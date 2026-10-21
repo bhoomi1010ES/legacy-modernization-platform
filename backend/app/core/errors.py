@@ -1,0 +1,90 @@
+"""Standardized error envelope and platform exceptions."""
+
+from typing import Any, Optional
+from pydantic import BaseModel, Field
+
+
+class ErrorDetail(BaseModel):
+    field: Optional[str] = Field(None, description="Request field that caused the error, if applicable.")
+    issue: str = Field(..., description="Explanation of the specific validation or business constraint issue.")
+
+
+class ErrorPayload(BaseModel):
+    code: str = Field(..., description="Machine-readable uppercase error code.")
+    message: str = Field(..., description="Human-readable descriptive error message.")
+    request_id: str = Field(..., description="Unique request tracing correlation identifier.")
+    details: Optional[list[ErrorDetail]] = Field(None, description="Optional array of field-level errors.")
+
+
+class ErrorEnvelope(BaseModel):
+    error: ErrorPayload
+
+
+class PlatformException(Exception):
+    """Base class for all application-level errors."""
+    def __init__(self, code: str, message: str, status_code: int = 400, details: Optional[list[ErrorDetail]] = None):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.status_code = status_code
+        self.details = details
+
+
+class IllegalStateTransitionException(PlatformException):
+    def __init__(self, current_state: str, target_state: str, reason: str = ""):
+        msg = f"Cannot transition job from '{current_state}' to '{target_state}'."
+        if reason:
+            msg += f" {reason}"
+        super().__init__(
+            code="ILLEGAL_STATE_TRANSITION",
+            message=msg,
+            status_code=409,
+            details=[ErrorDetail(field="status", issue=reason or "Preconditions for target state not satisfied.")],
+        )
+
+
+class GatePolicyException(PlatformException):
+    def __init__(self, message: str, issue: str = ""):
+        super().__init__(
+            code="GATE_POLICY_VIOLATION",
+            message=message,
+            status_code=422,
+            details=[ErrorDetail(field="rationale", issue=issue or message)],
+        )
+
+
+class UnauthorizedException(PlatformException):
+    def __init__(self, message: str = "Authentication required to access this resource."):
+        super().__init__(code="UNAUTHORIZED", message=message, status_code=401)
+
+
+class ForbiddenException(PlatformException):
+    def __init__(self, message: str = "You do not have permission to perform this action."):
+        super().__init__(code="FORBIDDEN", message=message, status_code=403)
+
+
+class NotFoundException(PlatformException):
+    def __init__(
+        self,
+        resource: str = "Resource",
+        resource_id: str = "",
+        entity_name: Optional[str] = None,
+        entity_id: Optional[str] = None,
+    ):
+        res = entity_name or resource
+        rid = entity_id or resource_id
+        super().__init__(
+            code="NOT_FOUND",
+            message=f"{res} with ID '{rid}' was not found.",
+            status_code=404,
+        )
+
+
+class ConflictException(PlatformException):
+    def __init__(self, message: str, details: Optional[list] = None):
+        super().__init__(code="CONFLICT", message=message, status_code=409, details=details)
+
+
+class ValidationException(PlatformException):
+    def __init__(self, message: str, details: Optional[list] = None):
+        super().__init__(code="VALIDATION_ERROR", message=message, status_code=422, details=details)

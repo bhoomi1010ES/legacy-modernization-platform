@@ -1,0 +1,54 @@
+:root {
+  /* Typography Scale */
+  --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Fira Code', 'Courier New', monospace;
+
+  /* Perceptually Uniform OKLCH Color Palette */
+  --background: oklch(1 0 0);               /* Pure white #ffffff */
+  --foreground: oklch(0.25 0.015 260);      /* Deep slate #222831 */
+  --card: oklch(1 0 0);                     /* Card interior */
+  
+  --primary: oklch(0.47 0.105 166);         /* Modernization Emerald Teal #137A5B */
+  --primary-foreground: oklch(1 0 0);      /* Crisp White */
+
+  --secondary: oklch(0.975 0.003 250);     /* Soft cool gray #f7f8f9 */
+  --muted: oklch(0.97 0.004 250);          /* Neutral surface #f2f4f7 */
+  --muted-foreground: oklch(0.56 0.017 260);/* Muted slate #6c757d */
+
+  --accent: oklch(0.955 0.026 162);        /* Mint/Teal tint #e6f5f0 */
+  --border: oklch(0.915 0.008 250);        /* Crisp light border #e4e7ec */
+
+  /* Status Colors */
+  --success: oklch(0.49 0.12 158);          /* Completed/Passing Green #15803d */
+  --warning: oklch(0.62 0.14 70);           /* Amber Pending #b45309 */
+  --warning-surface: oklch(0.975 0.034 85); /* Amber Soft Alert #fef3c7 */
+  --info: oklch(0.55 0.16 255);             /* Blue Running #2563eb */
+  --info-surface: oklch(0.955 0.019 250);   /* Blue Soft Surface #eff6ff */
+  --destructive: oklch(0.59 0.18 25);       /* Red Regression/Error #dc2626 */
+  --danger-surface: oklch(0.97 0.018 25);   /* Red Soft Surface #fee2e2 */
+  
+  /* AI & Specialist Copilot Tokens */
+  --purple: oklch(0.55 0.16 295);           /* Violet Copilot #7c3aed */
+  --purple-surface: oklch(0.96 0.02 295);   /* Soft Violet #f3e8ff */
+
+  /* Surface & Container Tints */
+  --sidebar-surface: oklch(0.987 0.002 250);/* Clean Off-White #fafafa */
+  --banner-surface: oklch(0.968 0.021 163); /* Light Teal Hero #edf7f4 */
+
+  /* Elevation & Shadows */
+  --shadow-soft: 0 2px 5px oklch(0.2 0.02 250 / 0.035);
+  --shadow-md: 0 4px 12px oklch(0.2 0.02 250 / 0.06);
+  --shadow-lg: 0 10px 25px oklch(0.2 0.02 250 / 0.10);
+  --overlay: oklch(0.2 0.01 250 / 0.45);
+
+  /* Border Radii */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+}
