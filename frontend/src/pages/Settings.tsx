@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, Shield, Lock, DollarSign, Save, CheckCircle2 } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, Lock, IndianRupee, Save, CheckCircle2 } from 'lucide-react';
 
 export const Settings: React.FC = () => {
-  const [defaultBudget, setDefaultBudget] = useState(150);
+  const [defaultBudget, setDefaultBudget] = useState(15000);
   const [maxRepairRetries, setMaxRepairRetries] = useState(3);
   const [sandboxMode, setSandboxMode] = useState('gVisor-rootless');
   const [networkEgress, setNetworkEgress] = useState('air-gapped');
@@ -44,14 +44,16 @@ export const Settings: React.FC = () => {
 
               <div className="form-grid">
                 <div className="form-field">
-                  <label>Default Autonomous Job Budget ($ USD)</label>
+                  <label>Default Autonomous Job Budget (₹ INR)</label>
                   <input
                     type="number"
                     className="field"
                     value={defaultBudget}
                     onChange={(e) => setDefaultBudget(Number(e.target.value))}
-                    min={10}
-                    max={1000}
+                    onWheel={(e) => (e.target as HTMLElement).blur()}
+                    min={50}
+                    max={1000000}
+                    step={100}
                   />
                   <small>Jobs halt automatically when spend exceeds 100% of this cap.</small>
                 </div>
@@ -63,6 +65,7 @@ export const Settings: React.FC = () => {
                     className="field"
                     value={maxRepairRetries}
                     onChange={(e) => setMaxRepairRetries(Number(e.target.value))}
+                    onWheel={(e) => (e.target as HTMLElement).blur()}
                     min={1}
                     max={5}
                   />
@@ -116,6 +119,7 @@ export const Settings: React.FC = () => {
                     className="field"
                     value={minRationaleChars}
                     onChange={(e) => setMinRationaleChars(Number(e.target.value))}
+                    onWheel={(e) => (e.target as HTMLElement).blur()}
                     min={10}
                     max={200}
                   />

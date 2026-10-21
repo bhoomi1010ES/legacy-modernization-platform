@@ -1,6 +1,6 @@
 import React from 'react';
 import type { AgentRun } from '../types/domain';
-import { Bot, X, Terminal, Cpu, Clock, DollarSign } from 'lucide-react';
+import { Bot, X, Terminal, Cpu, Clock, IndianRupee } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 
 interface AgentTraceModalProps {
@@ -63,9 +63,9 @@ export const AgentTraceModal: React.FC<AgentTraceModalProps> = ({ agent, onClose
           </div>
           <div style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
             <div style={{ fontSize: '10px', color: 'var(--muted-foreground)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <DollarSign size={12} /> Cost Spend
+              <IndianRupee size={12} /> Cost Spend
             </div>
-            <strong style={{ fontSize: '13px' }}>${agent.cost_usd.toFixed(2)}</strong>
+            <strong style={{ fontSize: '13px' }}>₹{agent.cost_usd.toFixed(2)}</strong>
             <small style={{ display: 'block', fontSize: '9px', color: 'var(--muted-foreground)' }}>Budget tracked</small>
           </div>
           <div style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
@@ -103,7 +103,7 @@ export const AgentTraceModal: React.FC<AgentTraceModalProps> = ({ agent, onClose
 [${agent.started_at}] [TOOL_EXEC] git rev-parse HEAD -> 8d41f96b27a3c20e4b88df1a774169c3a0b
 [${agent.started_at}] [TOOL_EXEC] tree-sitter parse src/main/java/**/*.java --format=ast-json
 [${agent.started_at}] [EMIT_ARTIFACT] Generated schema-validated artifact -> RepoInventory v1
-[${agent.started_at}] [BUDGET_CHECK] Token consumption: ${agent.input_tokens} input, ${agent.output_tokens} output (Cost: $${agent.cost_usd.toFixed(2)})
+[${agent.started_at}] [BUDGET_CHECK] Token consumption: ${agent.input_tokens} input, ${agent.output_tokens} output (Cost: ₹${agent.cost_usd.toFixed(2)})
 ${agent.completed_at ? `[${agent.completed_at}] [AGENT_COMPLETE] Checkpoint saved to PostgreSQL. Transitioning job state.` : '[RUNNING] Awaiting next outer-loop coordinator instruction...'}`}
           </div>
         </div>

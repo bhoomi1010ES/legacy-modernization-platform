@@ -5,6 +5,7 @@ from typing import List, Optional, Tuple
 import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from pathlib import Path
 
 import re
 from app.core.errors import ConflictException, NotFoundException, ValidationException, ErrorDetail
@@ -30,19 +31,45 @@ class JobService:
         correlation_id: Optional[str] = None,
     ) -> Job:
         """Transactionally creates a Job, Owner JobMembership, and initial AuditEvent."""
-        # Validate repository URL syntax and provider allowlist
-        self.git_adapter.validate_source_url(payload.source_repository)
+        is_local_source = (
+            (payload.source_type == "local")
+            or (payload.source_repository and payload.source_repository.startswith("local://"))
+            or (payload.source_repository and Path(payload.source_repository).is_absolute())
+        )
 
-        # Validate pinned commit format if provided
-        pinned_commit = None
-        if payload.pinned_commit and payload.pinned_commit.strip():
-            clean_commit = payload.pinned_commit.strip()
-            if not re.match(r"^[0-9a-fA-F]{7,40}$", clean_commit):
-                raise ValidationException(
-                    message="Invalid pinned commit SHA format.",
-                    details=[ErrorDetail(field="pinned_commit", issue="Must be a valid 7 to 40 character hexadecimal Git SHA.")]
-                )
-            pinned_commit = clean_commit
+        if is_local_source:
+            if not payload.source_repository or len(payload.source_repository.strip()) < 3:
+                raise ValidationException("Local source directory path cannot be empty.")
+            # If preview_snapshot_id is provided, verify it exists and is active
+            if payload.preview_snapshot_id:
+                from app.services.local_source_adapter import LocalSourceAdapter
+                adapter = LocalSourceAdapter()
+                adapter.get_staged_snapshot(payload.preview_snapshot_id)
+        else:
+            self.git_adapter.validate_source_url(payload.source_repository)
+
+            # If a private repository token was supplied, validate host restriction
+            if payload.git_token and payload.git_token.strip():
+                from urllib.parse import urlparse
+                parsed_host = (urlparse(payload.source_repository).hostname or "").lower()
+                if parsed_host != "github.com":
+                    from app.services.git_adapter import GitSecurityException
+                    raise GitSecurityException(
+                        f"GitHub Personal Access Token cannot be used with host '{parsed_host}'. Credentials are restricted strictly to github.com.",
+                        issue="git_token is restricted strictly to github.com repositories."
+                    )
+
+            # Validate pinned commit format if provided
+            if payload.pinned_commit and payload.pinned_commit.strip():
+                clean_commit = payload.pinned_commit.strip()
+                if not re.match(r"^[0-9a-fA-F]{7,40}$", clean_commit):
+                    raise ValidationException(
+                        message="Invalid pinned commit SHA format.",
+                        details=[ErrorDetail(field="pinned_commit", issue="Must be a valid 7 to 40 character hexadecimal Git SHA.")]
+                    )
+                pinned_commit = clean_commit
+
+        pinned_commit = payload.pinned_commit.strip() if payload.pinned_commit and not is_local_source else None
 
         # Normalize and structure stack_metadata separating automated detection from user overrides
         structured_metadata = None
@@ -74,7 +101,7 @@ class JobService:
             source_repository=payload.source_repository,
             source_revision=payload.source_revision or "main",
             source_stack=payload.source_stack or "Java 8 / Spring Boot",
-            target_stack=payload.target_stack or "TypeScript / NestJS",
+            target_stack=(payload.target_stack or "TypeScript / NestJS")[:100],
             status=JobStatus.CREATED.value,
             budget_limit_usd=Decimal(str(payload.budget)),
             budget_used_usd=Decimal("0.00"),
@@ -192,3 +219,54 @@ class JobService:
         await db.commit()
         await db.refresh(job)
         return job
+
+    def acquire_intake_workspace(
+        self,
+        job_id: str,
+        repo_url: str,
+        revision: str = "main",
+        pinned_commit: Optional[str] = None,
+        git_token: Optional[str] = None,
+        source_type: str = "git",
+        preview_snapshot_id: Optional[str] = None,
+        snapshot_fingerprint: Optional[str] = None,
+        user_id: Optional[str] = None,
+        is_admin: bool = False,
+    ) -> Tuple[Path, str]:
+        """Acquires approved repository snapshot into permanent job workspace for actual job intake.
+
+        For Git sources: clones via ControlledGitAdapter, enforcing pinned_commit.
+        For Local sources: promotes staged preview snapshot, verifying snapshot_fingerprint.
+        """
+        is_local = (
+            (source_type == "local")
+            or (repo_url and repo_url.startswith("local://"))
+            or (repo_url and Path(repo_url).is_absolute())
+        )
+        if is_local:
+            from app.services.local_source_adapter import LocalSourceAdapter
+            adapter = LocalSourceAdapter()
+            if preview_snapshot_id:
+                return adapter.promote_staging_to_workspace(
+                    snapshot_id=preview_snapshot_id,
+                    job_id=str(job_id),
+                    user_id=str(user_id or ""),
+                    expected_fingerprint=snapshot_fingerprint,
+                    is_admin=is_admin,
+                )
+            else:
+                clean_path = repo_url.removeprefix("local://")
+                return adapter.materialize_local_path(
+                    local_dir=Path(clean_path),
+                    job_id=str(job_id),
+                    expected_fingerprint=snapshot_fingerprint,
+                )
+
+        return self.git_adapter.clone_repository(
+            job_id=str(job_id),
+            repo_url=repo_url,
+            revision=revision,
+            pinned_commit=pinned_commit,
+            access_token=git_token,
+        )
+

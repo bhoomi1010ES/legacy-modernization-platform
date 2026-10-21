@@ -2,26 +2,43 @@
 # Git Ignore Configuration for Rebase Platform
 # ==============================================================================
 
-# Environment files & Secrets (NEVER commit .env to GitHub)
+# 1. Environment Files & Secrets (CRITICAL: Never commit to GitHub)
 .env
-.env.local
-.env.*.local
+.env.*
 *.env
+**/.env
+**/.env.*
 !*.env.example
+!**/.env.example
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+*.keystore
+*.credentials
+.cloudflared/
+**/.cloudflared/
 
-# Python & Virtual Environments
+# 2. Python & Virtual Environments
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 env/
+**/env/
 venv/
+**/venv/
 .venv/
+**/.venv/
 ENV/
+**/ENV/
 build/
-develop-eggs/
 dist/
+develop-eggs/
 downloads/
 eggs/
 .eggs/
@@ -35,33 +52,90 @@ wheels/
 .installed.cfg
 *.egg
 
-# Testing & Coverage
+# 3. Testing, Type Checking & Code Quality
 .pytest_cache/
+**/.pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 .tox/
 .hypothesis/
+.mypy_cache/
+**/.mypy_cache/
+.ruff_cache/
+**/.ruff_cache/
+test-results/
+playwright-report/
+.nyc_output/
 
-# Node.js & Frontend Build Outputs
+# 4. Node.js & Frontend Build Outputs
 node_modules/
+**/node_modules/
+frontend/dist/
+dist/
+**/dist/
+.output/
+.next/
+.nuxt/
+.turbo/
+*.tsbuildinfo
+.eslintcache
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-frontend/dist/
-frontend/node_modules/
-.output/
 
-# IDE & OS Files
+# 5. Local Workspaces, Staging & Ingestion Snapshots
+artifacts/
+**/artifacts/
+repo_workspaces/
+**/repo_workspaces/
+staging_snapshots/
+**/staging_snapshots/
+scratch/
+**/scratch/
+tmp/
+**/tmp/
+temp/
+**/temp/
+
+# 6. Database & Local Storage Files
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.dump
+
+# 7. Archives & Compressed Uploads
+*.zip
+**/*.zip
+*.tar
+**/*.tar
+*.tar.gz
+**/*.tar.gz
+*.tgz
+**/*.tgz
+*.rar
+*.7z
+
+# 8. Logs & Diagnostic Dumps
+*.log
+logs/
+**/logs/
+
+# 9. IDE & Operating System Files
 .DS_Store
 Thumbs.db
+desktop.ini
 .idea/
+**/.idea/
 .vscode/
+**/.vscode/
 *.swp
 *.swo
+*~
+*.tmp
+*.temp
 
-# Local Artifacts & Sandboxes
-artifacts/
-repo_workspaces/
-*.log
-scratch/
+

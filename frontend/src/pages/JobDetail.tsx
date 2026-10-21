@@ -247,8 +247,8 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateD
             <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '20px', backgroundColor: 'var(--card)' }}>
               <h2 style={{ fontSize: '15px', fontWeight: 650, marginBottom: '14px' }}>Autonomous Budget</h2>
               <div style={{ fontSize: '24px', fontWeight: 700, marginBottom: '4px' }}>
-                ${job.cost.toFixed(2)}
-                <span style={{ fontSize: '13px', color: 'var(--muted-foreground)', fontWeight: 400 }}> / ${job.budget.toFixed(2)}</span>
+                ₹{job.cost.toFixed(2)}
+                <span style={{ fontSize: '13px', color: 'var(--muted-foreground)', fontWeight: 400 }}> / ₹{job.budget.toFixed(2)}</span>
               </div>
               <div className="progress-track" style={{ width: '100%', height: '8px', margin: '12px 0' }}>
                 <div
@@ -399,7 +399,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateD
                 {ag.role_description}
               </p>
               <div style={{ fontSize: '10px', color: 'var(--muted-foreground)' }}>
-                Tokens: {ag.input_tokens + ag.output_tokens} · Cost: ${ag.cost_usd.toFixed(2)}
+                Tokens: {ag.input_tokens + ag.output_tokens} · Cost: ₹{ag.cost_usd.toFixed(2)}
               </div>
             </div>
           ))}

@@ -96,7 +96,7 @@ export const INITIAL_GATES: GateDetail[] = [
     status: 'PENDING',
     artifact: 'FeasibilityReport v1',
     artifact_hash: 'sha256:4a9918231c55490a1bc3a1b490e21975bba',
-    cost_summary: '$18.35 / $100.00',
+    cost_summary: '₹18.35 / ₹100.00',
     requested_at: '2026-10-19T09:15:00Z',
   },
   {
@@ -109,7 +109,7 @@ export const INITIAL_GATES: GateDetail[] = [
     status: 'PENDING',
     artifact: 'TargetBlueprint v2 · ConversionPlan v3',
     artifact_hash: 'sha256:7f33a89c10e42d76b110bc551098231a44e',
-    cost_summary: '$42.80 / $150.00',
+    cost_summary: '₹42.80 / ₹150.00',
     requested_at: '2026-10-19T08:45:00Z',
   },
   {
@@ -122,7 +122,7 @@ export const INITIAL_GATES: GateDetail[] = [
     status: 'APPROVED',
     artifact: 'CharacterizationSuite v1',
     artifact_hash: 'sha256:8d41f96b27a3c20e4b88df1a774169c3a0b',
-    cost_summary: '$63.20 / $120.00',
+    cost_summary: '₹63.20 / ₹120.00',
     requested_at: '2026-10-18T12:00:00Z',
     decided_at: '2026-10-18T12:28:00Z',
     reviewer: 'Alex Morgan',

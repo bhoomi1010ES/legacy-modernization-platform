@@ -54,6 +54,7 @@ class StackDetector:
         source_repository: str,
         source_revision: str = "main",
         git_adapter: Optional[ControlledGitAdapter] = None,
+        access_token: Optional[str] = None,
     ) -> DetectedStackResponse:
         """Clones a repository into an isolated OS temporary directory and performs static inventory and detection."""
         if not source_repository or not isinstance(source_repository, str) or not source_repository.strip():
@@ -86,6 +87,7 @@ class StackDetector:
                 depth=1,
                 timeout_seconds=45,
                 max_size_mb=100,
+                access_token=access_token,
             )
 
             # Discover the actual branch checked out
@@ -121,6 +123,36 @@ class StackDetector:
                     logger.warning(f"Failed to cleanup ephemeral preview workspace: {e}")
 
     @classmethod
+    def detect_stack_from_workspace(
+        cls,
+        workspace_path: Path,
+        source_name: str,
+        source_revision: str = "LOCAL",
+        preview_snapshot_id: Optional[str] = None,
+        snapshot_fingerprint: Optional[str] = None,
+        extra_warnings: Optional[List[str]] = None,
+        is_complete: bool = True,
+    ) -> DetectedStackResponse:
+        """Performs static inventory and technology detection on an existing directory workspace."""
+        inventory = RepositoryInventoryScanner.scan(workspace_path)
+        if extra_warnings:
+            inventory.warnings.extend(extra_warnings)
+        if not is_complete and not any("partial" in w.lower() or "limit" in w.lower() for w in inventory.warnings):
+            inventory.warnings.append("Local directory scan reached configured size/file bounds and is partial.")
+
+        return cls._analyze_inventory(
+            inventory=inventory,
+            source_repository=f"local://{source_name}",
+            source_revision=source_revision,
+            requested_revision=source_revision,
+            resolved_commit=None,
+            source_type="local",
+            preview_snapshot_id=preview_snapshot_id,
+            snapshot_fingerprint=snapshot_fingerprint,
+            is_complete=is_complete,
+        )
+
+    @classmethod
     def _analyze_inventory(
         cls,
         inventory: InventoryResult,
@@ -128,6 +160,10 @@ class StackDetector:
         source_revision: str,
         requested_revision: Optional[str] = None,
         resolved_commit: Optional[str] = None,
+        source_type: str = "git",
+        preview_snapshot_id: Optional[str] = None,
+        snapshot_fingerprint: Optional[str] = None,
+        is_complete: bool = True,
     ) -> DetectedStackResponse:
         """Analyzes inventory results and manifests to construct an evidence-backed DetectedStackResponse."""
         warnings: List[str] = list(inventory.warnings)
@@ -143,6 +179,9 @@ class StackDetector:
                 source_repository=source_repository,
                 source_revision=source_revision,
                 requested_revision=requested_revision or source_revision,
+                source_type=source_type,
+                preview_snapshot_id=preview_snapshot_id,
+                snapshot_fingerprint=snapshot_fingerprint,
                 primary_language="Unknown",
                 language_version="Unknown",
                 framework="None detected",
@@ -354,10 +393,17 @@ class StackDetector:
             clean_bld = build_tool.split("(")[0].strip()
             summary_stack += f" ({clean_bld})"
 
+        # Enforce PARTIAL status if limits were reached during extraction
+        if not is_complete and scan_status == "COMPLETED":
+            scan_status = "PARTIAL"
+
         return DetectedStackResponse(
             source_repository=source_repository,
             source_revision=source_revision,
             requested_revision=requested_revision or source_revision,
+            source_type=source_type,
+            preview_snapshot_id=preview_snapshot_id,
+            snapshot_fingerprint=snapshot_fingerprint,
             primary_language=primary_lang,
             language_version=lang_ver,
             framework=primary_framework,

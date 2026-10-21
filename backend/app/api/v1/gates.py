@@ -140,7 +140,7 @@ async def list_pending_gates(
                 status="PENDING",
                 artifact="Gate Feasibility & Characterization Package",
                 artifact_hash="sha256:4a9918231c55490a1bc3a1b490e21975bba",
-                cost_summary=f"${float(j.budget_used_usd):.2f} / ${float(j.budget_limit_usd):.2f}",
+                cost_summary=f"₹{float(j.budget_used_usd):.2f} / ₹{float(j.budget_limit_usd):.2f}",
                 requested_at=j.updated_at.isoformat() if hasattr(j.updated_at, "isoformat") else str(j.updated_at),
             )
         )
@@ -186,7 +186,7 @@ async def list_gates_for_job(
                 status=d.decision,
                 artifact=f"Gate {g_type.value} Artifact Package",
                 artifact_hash="sha256:4a9918231c55490a1bc3a1b490e21975bba",
-                cost_summary=f"${float(job.budget_used_usd):.2f} / ${float(job.budget_limit_usd):.2f}",
+                cost_summary=f"₹{float(job.budget_used_usd):.2f} / ₹{float(job.budget_limit_usd):.2f}",
                 requested_at=d.decided_at.isoformat(),
                 decided_at=d.decided_at.isoformat(),
                 reviewer=user.full_name,
@@ -207,7 +207,7 @@ async def list_gates_for_job(
                 status="PENDING",
                 artifact=f"Gate {pending_type.value} Package",
                 artifact_hash="sha256:4a9918231c55490a1bc3a1b490e21975bba",
-                cost_summary=f"${float(job.budget_used_usd):.2f} / ${float(job.budget_limit_usd):.2f}",
+                cost_summary=f"₹{float(job.budget_used_usd):.2f} / ₹{float(job.budget_limit_usd):.2f}",
                 requested_at=job.updated_at.isoformat() if hasattr(job.updated_at, "isoformat") else str(job.updated_at),
             )
         )

@@ -26,7 +26,22 @@ import {
   AlertTriangle,
   FileCode,
   Info,
+  Lock,
+  Eye,
+  EyeOff,
+  X,
+  Folder,
+  FolderOpen,
+  HardDrive,
+  UploadCloud,
+  Search,
 } from 'lucide-react';
+import {
+  isFileSystemAccessSupported,
+  scanWithDirectoryPicker,
+  scanWithFileList,
+  type ScanProgress,
+} from '../services/localSourceScanner';
 
 interface CreateJobProps {
   onSubmit: (req: JobCreateRequest) => Promise<any>;
@@ -55,11 +70,29 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
   const [name, setName] = useState('Payment Gateway Modernization');
   const [sourceRepo, setSourceRepo] = useState('https://github.com/acme/payment-gateway');
   const [revision, setRevision] = useState('main');
+  const [gitToken, setGitToken] = useState('');
+  const [showToken, setShowToken] = useState(false);
+  const [isPrivateRepo, setIsPrivateRepo] = useState(false);
+
+  // Local Folder Source States
+  const [sourceType, setSourceType] = useState<'git' | 'local'>('git');
+  const [localPath, setLocalPath] = useState('');
+  const [uploadedZipName, setUploadedZipName] = useState<string | null>(null);
+  const [zipUploading, setZipUploading] = useState(false);
+  const zipInputRef = useRef<HTMLInputElement | null>(null);
+  const [localFolderName, setLocalFolderName] = useState('');
+  const [previewSnapshotId, setPreviewSnapshotId] = useState<string | null>(null);
+  const [snapshotFingerprint, setSnapshotFingerprint] = useState<string | null>(null);
+  const [localScanProgress, setLocalScanProgress] = useState<ScanProgress | null>(null);
+  const [localScanActive, setLocalScanActive] = useState(false);
+  const [localWarnings, setLocalWarnings] = useState<string[]>([]);
+  const [localScanSummary, setLocalScanSummary] = useState<{ fileCount: number; totalBytes: number } | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const fallbackInputRef = useRef<HTMLInputElement | null>(null);
   const [sourceStack, setSourceStack] = useState('Java 11 / Spring Boot 2.7 (Maven)');
-  const [targetStack] = useState('TypeScript / Node.js 22 / NestJS');
-  const [budget, setBudget] = useState(150);
+  const [targetPlan, setTargetPlan] = useState('');
+  const [budget, setBudget] = useState(15000);
   const [maxRepairAttempts, setMaxRepairAttempts] = useState(3);
-  const [constraints, setConstraints] = useState('Preserve all ISO8583 settlement idempotency constraints.');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,14 +121,20 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
   // Race-condition guard for async preview requests
   const latestReqIdRef = useRef(0);
 
-  const handleDetectStack = async (repoUrl: string, rev: string) => {
+  const handleDetectStack = async (repoUrl: string, rev: string, tokenOverride?: string) => {
     if (!repoUrl || !repoUrl.trim()) return;
     const reqId = ++latestReqIdRef.current;
 
     try {
       setDetecting(true);
       setDetectError(null);
-      const res = await api.detectSourceStack(repoUrl.trim(), rev?.trim() || 'main');
+      const activeToken = tokenOverride !== undefined ? tokenOverride : gitToken;
+      const res = await api.detectSourceStack(
+        repoUrl.trim(),
+        rev?.trim() || 'main',
+        undefined,
+        activeToken.trim() || undefined
+      );
 
       // Check if another request has been initiated since this one started
       if (reqId !== latestReqIdRef.current) return;
@@ -106,13 +145,36 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
       }
       setSourceStack(res.summary_stack);
 
+      // If detection succeeded without any token, this repository is public
+      if (!activeToken.trim()) {
+        setIsPrivateRepo(false);
+      }
+
       // Reset overrides on fresh detection
       setOverrides({});
       setEditingTier(null);
     } catch (err: any) {
       if (reqId === latestReqIdRef.current) {
         console.warn('Stack detection notice:', err);
-        setDetectError(err.message || 'Stack detection failed. Please check repository coordinates and permissions.');
+        const errMsg = err.message || '';
+        const isAuthOrPrivate =
+          errMsg.includes('Authentication required') ||
+          errMsg.includes('private') ||
+          errMsg.includes('Personal Access Token') ||
+          errMsg.includes('access denied') ||
+          errMsg.includes('authentication failed') ||
+          errMsg.includes('401') ||
+          errMsg.includes('403') ||
+          errMsg.includes('could not read Username');
+
+        if (isAuthOrPrivate) {
+          setIsPrivateRepo(true);
+          setDetectError(
+            'Private repository detected: A GitHub Personal Access Token (PAT) with Read-only access is required to analyze this repository.'
+          );
+        } else {
+          setDetectError(errMsg || 'Stack detection failed. Please check repository coordinates and permissions.');
+        }
       }
     } finally {
       if (reqId === latestReqIdRef.current) {
@@ -121,13 +183,91 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
     }
   };
 
+  const handleDetectLocalPath = async (pathStr: string) => {
+    if (!pathStr || !pathStr.trim()) return;
+    const reqId = ++latestReqIdRef.current;
+    try {
+      setDetecting(true);
+      setDetectError(null);
+      const res = await api.detectSourceStack(pathStr.trim(), 'LOCAL', undefined, undefined, 'local');
+      if (reqId !== latestReqIdRef.current) return;
+      setDetectedStack(res);
+      setPreviewSnapshotId(res.preview_snapshot_id || null);
+      setSnapshotFingerprint(res.snapshot_fingerprint || null);
+      setLocalWarnings(res.warnings || []);
+      const folderName = pathStr.trim().split(/[\\/]/).filter(Boolean).pop() || 'project';
+      setLocalFolderName(folderName);
+      setUploadedZipName(null);
+      setOverrides({});
+      setEditingTier(null);
+    } catch (err: any) {
+      if (reqId !== latestReqIdRef.current) return;
+      console.error('Local path detection error:', err);
+      setDetectError(err.message || 'Failed to inspect local project path. Please verify the directory exists.');
+    } finally {
+      if (reqId === latestReqIdRef.current) {
+        setDetecting(false);
+      }
+    }
+  };
+
+  const handleZipFileSelected = async (file: File) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+      setDetectError('Please select a valid .zip archive file.');
+      return;
+    }
+    const cleanName = file.name.replace(/\.zip$/i, '');
+    const reqId = ++latestReqIdRef.current;
+    try {
+      setZipUploading(true);
+      setDetecting(true);
+      setDetectError(null);
+      setUploadedZipName(file.name);
+      setLocalFolderName(cleanName);
+      setLocalPath('');
+
+      const res = await api.detectLocalSourceStack(file, cleanName);
+      if (reqId !== latestReqIdRef.current) return;
+      setDetectedStack(res);
+      setPreviewSnapshotId(res.preview_snapshot_id || null);
+      setSnapshotFingerprint(res.snapshot_fingerprint || null);
+      setLocalWarnings(res.warnings || []);
+      setOverrides({});
+      setEditingTier(null);
+    } catch (err: any) {
+      if (reqId !== latestReqIdRef.current) return;
+      console.error('ZIP upload detection error:', err);
+      setDetectError(err.message || 'Failed to analyze project ZIP archive.');
+      setUploadedZipName(null);
+    } finally {
+      if (reqId === latestReqIdRef.current) {
+        setZipUploading(false);
+        setDetecting(false);
+      }
+    }
+  };
+
   useEffect(() => {
+    if (sourceType === 'local') return;
     if (!sourceRepo || sourceRepo.trim().length < 5) return;
     const timer = setTimeout(() => {
-      handleDetectStack(sourceRepo, revision);
-    }, 500);
+      handleDetectStack(sourceRepo, revision, gitToken);
+    }, 600);
     return () => clearTimeout(timer);
-  }, [sourceRepo, revision]);
+  }, [sourceRepo, revision, gitToken, sourceType]);
+
+  useEffect(() => {
+    if (sourceType !== 'local') return;
+    if (!localPath || localPath.trim().length < 3) return;
+    const timer = setTimeout(() => {
+      handleDetectLocalPath(localPath.trim());
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [localPath, sourceType]);
+
+  // PAT section is shown only for private repositories (detected or manually toggled)
+  const showPatSection = isPrivateRepo || gitToken.length > 0;
 
   // Derive effective tier values
   const rawFrontend = detectedStack?.tiers?.frontend?.primary;
@@ -213,6 +353,103 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
     setEditingTier(null);
   };
 
+  const handlePickLocalFolder = async () => {
+    try {
+      setDetectError(null);
+      setLocalWarnings([]);
+      setLocalScanActive(true);
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      const result = await scanWithDirectoryPicker((prog) => {
+        setLocalScanProgress(prog);
+      }, controller.signal);
+
+      setLocalFolderName(result.sourceName);
+      setLocalWarnings(result.warnings);
+      setLocalScanSummary({ fileCount: result.fileCount, totalBytes: result.totalBytes });
+      setLocalScanProgress(null);
+      setDetecting(true);
+
+      const res = await api.detectLocalSourceStack(result.bundleZip, result.sourceName);
+      setDetectedStack(res);
+      setPreviewSnapshotId(res.preview_snapshot_id || null);
+      setSnapshotFingerprint(res.snapshot_fingerprint || null);
+      setSourceStack(res.summary_stack);
+      if (name === 'Payment Gateway Modernization' || !name) {
+        setName(`${result.sourceName} Modernization`);
+      }
+      setOverrides({});
+      setEditingTier(null);
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        // User cancelled picker dialog
+      } else {
+        console.error('Local folder scan error:', err);
+        setDetectError(err.message || 'Failed to scan or upload local project folder.');
+      }
+    } finally {
+      setLocalScanActive(false);
+      setDetecting(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleFallbackFolderSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    try {
+      setDetectError(null);
+      setLocalWarnings([]);
+      setLocalScanActive(true);
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      const result = await scanWithFileList(files, 'local-project', (prog) => {
+        setLocalScanProgress(prog);
+      }, controller.signal);
+
+      setLocalFolderName(result.sourceName);
+      setLocalWarnings(result.warnings);
+      setLocalScanSummary({ fileCount: result.fileCount, totalBytes: result.totalBytes });
+      setLocalScanProgress(null);
+      setDetecting(true);
+
+      const res = await api.detectLocalSourceStack(result.bundleZip, result.sourceName);
+      setDetectedStack(res);
+      setPreviewSnapshotId(res.preview_snapshot_id || null);
+      setSnapshotFingerprint(res.snapshot_fingerprint || null);
+      setSourceStack(res.summary_stack);
+      if (name === 'Payment Gateway Modernization' || !name) {
+        setName(`${result.sourceName} Modernization`);
+      }
+      setOverrides({});
+      setEditingTier(null);
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        // User cancelled
+      } else {
+        console.error('Fallback folder scan error:', err);
+        setDetectError(err.message || 'Failed to scan or upload local project folder.');
+      }
+    } finally {
+      setLocalScanActive(false);
+      setDetecting(false);
+      abortControllerRef.current = null;
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const handleCancelLocalScan = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLocalScanActive(false);
+    setLocalScanProgress(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -220,19 +457,34 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
       setError(null);
       const hasOverrides = Object.keys(overrides).length > 0;
 
+      const isLocal = sourceType === 'local';
+      const cleanLocalPath = localPath.trim();
+      const localRepoIdentifier = uploadedZipName
+        ? `local://${uploadedZipName}`
+        : (cleanLocalPath ? (cleanLocalPath.startsWith('local://') ? cleanLocalPath : `local://${cleanLocalPath}`) : `local://${localFolderName || 'project'}`);
+
+      const cleanTargetPlan = targetPlan.trim();
+      const firstLine = cleanTargetPlan.split('\n')[0].trim();
+      const conciseTargetStack = (firstLine || 'TypeScript / Node.js 22 / NestJS').slice(0, 100);
+
       const created = await onSubmit({
         name,
-        source_repository: sourceRepo,
-        source_revision: revision,
+        source_repository: isLocal ? localRepoIdentifier : sourceRepo,
+        source_revision: isLocal ? 'LOCAL' : revision,
         source_stack: sourceStack,
-        target_stack: targetStack,
+        target_stack: conciseTargetStack,
         budget,
         max_repair_attempts: maxRepairAttempts,
-        constraints,
-        pinned_commit: detectedStack?.resolved_commit || undefined,
+        constraints: cleanTargetPlan || undefined,
+        pinned_commit: !isLocal ? (detectedStack?.resolved_commit || undefined) : undefined,
         user_overrides: hasOverrides ? overrides : undefined,
         stack_metadata: detectedStack || undefined,
+        git_token: !isLocal ? (gitToken.trim() || undefined) : undefined,
+        source_type: sourceType,
+        preview_snapshot_id: isLocal ? (previewSnapshotId || undefined) : undefined,
+        snapshot_fingerprint: isLocal ? (snapshotFingerprint || undefined) : undefined,
       });
+      setGitToken('');
       onNavigate(`/jobs/${created.job_id}`);
     } catch (err: any) {
       setError(err.message || 'Failed to initialize modernization job');
@@ -278,10 +530,63 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
           <div>
             {/* Step 1: Source Discovery */}
             <div className="form-section">
-              <h2>1. Legacy Source Repository</h2>
-              <p>Specify the repository coordinates and branch revision for intake discovery.</p>
+              <h2>1. Source Repository & Architecture Discovery</h2>
+              <p>Select a Git repository or inspect a local project folder directly from your computer.</p>
 
-              <div className="form-grid">
+              {/* Source Type Selector Tabs */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSourceType('git');
+                    setDetectError(null);
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    borderRadius: 'var(--radius-md)',
+                    border: sourceType === 'git' ? '1px solid var(--primary)' : '1px solid var(--border)',
+                    backgroundColor: sourceType === 'git' ? 'var(--accent)' : 'var(--card)',
+                    color: sourceType === 'git' ? 'var(--primary)' : 'var(--muted-foreground)',
+                    fontWeight: 600,
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <GitBranch size={14} />
+                  <span>Git Remote Repository</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSourceType('local');
+                    setDetectError(null);
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    borderRadius: 'var(--radius-md)',
+                    border: sourceType === 'local' ? '1px solid var(--primary)' : '1px solid var(--border)',
+                    backgroundColor: sourceType === 'local' ? 'var(--accent)' : 'var(--card)',
+                    color: sourceType === 'local' ? 'var(--primary)' : 'var(--muted-foreground)',
+                    fontWeight: 600,
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Folder size={14} />
+                  <span>Local Project Folder</span>
+                </button>
+              </div>
+
+
+
+              {sourceType === 'git' ? (
+                <div className="form-grid">
                 <div className="form-field span-two">
                   <label htmlFor="repo-url">Repository URL</label>
                   <input
@@ -297,6 +602,7 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
                         val = matches[0];
                       }
                       setSourceRepo(val);
+                      if (detectError) setDetectError(null);
                     }}
                     placeholder="https://github.com/org/repo"
                     required
@@ -318,6 +624,402 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
                   <small>Target branch or pinned commit hash for characterization.</small>
                 </div>
 
+                <div className="form-field">
+                  <label htmlFor="private-repo-toggle" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Lock size={14} color={showPatSection ? 'var(--primary)' : 'var(--muted-foreground)'} />
+                    <span>Private Repository</span>
+                  </label>
+                  <div
+                    style={{
+                      height: '42px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '0 12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: showPatSection ? '1px solid var(--primary)' : '1px solid var(--border)',
+                      backgroundColor: showPatSection ? 'var(--accent)' : 'var(--card)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onClick={() => {
+                      const next = !showPatSection;
+                      setIsPrivateRepo(next);
+                      if (!next) {
+                        setGitToken('');
+                        handleDetectStack(sourceRepo, revision, '');
+                      }
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      id="private-repo-toggle"
+                      checked={showPatSection}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setIsPrivateRepo(checked);
+                        if (!checked) {
+                          setGitToken('');
+                          handleDetectStack(sourceRepo, revision, '');
+                        }
+                      }}
+                      style={{ cursor: 'pointer', accentColor: 'var(--primary)', width: '16px', height: '16px' }}
+                    />
+                    <span style={{ fontSize: '12px', fontWeight: 500, color: showPatSection ? 'var(--foreground)' : 'var(--muted-foreground)' }}>
+                      {showPatSection ? 'Private repository enabled' : 'Requires Personal Access Token'}
+                    </span>
+                  </div>
+                  <small>Enable if repository is private or requires credentials.</small>
+                </div>
+
+                {/* Private GitHub Repository Access Section - Only displayed when repository is private */}
+                {showPatSection && (
+                  <div
+                    className="form-field span-two"
+                    style={{
+                      backgroundColor: 'var(--card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '14px 16px',
+                      marginTop: '4px',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <label
+                        htmlFor="github-pat"
+                        style={{
+                          margin: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: 'var(--foreground)',
+                        }}
+                      >
+                        <Lock size={14} color="var(--primary)" />
+                        <span>Private Repository Access (GitHub Personal Access Token)</span>
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            padding: '1px 6px',
+                            borderRadius: 'var(--radius-full)',
+                            backgroundColor: 'var(--secondary)',
+                            color: 'var(--primary)',
+                            fontWeight: 600,
+                          }}
+                        >
+                          Private Repo
+                        </span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGitToken('');
+                          setIsPrivateRepo(false);
+                          handleDetectStack(sourceRepo, revision, '');
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--muted-foreground)',
+                          fontSize: '11px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '2px 6px',
+                        }}
+                        title="Clear token and close private access section"
+                      >
+                        <X size={12} />
+                        <span>{gitToken ? 'Clear Token' : 'Cancel'}</span>
+                      </button>
+                    </div>
+
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <input
+                        id="github-pat"
+                        type={showToken ? 'text' : 'password'}
+                        className="field"
+                        style={{ paddingRight: '40px', fontFamily: 'var(--font-mono)', fontSize: '13px' }}
+                        value={gitToken}
+                        onChange={(e) => setGitToken(e.target.value.trim())}
+                        placeholder="github_pat_... or ghp_..."
+                        autoComplete="off"
+                        spellCheck={false}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowToken(!showToken)}
+                        style={{
+                          position: 'absolute',
+                          right: '10px',
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--muted-foreground)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '4px',
+                        }}
+                        title={showToken ? 'Hide token' : 'Show token'}
+                        aria-label={showToken ? 'Hide token' : 'Show token'}
+                      >
+                        {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '8px',
+                        marginTop: '8px',
+                        fontSize: '11px',
+                        color: 'var(--muted-foreground)',
+                        lineHeight: '1.4',
+                      }}
+                    >
+                      <Info size={14} style={{ flexShrink: 0, marginTop: '2px', color: 'var(--primary)' }} />
+                      <div>
+                        <span>
+                          Required for private GitHub repositories. Provide a fine-grained PAT with <strong>Contents: Read-only</strong> access.
+                          Never embed credentials into the repository URL. The token is kept strictly in memory for preview detection and job intake; it is never stored in browser storage, logs, or persistent database records.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              ) : (
+                /* Local Folder Path Input OR Direct ZIP Upload */
+                <div>
+                  <div className="form-grid">
+                    <div className="form-field span-two">
+                      <label htmlFor="local-project-path" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Folder size={14} color="var(--primary)" />
+                        <span>Local Project Location (Folder Path on your PC)</span>
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          id="local-project-path"
+                          type="text"
+                          className="field"
+                          value={localPath}
+                          onChange={(e) => {
+                            setLocalPath(e.target.value);
+                            if (uploadedZipName) {
+                              setUploadedZipName(null);
+                              setPreviewSnapshotId(null);
+                            }
+                            if (detectError) setDetectError(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (localPath.trim()) {
+                                handleDetectLocalPath(localPath.trim());
+                              }
+                            }
+                          }}
+                          placeholder="e.g. C:\Users\EI 3\Desktop\my-legacy-app or /home/user/projects/legacy-app"
+                        />
+                        <button
+                          type="button"
+                          className="button button-primary"
+                          onClick={() => {
+                            if (localPath.trim()) {
+                              handleDetectLocalPath(localPath.trim());
+                            }
+                          }}
+                          disabled={detecting || !localPath.trim()}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', padding: '0 16px' }}
+                        >
+                          {detecting && !zipUploading ? (
+                            <>
+                              <RefreshCw size={14} className="spin" />
+                              <span>Inspecting...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Search size={14} />
+                              <span>Detect Stack</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <small>
+                        Paste the absolute folder path from your computer. Rebase inspects the manifests and source structure directly on this machine.
+                      </small>
+                    </div>
+                  </div>
+
+                  {/* Divider: OR */}
+                  <div style={{ display: 'flex', alignItems: 'center', margin: '14px 0', gap: '12px' }}>
+                    <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border)' }} />
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      or
+                    </span>
+                    <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border)' }} />
+                  </div>
+
+                  {/* Direct ZIP Upload Section */}
+                  <div>
+                    <input
+                      type="file"
+                      ref={zipInputRef}
+                      accept=".zip,application/zip"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleZipFileSelected(file);
+                        e.target.value = '';
+                      }}
+                    />
+
+                    {uploadedZipName && detectedStack ? (
+                      <div
+                        style={{
+                          padding: '12px 16px',
+                          backgroundColor: 'var(--card)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 'var(--radius-md)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: '12px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <FileCode size={20} color="var(--primary)" />
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--foreground)' }}>
+                                {uploadedZipName}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: '10px',
+                                  padding: '2px 8px',
+                                  borderRadius: 'var(--radius-full)',
+                                  backgroundColor: 'var(--accent)',
+                                  color: 'var(--primary)',
+                                  fontWeight: 600,
+                                }}
+                              >
+                                ZIP Staged for Intake
+                              </span>
+                            </div>
+                            {snapshotFingerprint && (
+                              <div style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--muted-foreground)', marginTop: '2px' }}>
+                                Fingerprint: {snapshotFingerprint.slice(0, 16)}...
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="button button-secondary button-sm"
+                          onClick={() => zipInputRef.current?.click()}
+                          style={{ fontSize: '11px' }}
+                        >
+                          Change ZIP
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => zipInputRef.current?.click()}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const file = e.dataTransfer.files?.[0];
+                          if (file) handleZipFileSelected(file);
+                        }}
+                        style={{
+                          border: '1.5px dashed var(--border)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '18px 16px',
+                          textAlign: 'center',
+                          backgroundColor: 'var(--card)',
+                          cursor: 'pointer',
+                          transition: 'border-color 0.15s ease',
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                          {zipUploading ? (
+                            <>
+                              <RefreshCw size={24} className="spin" color="var(--primary)" style={{ marginBottom: '4px' }} />
+                              <span style={{ fontSize: '13px', fontWeight: 600 }}>Uploading and analyzing ZIP archive...</span>
+                              <span style={{ fontSize: '11px', color: 'var(--muted-foreground)' }}>Extracting manifests and computing canonical Merkle fingerprint</span>
+                            </>
+                          ) : (
+                            <>
+                              <UploadCloud size={24} color="var(--primary)" style={{ marginBottom: '2px', opacity: 0.85 }} />
+                              <div style={{ fontSize: '13px', fontWeight: 600 }}>
+                                Upload Project Archive (<span style={{ fontFamily: 'var(--font-mono)' }}>.ZIP</span>)
+                              </div>
+                              <span style={{ fontSize: '11px', color: 'var(--muted-foreground)' }}>
+                                Drag and drop a <code style={{ fontSize: '11px' }}>.zip</code> file here, or click to browse from your computer (max 100 MB)
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Verified On PC status badge for Folder Path mode */}
+                  {detectedStack && sourceType === 'local' && !uploadedZipName && (
+                    <div
+                      style={{
+                        marginTop: '12px',
+                        padding: '10px 14px',
+                        backgroundColor: 'var(--card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-md)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '12px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FolderOpen size={16} color="var(--primary)" />
+                        <span style={{ fontSize: '13px', fontWeight: 600 }}>{localFolderName || 'Local Project'}</span>
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            padding: '2px 8px',
+                            borderRadius: 'var(--radius-full)',
+                            backgroundColor: 'var(--accent)',
+                            color: 'var(--primary)',
+                            fontWeight: 600,
+                          }}
+                        >
+                          Verified On PC
+                        </span>
+                      </div>
+                      {snapshotFingerprint && (
+                        <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--muted-foreground)' }} title={snapshotFingerprint}>
+                          Fingerprint: <strong>{snapshotFingerprint.slice(0, 12)}...</strong>
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="form-grid" style={{ marginTop: '16px' }}>
                 <div className="form-field span-two">
                   {/* Card Section Header */}
                   <div
@@ -406,7 +1108,7 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
                       <button
                         type="button"
                         className="button button-secondary button-sm"
-                        onClick={() => handleDetectStack(sourceRepo, revision)}
+                        onClick={() => handleDetectStack(sourceRepo, revision, gitToken)}
                         disabled={detecting}
                         title="Re-scan and fetch manifests from repository"
                         style={{ padding: '4px 10px', fontSize: '11px', height: '28px' }}
@@ -435,7 +1137,7 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
                       <button
                         type="button"
                         className="button button-secondary button-sm"
-                        onClick={() => handleDetectStack(sourceRepo, revision)}
+                        onClick={() => handleDetectStack(sourceRepo, revision, gitToken)}
                         style={{ fontSize: '11px', height: '24px' }}
                       >
                         Retry
@@ -1099,30 +1801,21 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
             {/* Step 2: Target Stack */}
             <div className="form-section">
               <h2>2. Target Architecture Stack</h2>
-              <p>Phase 0 vertical slice canonical target architecture specification.</p>
+              <p>Specify your targeted technology stack, framework preferences, and architectural modernization plan.</p>
 
               <div className="form-grid">
                 <div className="form-field span-two">
-                  <label>Target Framework & Runtime</label>
-                  <input
-                    type="text"
-                    className="field"
-                    value={targetStack}
-                    disabled
-                    style={{ backgroundColor: 'var(--secondary)' }}
-                  />
-                  <small>Locked for V1 vertical slice: TypeScript 5.x / Node.js 22 LTS / NestJS framework.</small>
-                </div>
-
-                <div className="form-field span-two">
-                  <label>Architectural Constraints & Requirements</label>
+                  <label htmlFor="target-plan">Targeted Tech Stack & Modernization Plan</label>
                   <textarea
+                    id="target-plan"
                     className="field"
-                    rows={3}
-                    value={constraints}
-                    onChange={(e) => setConstraints(e.target.value)}
+                    rows={4}
+                    value={targetPlan}
+                    onChange={(e) => setTargetPlan(e.target.value)}
+                    placeholder="Explain your targeted tech stack and modernization plan (e.g. Modernize to TypeScript 5.x / Node.js 22 LTS with NestJS framework. Preserve all ISO8583 settlement idempotency constraints.)"
+                    required
                   />
-                  <small>Injected into the Architect and CodeWriter prompt contracts.</small>
+                  <small>Injected into the Architect and CodeWriter prompt contracts to govern code generation.</small>
                 </div>
               </div>
             </div>
@@ -1134,14 +1827,17 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
 
               <div className="form-grid">
                 <div className="form-field">
-                  <label>Autonomous Budget Limit ($ USD)</label>
+                  <label>Autonomous Budget Limit (₹ INR)</label>
                   <input
                     type="number"
                     className="field"
-                    min={10}
-                    max={1000}
+                    min={50}
+                    max={1000000}
+                    step={100}
                     value={budget}
                     onChange={(e) => setBudget(Number(e.target.value))}
+                    onWheel={(e) => (e.target as HTMLElement).blur()}
+                    placeholder="e.g. 15000"
                     required
                   />
                   <small>Execution pauses automatically if 100% budget reached.</small>
@@ -1156,6 +1852,7 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
                     max={5}
                     value={maxRepairAttempts}
                     onChange={(e) => setMaxRepairAttempts(Number(e.target.value))}
+                    onWheel={(e) => (e.target as HTMLElement).blur()}
                     required
                   />
                   <small>Number of compile/test repair attempts per module (default: 3).</small>

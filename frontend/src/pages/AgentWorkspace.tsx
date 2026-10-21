@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { AgentRun } from '../types/domain';
 import { StatusBadge } from '../components/StatusBadge';
 import { AgentTraceModal } from '../components/AgentTraceModal';
-import { Bot, Terminal, Cpu, DollarSign, Activity, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Bot, Terminal, Cpu, IndianRupee, Activity, CheckCircle2, ShieldCheck } from 'lucide-react';
 
 interface AgentWorkspaceProps {
   agents: AgentRun[];
@@ -29,8 +29,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ agents }) => {
             <Cpu size={14} />
             <span>Total Tokens: <strong>{totalTokens.toLocaleString()}</strong></span>
             <span>•</span>
-            <DollarSign size={14} />
-            <span>Spend: <strong>${totalCost.toFixed(2)}</strong></span>
+            <IndianRupee size={14} />
+            <span>Spend: <strong>₹{totalCost.toFixed(2)}</strong></span>
           </div>
         </div>
       </div>
@@ -103,7 +103,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ agents }) => {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '12px' }}>
                   <span style={{ color: 'var(--muted-foreground)' }}>Spend:</span>
-                  <span style={{ fontWeight: 600, color: 'var(--primary)' }}>${(agent.cost_usd || 0).toFixed(2)}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--primary)' }}>₹{(agent.cost_usd || 0).toFixed(2)}</span>
                 </div>
 
                 <button

@@ -33,7 +33,10 @@ def redact_sensitive_data(obj: Any) -> Any:
     elif isinstance(obj, str):
         # Redact bearer tokens or basic auth patterns in raw strings if present
         if "Bearer " in obj:
-            return re.sub(r"Bearer\s+[\w\.\-]+", "Bearer [REDACTED]", obj)
+            obj = re.sub(r"Bearer\s+[\w\.\-]+", "Bearer [REDACTED]", obj)
+        # Redact GitHub fine-grained and classic personal access tokens
+        obj = re.sub(r"gh[pousr]_[A-Za-z0-9_]{16,255}", "[REDACTED]", obj)
+        obj = re.sub(r"github_pat_[A-Za-z0-9_]{16,255}", "[REDACTED]", obj)
         return obj
     return obj
 

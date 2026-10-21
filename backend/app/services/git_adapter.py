@@ -18,6 +18,7 @@ import socket
 import subprocess
 import tempfile
 import time
+import sys
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
@@ -59,7 +60,7 @@ class ControlledGitAdapter:
     def __init__(
         self,
         workspace_base: Optional[str] = None,
-        allow_local_repos_for_test: bool = False,
+        allow_local_repos_for_test: Optional[bool] = None,
     ):
         base = workspace_base or os.getenv("GIT_WORKSPACE_BASE", "./repo_workspaces")
         self.workspace_base = Path(base).resolve()
@@ -67,7 +68,7 @@ class ControlledGitAdapter:
         self.allow_local_repos_for_test = (
             allow_local_repos_for_test
             if allow_local_repos_for_test is not None
-            else settings.ENVIRONMENT in ("testing", "development")
+            else settings.ENVIRONMENT in ("testing", "test", "development")
         )
 
     def validate_source_url(self, repo_url: str) -> None:
@@ -146,11 +147,99 @@ class ControlledGitAdapter:
         }
         return safe_env
 
+    @staticmethod
+    def _setup_github_credential_helper(access_token: str) -> Tuple[List[str], Callable[[], None]]:
+        """Sets up a temporary, process-isolated Git credential helper strictly for github.com."""
+        token = access_token.strip()
+        if not token:
+            raise GitSecurityException("Personal access token cannot be empty.", issue="access_token is empty.")
+        if any(c in token for c in ("\r", "\n", "\0")):
+            raise GitSecurityException("Personal access token contains invalid control characters.", issue="Invalid characters in token.")
+
+        cred_dir = Path(tempfile.mkdtemp(prefix="rebase_gitcred_")).resolve()
+        if os.name != "nt":
+            try:
+                os.chmod(cred_dir, 0o700)
+            except Exception:
+                pass
+
+        token_file = cred_dir / "token.secret"
+        token_file.write_text(token, encoding="utf-8")
+        if os.name != "nt":
+            try:
+                os.chmod(token_file, 0o600)
+            except Exception:
+                pass
+
+        helper_py = cred_dir / "helper.py"
+        helper_code = '''import sys
+from pathlib import Path
+
+action = sys.argv[1] if len(sys.argv) > 1 else ""
+if action != "get":
+    sys.exit(0)
+
+host = ""
+protocol = ""
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        break
+    if "=" in line:
+        k, v = line.split("=", 1)
+        if k.lower() == "host":
+            host = v.strip().lower()
+        elif k.lower() == "protocol":
+            protocol = v.strip().lower()
+
+if host == "github.com" and protocol == "https":
+    token_p = Path(__file__).parent / "token.secret"
+    if token_p.exists():
+        secret = token_p.read_text(encoding="utf-8").strip()
+        if secret:
+            sys.stdout.write(f"username=x-access-token\\npassword={secret}\\n")
+            sys.stdout.flush()
+'''
+        helper_py.write_text(helper_code, encoding="utf-8")
+        if os.name != "nt":
+            try:
+                os.chmod(helper_py, 0o700)
+            except Exception:
+                pass
+
+        py_exe_str = sys.executable.replace("\\", "/")
+        helper_py_str = str(helper_py).replace("\\", "/")
+
+        config_args = [
+            "-c", "credential.helper=",
+            "-c", f'credential.https://github.com.helper=!"{py_exe_str}" "{helper_py_str}"',
+        ]
+
+        def _cleanup():
+            try:
+                if token_file.exists():
+                    try:
+                        with open(token_file, "wb") as f:
+                            f.write(b"\x00" * 256)
+                            f.flush()
+                    except Exception:
+                        pass
+                    token_file.unlink(missing_ok=True)
+                if helper_py.exists():
+                    helper_py.unlink(missing_ok=True)
+                if cred_dir.exists():
+                    shutil.rmtree(cred_dir, ignore_errors=True)
+            except Exception:
+                pass
+
+        return config_args, _cleanup
+
     def _execute_git(
         self,
         args: List[str],
         cwd: Optional[Path] = None,
         timeout_seconds: int = 60,
+        extra_config_args: Optional[List[str]] = None,
     ) -> str:
         """Executes git subprocess safely with argument list, no shell, and hooks disabled."""
         safe_args = [
@@ -159,7 +248,10 @@ class ControlledGitAdapter:
             "-c", "protocol.ext.allow=never",       # Disable external protocol helpers
             "-c", "core.symlinks=false",            # Prevent symlink traversal exploits
             "-c", "http.followRedirects=false",     # Block HTTP redirects to mitigate SSRF bypass
-        ] + args
+        ]
+        if extra_config_args:
+            safe_args.extend(extra_config_args)
+        safe_args.extend(args)
 
         try:
             result = subprocess.run(
@@ -173,20 +265,44 @@ class ControlledGitAdapter:
             )
         except subprocess.TimeoutExpired:
             raise GitOperationException(
-                f"Git operation timed out after {timeout_seconds} seconds."
+                f"Git operation timed out after {timeout_seconds} seconds.",
+                status_code=504,
             )
         except FileNotFoundError:
             raise GitOperationException("Git executable not found on host system.")
 
         if result.returncode != 0:
-            # Mask potential credentials from error message
+            # Mask potential credentials and tokens from error message
             err = result.stderr.strip() or result.stdout.strip()
             clean_err = re.sub(r"://[^@]+@", "://***:***@", err)
-            status_code = 404 if "not found" in clean_err.lower() or "does not exist" in clean_err.lower() else (
-                401 if "authentication" in clean_err.lower() or "credentials" in clean_err.lower() else 502
-            )
+            clean_err = re.sub(r"gh[pousr]_[A-Za-z0-9_]{16,255}", "***", clean_err)
+            clean_err = re.sub(r"github_pat_[A-Za-z0-9_]{16,255}", "***", clean_err)
+
+            lower_err = clean_err.lower()
+            if "could not read username" in lower_err or "terminal prompts disabled" in lower_err:
+                diagnostic = "Authentication required: Repository is private or inaccessible without a GitHub Personal Access Token (PAT)."
+                status_code = 401
+            elif "authentication failed" in lower_err or "invalid username or" in lower_err or "bad credentials" in lower_err:
+                diagnostic = "GitHub authentication failed: The provided Personal Access Token is invalid, expired, or revoked."
+                status_code = 401
+            elif "saml enforcement" in lower_err or "organization requires approval" in lower_err:
+                diagnostic = "GitHub organization policy restriction: The Personal Access Token must be authorized for SAML/SSO by the repository owner organization."
+                status_code = 403
+            elif "secondary rate limit" in lower_err or "rate limit" in lower_err:
+                diagnostic = "GitHub rate limit exceeded: Secondary or API rate limit reached. Please wait before retrying."
+                status_code = 429
+            elif "not found" in lower_err or "does not exist" in lower_err:
+                diagnostic = "Repository not found or access denied: Verify repository URL and ensure the PAT has Contents (Read-only) permissions."
+                status_code = 404
+            elif "timed out" in lower_err or "connection timed out" in lower_err:
+                diagnostic = "Network timeout while communicating with repository host."
+                status_code = 504
+            else:
+                diagnostic = clean_err
+                status_code = 502
+
             raise GitOperationException(
-                f"Git command failed (code {result.returncode}): {clean_err}",
+                f"Git command failed (code {result.returncode}): {diagnostic}",
                 status_code=status_code,
             )
 
@@ -200,8 +316,10 @@ class ControlledGitAdapter:
         depth: Optional[int] = 50,
         workspace_dir_override: Optional[Path] = None,
         timeout_seconds: int = 120,
+        access_token: Optional[str] = None,
+        pinned_commit: Optional[str] = None,
     ) -> Tuple[Path, str]:
-        """Clones a repository into the job workspace and checks out the specified revision."""
+        """Clones a repository into the job workspace and checks out the specified revision or pinned commit."""
         self.validate_source_url(repo_url)
         workspace = workspace_dir_override if workspace_dir_override is not None else self.get_job_workspace(job_id)
 
@@ -210,100 +328,139 @@ class ControlledGitAdapter:
             shutil.rmtree(workspace)
         workspace.mkdir(parents=True, exist_ok=True)
 
-        # In testing/development, support local fixtures directly
-        if self.allow_local_repos_for_test:
-            # Check for acme payment-gateway contract test fixture
-            if "acme/payment-gateway" in repo_url:
-                fixture_dir = Path(__file__).resolve().parent.parent.parent / "tests" / "fixtures" / "sample_payment_gateway"
-                if fixture_dir.exists():
-                    shutil.copytree(fixture_dir, workspace, dirs_exist_ok=True)
-                    self._execute_git(["init"], cwd=workspace)
-                    self._execute_git(["config", "user.name", "Test Committer"], cwd=workspace)
-                    self._execute_git(["config", "user.email", "test@acme.corp"], cwd=workspace)
-                    self._execute_git(["add", "."], cwd=workspace)
-                    self._execute_git(["commit", "-m", "Sample payment gateway test commit"], cwd=workspace)
+        cred_args: List[str] = []
+        cred_cleanup: Optional[Callable[[], None]] = None
+
+        if access_token and access_token.strip():
+            parsed = urlparse(repo_url)
+            hostname = (parsed.hostname or "").lower()
+            if hostname != "github.com":
+                raise GitSecurityException(
+                    f"GitHub Personal Access Token cannot be used with host '{hostname}'. Credentials are restricted strictly to github.com.",
+                    issue="PAT is restricted strictly to github.com repositories.",
+                )
+            cred_args, cred_cleanup = self._setup_github_credential_helper(access_token)
+
+        try:
+            # In testing/development, support local fixtures directly
+            if self.allow_local_repos_for_test:
+                # Check for acme payment-gateway contract test fixture
+                if "acme/payment-gateway" in repo_url:
+                    fixture_dir = Path(__file__).resolve().parent.parent.parent / "tests" / "fixtures" / "sample_payment_gateway"
+                    if fixture_dir.exists():
+                        shutil.copytree(fixture_dir, workspace, dirs_exist_ok=True)
+                        self._execute_git(["init"], cwd=workspace)
+                        self._execute_git(["config", "user.name", "Test Committer"], cwd=workspace)
+                        self._execute_git(["config", "user.email", "test@acme.corp"], cwd=workspace)
+                        self._execute_git(["add", "."], cwd=workspace)
+                        self._execute_git(["commit", "-m", "Sample payment gateway test commit"], cwd=workspace)
+                        resolved_commit = self._execute_git(["rev-parse", "HEAD"], cwd=workspace)
+                        return workspace, resolved_commit
+
+                # Check for local directory path
+                local_path_str = repo_url[7:] if repo_url.startswith("file://") else repo_url
+                # On Windows, handle /C:/path
+                if local_path_str.startswith("/") and len(local_path_str) > 2 and local_path_str[2] == ":":
+                    local_path_str = local_path_str[1:]
+                local_path = Path(local_path_str)
+                if local_path.is_dir():
+                    if (local_path / ".git").is_dir():
+                        clone_args = ["clone"]
+                        if depth:
+                            clone_args.extend(["--depth", str(depth)])
+                        clone_args.extend([str(local_path), str(workspace)])
+                        self._execute_git(clone_args, timeout_seconds=120)
+                    else:
+                        shutil.copytree(local_path, workspace, dirs_exist_ok=True)
+                        self._execute_git(["init"], cwd=workspace)
+                        self._execute_git(["config", "user.name", "Test Committer"], cwd=workspace)
+                        self._execute_git(["config", "user.email", "test@acme.corp"], cwd=workspace)
+                        self._execute_git(["add", "."], cwd=workspace)
+                        self._execute_git(["commit", "-m", "Local test commit"], cwd=workspace)
+
+                    if pinned_commit and pinned_commit.strip():
+                        self._execute_git(["checkout", pinned_commit.strip()], cwd=workspace)
+                    elif revision and revision not in ("HEAD", "main", "master"):
+                        try:
+                            self._execute_git(["checkout", revision], cwd=workspace)
+                        except Exception:
+                            pass
                     resolved_commit = self._execute_git(["rev-parse", "HEAD"], cwd=workspace)
                     return workspace, resolved_commit
 
-            # Check for local directory path
-            local_path_str = repo_url[7:] if repo_url.startswith("file://") else repo_url
-            # On Windows, handle /C:/path
-            if local_path_str.startswith("/") and len(local_path_str) > 2 and local_path_str[2] == ":":
-                local_path_str = local_path_str[1:]
-            local_path = Path(local_path_str)
-            if local_path.is_dir():
-                if (local_path / ".git").is_dir():
-                    clone_args = ["clone"]
+            target_rev = revision.strip() if revision else "HEAD"
+            cloned = False
+
+            # Attempt 1: If a specific branch is requested (and not generic HEAD), try shallow clone with --branch
+            if target_rev and target_rev != "HEAD":
+                try:
+                    branch_clone_args = ["clone"]
                     if depth:
-                        clone_args.extend(["--depth", str(depth)])
-                    clone_args.extend([str(local_path), str(workspace)])
-                    self._execute_git(clone_args, timeout_seconds=120)
-                else:
-                    shutil.copytree(local_path, workspace, dirs_exist_ok=True)
-                    self._execute_git(["init"], cwd=workspace)
-                    self._execute_git(["config", "user.name", "Test Committer"], cwd=workspace)
-                    self._execute_git(["config", "user.email", "test@acme.corp"], cwd=workspace)
-                    self._execute_git(["add", "."], cwd=workspace)
-                    self._execute_git(["commit", "-m", "Local test commit"], cwd=workspace)
+                        branch_clone_args.extend(["--depth", str(depth)])
+                    branch_clone_args.extend(["--branch", target_rev, repo_url, str(workspace)])
+                    self._execute_git(branch_clone_args, timeout_seconds=timeout_seconds, extra_config_args=cred_args)
+                    cloned = True
+                except GitOperationException:
+                    # If branch doesn't exist on remote or --branch failed, clean up for default clone retry
+                    if workspace.exists():
+                        shutil.rmtree(workspace)
+                    workspace.mkdir(parents=True, exist_ok=True)
 
-                if revision and revision not in ("HEAD", "main", "master"):
-                    try:
-                        self._execute_git(["checkout", revision], cwd=workspace)
-                    except Exception:
-                        pass
-                resolved_commit = self._execute_git(["rev-parse", "HEAD"], cwd=workspace)
-                return workspace, resolved_commit
-
-        target_rev = revision.strip() if revision else "HEAD"
-        cloned = False
-
-        # Attempt 1: If a specific branch is requested (and not generic HEAD), try shallow clone with --branch
-        if target_rev and target_rev != "HEAD":
-            try:
-                branch_clone_args = ["clone"]
+            # Attempt 2: Clone repository default branch
+            if not cloned:
+                default_clone_args = ["clone"]
                 if depth:
-                    branch_clone_args.extend(["--depth", str(depth)])
-                branch_clone_args.extend(["--branch", target_rev, repo_url, str(workspace)])
-                self._execute_git(branch_clone_args, timeout_seconds=timeout_seconds)
-                cloned = True
-            except GitOperationException:
-                # If branch doesn't exist on remote or --branch failed, clean up for default clone retry
-                if workspace.exists():
-                    shutil.rmtree(workspace)
-                workspace.mkdir(parents=True, exist_ok=True)
+                    default_clone_args.extend(["--depth", str(depth)])
+                default_clone_args.extend([repo_url, str(workspace)])
+                self._execute_git(default_clone_args, timeout_seconds=timeout_seconds, extra_config_args=cred_args)
 
-        # Attempt 2: Clone repository default branch
-        if not cloned:
-            default_clone_args = ["clone"]
-            if depth:
-                default_clone_args.extend(["--depth", str(depth)])
-            default_clone_args.extend([repo_url, str(workspace)])
-            self._execute_git(default_clone_args, timeout_seconds=timeout_seconds)
+                # Discover current branch name
+                try:
+                    current_branch = self._execute_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=workspace)
+                except Exception:
+                    current_branch = "HEAD"
 
-            # Discover current branch name
-            try:
-                current_branch = self._execute_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=workspace)
-            except Exception:
-                current_branch = "HEAD"
+                # If user requested a revision different from what was cloned
+                if target_rev and target_rev != "HEAD" and current_branch != target_rev:
+                    # If user requested common default branch like 'main' but repo is on 'master' (or vice-versa),
+                    # stay gracefully on the repository's primary branch without error
+                    if target_rev in ("main", "master") and current_branch in ("main", "master"):
+                        pass
+                    else:
+                        # Attempt checkout of specific requested branch or commit SHA
+                        try:
+                            self._execute_git(["checkout", target_rev], cwd=workspace)
+                        except GitOperationException as e:
+                            if target_rev in ("main", "master"):
+                                pass
+                            else:
+                                raise e
 
-            # If user requested a revision different from what was cloned
-            if target_rev and target_rev != "HEAD" and current_branch != target_rev:
-                # If user requested common default branch like 'main' but repo is on 'master' (or vice-versa),
-                # stay gracefully on the repository's primary branch without error
-                if target_rev in ("main", "master") and current_branch in ("main", "master"):
+            # If an approved pinned_commit was specified, enforce checkout of the pinned commit
+            if pinned_commit and pinned_commit.strip():
+                target_commit = pinned_commit.strip()
+                try:
+                    self._execute_git(["checkout", target_commit], cwd=workspace)
+                except GitOperationException as e:
+                    raise GitOperationException(
+                        f"Approved pinned commit '{target_commit}' is unavailable or inaccessible in repository: {e.message}",
+                        status_code=404,
+                    ) from e
+
+            resolved_commit = self._execute_git(["rev-parse", "HEAD"], cwd=workspace)
+            if pinned_commit and pinned_commit.strip() and resolved_commit.lower() != pinned_commit.strip().lower():
+                raise GitOperationException(
+                    f"Resolved commit '{resolved_commit}' does not match approved pinned commit '{pinned_commit}'.",
+                    status_code=409,
+                )
+
+            return workspace, resolved_commit
+        finally:
+            if cred_cleanup:
+                try:
+                    cred_cleanup()
+                except Exception:
                     pass
-                else:
-                    # Attempt checkout of specific requested branch or commit SHA
-                    try:
-                        self._execute_git(["checkout", target_rev], cwd=workspace)
-                    except GitOperationException as e:
-                        if target_rev in ("main", "master"):
-                            pass
-                        else:
-                            raise e
-
-        resolved_commit = self._execute_git(["rev-parse", "HEAD"], cwd=workspace)
-        return workspace, resolved_commit
 
     def acquire_ephemeral_workspace(
         self,
@@ -312,6 +469,7 @@ class ControlledGitAdapter:
         depth: Optional[int] = 1,
         timeout_seconds: int = 45,
         max_size_mb: int = 100,
+        access_token: Optional[str] = None,
     ) -> Tuple[Path, str, Callable[[], None]]:
         """Safely clones a shallow preview into an OS temporary directory outside repo_workspaces.
 
@@ -358,6 +516,7 @@ class ControlledGitAdapter:
                 depth=depth,
                 workspace_dir_override=temp_dir,
                 timeout_seconds=timeout_seconds,
+                access_token=access_token,
             )
 
             # Check directory size limit

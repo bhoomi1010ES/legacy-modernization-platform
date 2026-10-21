@@ -158,8 +158,8 @@ export const Jobs: React.FC<JobsProps> = ({ jobs, onNavigate }) => {
                     </div>
                   </td>
                   <td>
-                    <span style={{ fontWeight: 600 }}>${job.cost.toFixed(2)}</span>
-                    <span style={{ color: 'var(--muted-foreground)', fontSize: '10px' }}> / ${job.budget.toFixed(2)}</span>
+                    <span style={{ fontWeight: 600 }}>₹{job.cost.toFixed(2)}</span>
+                    <span style={{ color: 'var(--muted-foreground)', fontSize: '10px' }}> / ₹{job.budget.toFixed(2)}</span>
                   </td>
                   <td>
                     <span style={{ fontSize: '11px', color: 'var(--muted-foreground)' }}>{job.owner}</span>

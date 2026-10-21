@@ -30,12 +30,22 @@ class JobCreateRequest(BaseModel):
     source_revision: str = Field("main", description="Git branch or commit revision.")
     source_stack: Optional[str] = Field("Auto-detect", description="Legacy language and framework.")
     target_stack: str = Field("TypeScript / Node.js 22 / NestJS", description="Target modern stack.")
-    budget: float = Field(150.0, ge=50.0, description="Job budget ceiling in USD (minimum $50.00).")
+    budget: float = Field(15000.0, ge=50.0, description="Job budget ceiling in INR (Rupees, minimum ₹50.00).")
     max_repair_attempts: int = Field(3, ge=1, le=5, description="Maximum automated repair attempts per module.")
     constraints: Optional[str] = Field(None, description="Architecture constraints or preserved behaviors.")
     stack_metadata: Optional[dict[str, Any]] = Field(None, description="Detailed stack detection metadata.")
     pinned_commit: Optional[str] = Field(None, description="Pinned Git commit hash verified during preview.")
     user_overrides: Optional[dict[str, Any]] = Field(None, description="Explicit user customizations overriding automated detection.")
+    git_token: Optional[str] = Field(None, description="Optional GitHub Personal Access Token for private repository intake.")
+    source_type: Optional[str] = Field("git", description="Source provider type: 'git' or 'local'.")
+    preview_snapshot_id: Optional[str] = Field(None, description="UUID of staged preview snapshot for local folder intake.")
+    snapshot_fingerprint: Optional[str] = Field(None, description="Authoritative SHA-256 fingerprint of the local source snapshot.")
+
+
+class JobIntakeRequest(BaseModel):
+    git_token: Optional[str] = Field(None, description="Optional GitHub Personal Access Token for private repository intake.")
+    preview_snapshot_id: Optional[str] = Field(None, description="UUID of staged preview snapshot to promote to permanent workspace.")
+    snapshot_fingerprint: Optional[str] = Field(None, description="Authoritative SHA-256 fingerprint to verify against staged snapshot.")
 
 
 class JobSummaryResponse(BaseModel):
@@ -48,8 +58,8 @@ class JobSummaryResponse(BaseModel):
     status: JobStatus = Field(..., description="Current lifecycle state.")
     progress: int = Field(0, ge=0, le=100, description="Overall completion percentage.")
     modules: int = Field(0, description="Total identified modules.")
-    cost: float = Field(0.0, description="Current token and infrastructure spend in USD.")
-    budget: float = Field(..., description="Budget ceiling in USD.")
+    cost: float = Field(0.0, description="Current token and infrastructure spend in INR (Rupees).")
+    budget: float = Field(..., description="Budget ceiling in INR (Rupees).")
     owner: str = Field(..., description="Job owner full name.")
     created_at: str = Field(..., description="ISO 8601 creation timestamp.")
     updated_at: str = Field(..., description="ISO 8601 last updated timestamp.")
@@ -114,12 +124,17 @@ class StackDetectionRequest(BaseModel):
     source_repository: str = Field(..., description="Git repository URL or configured reference.")
     source_revision: Optional[str] = Field("main", description="Git branch or commit revision.")
     job_id: Optional[str] = Field(None, description="Optional job ID to associate and persist detection results.")
+    access_token: Optional[str] = Field(None, description="Optional GitHub Personal Access Token for private repository access.")
+    source_type: Optional[str] = Field("git", description="Source provider type: 'git' or 'local'.")
 
 
 class DetectedStackResponse(BaseModel):
     source_repository: str
     source_revision: str
     requested_revision: Optional[str] = None
+    source_type: str = Field("git", description="Source provider: 'git' or 'local'.")
+    preview_snapshot_id: Optional[str] = Field(None, description="Temporary staging snapshot ID for local source reuse.")
+    snapshot_fingerprint: Optional[str] = Field(None, description="Authoritative canonical SHA-256 snapshot fingerprint.")
     primary_language: str
     language_version: str
     framework: str

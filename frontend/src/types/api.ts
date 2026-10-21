@@ -29,6 +29,16 @@ export interface JobCreateRequest {
   stack_metadata?: Record<string, any>;
   pinned_commit?: string;
   user_overrides?: Record<string, any>;
+  git_token?: string;
+  source_type?: 'git' | 'local';
+  preview_snapshot_id?: string;
+  snapshot_fingerprint?: string;
+}
+
+export interface JobIntakeRequest {
+  git_token?: string;
+  preview_snapshot_id?: string;
+  snapshot_fingerprint?: string;
 }
 
 export interface GateDecisionRequest {
@@ -128,6 +138,9 @@ export interface DetectedStackResponse {
   source_repository: string;
   source_revision: string;
   requested_revision?: string;
+  source_type?: 'git' | 'local' | string;
+  preview_snapshot_id?: string;
+  snapshot_fingerprint?: string;
   primary_language: string;
   language_version: string;
   framework: string;

@@ -157,15 +157,88 @@ export const api = {
     });
   },
 
-  async detectSourceStack(sourceRepository: string, sourceRevision: string = 'main', jobId?: string): Promise<DetectedStackResponse> {
+  async detectSourceStack(
+    sourceRepository: string,
+    sourceRevision: string = 'main',
+    jobId?: string,
+    accessToken?: string,
+    sourceType: string = 'git'
+  ): Promise<DetectedStackResponse> {
     return request<DetectedStackResponse>('/jobs/detect-stack', {
       method: 'POST',
       body: JSON.stringify({
         source_repository: sourceRepository,
         source_revision: sourceRevision,
         job_id: jobId,
+        access_token: accessToken || undefined,
+        source_type: sourceType,
       }),
     });
+  },
+
+  async detectLocalSourceStack(
+    bundleZip: Blob,
+    sourceName: string,
+    jobId?: string
+  ): Promise<DetectedStackResponse> {
+    const formData = new FormData();
+    formData.append('bundle', bundleZip, `${sourceName}.zip`);
+    formData.append('source_name', sourceName);
+    if (jobId) formData.append('job_id', jobId);
+
+    const res = await fetch(`${API_BASE}/jobs/detect-stack/local`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const errMsg = err.error?.message || err.detail || `Upload detection failed with status ${res.status}`;
+      throw new Error(errMsg);
+    }
+
+    return await res.json();
+  },
+
+  async intakeJob(
+    jobId: string,
+    gitToken?: string,
+    previewSnapshotId?: string,
+    snapshotFingerprint?: string
+  ): Promise<Job> {
+    return request<Job>(`/jobs/${jobId}/intake`, {
+      method: 'POST',
+      body: JSON.stringify({
+        git_token: gitToken || undefined,
+        preview_snapshot_id: previewSnapshotId || undefined,
+        snapshot_fingerprint: snapshotFingerprint || undefined,
+      }),
+    });
+  },
+
+  async intakeJobLocal(
+    jobId: string,
+    bundleZip: Blob,
+    expectedFingerprint?: string
+  ): Promise<Job> {
+    const formData = new FormData();
+    formData.append('bundle', bundleZip, 'intake.zip');
+    if (expectedFingerprint) formData.append('expected_fingerprint', expectedFingerprint);
+
+    const res = await fetch(`${API_BASE}/jobs/${jobId}/intake/local`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const errMsg = err.error?.message || err.detail || `Local intake failed with status ${res.status}`;
+      throw new Error(errMsg);
+    }
+
+    return await res.json();
   },
 
   async pauseJob(jobId: string): Promise<Job> {

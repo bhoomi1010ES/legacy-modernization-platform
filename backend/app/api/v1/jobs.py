@@ -2,11 +2,12 @@
 
 from typing import Optional, Tuple
 import uuid
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pathlib import Path
 from app.api.deps import get_current_user, get_optional_user, get_db, require_job_access
-from app.core.errors import NotFoundException
+from app.core.errors import ErrorDetail, NotFoundException, ValidationException
 from app.models.job import Job
 from app.models.user import User
 from app.schemas.jobs import (
@@ -17,6 +18,7 @@ from app.schemas.jobs import (
     JobSummaryResponse,
     StackDetectionRequest,
     DetectedStackResponse,
+    JobIntakeRequest,
 )
 from app.services.job_service import JobService
 from app.services.stack_detector import StackDetector
@@ -117,10 +119,65 @@ async def detect_stack(
     user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ) -> DetectedStackResponse:
-    detected = StackDetector.detect_stack(
-        source_repository=payload.source_repository,
-        source_revision=payload.source_revision or "main",
-    )
+    raw_path = payload.source_repository.strip()
+    is_local_request = (payload.source_type == "local") or raw_path.startswith("local://")
+    if not is_local_request:
+        try:
+            p = Path(raw_path)
+            if p.is_absolute() and (p.exists() or not (raw_path.startswith("http://") or raw_path.startswith("https://") or raw_path.startswith("git@"))):
+                is_local_request = True
+        except Exception:
+            pass
+
+    if is_local_request:
+        clean_path_str = raw_path.removeprefix("local://")
+        local_dir = Path(clean_path_str).resolve()
+        if not local_dir.exists():
+            raise ValidationException(
+                f"Local directory path '{clean_path_str}' was not found on this machine.",
+                details=[ErrorDetail(field="source_repository", issue="Local directory does not exist")],
+            )
+        if local_dir.is_file() and clean_path_str.lower().endswith(".zip"):
+            from app.services.local_source_adapter import LocalSourceAdapter
+            adapter = LocalSourceAdapter()
+            staging_dir, metadata = adapter.stage_preview_bundle(
+                archive_path=local_dir,
+                source_name=local_dir.stem,
+                user_id=str(user.user_id) if user else "local-operator",
+            )
+            detected = StackDetector.detect_stack_from_workspace(
+                workspace_path=staging_dir,
+                source_name=local_dir.stem,
+                source_revision="LOCAL",
+                preview_snapshot_id=metadata.snapshot_id,
+                snapshot_fingerprint=metadata.canonical_fingerprint,
+                extra_warnings=metadata.warnings,
+                is_complete=metadata.is_complete,
+            )
+            detected.source_repository = str(local_dir)
+            detected.source_type = "local"
+        elif not local_dir.is_dir():
+            raise ValidationException(
+                f"Path '{clean_path_str}' is neither a directory nor a .zip archive.",
+                details=[ErrorDetail(field="source_repository", issue="Target must be a directory or .zip archive")],
+            )
+        else:
+            from app.services.local_source_adapter import LocalSourceAdapter
+            fingerprint = LocalSourceAdapter.calculate_canonical_fingerprint(local_dir)
+            detected = StackDetector.detect_stack_from_workspace(
+                workspace_path=local_dir,
+                source_name=local_dir.name,
+                source_revision="LOCAL",
+                snapshot_fingerprint=fingerprint,
+            )
+            detected.source_repository = str(local_dir)
+            detected.source_type = "local"
+    else:
+        detected = StackDetector.detect_stack(
+            source_repository=payload.source_repository,
+            source_revision=payload.source_revision or "main",
+            access_token=payload.access_token,
+        )
 
     if payload.job_id and user:
         from app.models.job import Job
@@ -155,6 +212,92 @@ async def detect_stack(
 
     return detected
 
+
+@router.post(
+    "/detect-stack/local",
+    response_model=DetectedStackResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Upload and inspect local folder bundle, detecting technology stack",
+    operation_id="jobs_detect_stack_local",
+)
+async def detect_stack_local(
+    bundle: UploadFile = File(..., description="Zipped local project source bundle"),
+    source_name: str = Form("local-project", description="Display name of local folder"),
+    job_id: Optional[str] = Form(None, description="Optional job ID"),
+    request: Request = None,
+    user: Optional[User] = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+) -> DetectedStackResponse:
+    import tempfile
+    from pathlib import Path
+    from app.services.local_source_adapter import LocalSourceAdapter
+
+    adapter = LocalSourceAdapter()
+    try:
+        adapter.cleanup_staged_snapshots()
+    except Exception:
+        pass
+
+    # Stream uploaded bundle to temporary file on disk to prevent memory spikes
+    temp_zip = Path(tempfile.gettempdir()) / f"rebase_upload_{uuid.uuid4()}.zip"
+    try:
+        with open(temp_zip, "wb") as f:
+            while chunk := await bundle.read(1024 * 1024):  # 1 MB chunks
+                f.write(chunk)
+
+        staging_dir, metadata = adapter.stage_preview_bundle(
+            archive_path=temp_zip,
+            source_name=source_name,
+            user_id=str(user.user_id) if user else "anonymous",
+        )
+
+        detected = StackDetector.detect_stack_from_workspace(
+            workspace_path=staging_dir,
+            source_name=source_name,
+            source_revision="LOCAL",
+            preview_snapshot_id=metadata.snapshot_id,
+            snapshot_fingerprint=metadata.canonical_fingerprint,
+            extra_warnings=metadata.warnings,
+            is_complete=metadata.is_complete,
+        )
+
+        if job_id and user:
+            from app.models.job import Job
+            from app.models.audit import AuditEvent
+            from sqlalchemy import select
+
+            try:
+                clean_id = uuid.UUID(str(job_id))
+                res = await db.execute(select(Job).where(Job.job_id == clean_id))
+                job = res.scalar_one_or_none()
+                if job and (job.owner_user_id == user.user_id or user.role in ("ADMIN", "ARCHITECT")):
+                    job.stack_metadata = detected.model_dump()
+                    job.source_stack = detected.summary_stack[:100]
+                    audit = AuditEvent(
+                        job_id=job.job_id,
+                        event_type="JOB_STACK_DETECTED",
+                        actor_type="USER",
+                        actor_id=str(user.user_id),
+                        payload={
+                            "scan_status": detected.scan_status,
+                            "source_type": "local",
+                            "snapshot_fingerprint": metadata.canonical_fingerprint,
+                            "file_count": metadata.file_count,
+                        },
+                        correlation_id=getattr(request.state, "correlation_id", None) if request else None,
+                    )
+                    db.add(audit)
+                    await db.commit()
+            except (ValueError, TypeError):
+                pass
+
+        return detected
+    finally:
+        if temp_zip.exists():
+            try:
+                temp_zip.unlink()
+            except Exception:
+                pass
 
 
 @router.get(
@@ -236,3 +379,163 @@ async def cancel_job(
         correlation_id=correlation_id,
     )
     return _job_to_response(cancelled_job, user.full_name)
+
+
+@router.post(
+    "/{job_id}/intake",
+    response_model=JobDetailResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Acquire repository and initiate job intake stage",
+    operation_id="jobs_intake",
+)
+async def intake_job(
+    job_id: str,
+    payload: JobIntakeRequest,
+    request: Request,
+    access: Tuple[Job, User] = Depends(require_job_access(permission="job:intake")),
+    db: AsyncSession = Depends(get_db),
+) -> JobDetailResponse:
+    from app.models.audit import AuditEvent
+
+    job, user = access
+    current_status = JobStatus(job.status)
+    if current_status == JobStatus.CREATED:
+        JobStateMachine.validate_transition(current_status, JobStatus.INTAKE)
+        job.status = JobStatus.INTAKE.value
+
+    # Extract pinned_commit if available from preview metadata
+    pinned_commit = None
+    snapshot_fingerprint = payload.snapshot_fingerprint
+    preview_snapshot_id = payload.preview_snapshot_id
+
+    if isinstance(job.stack_metadata, dict):
+        pinned_commit = job.stack_metadata.get("pinned_commit")
+        eff = job.stack_metadata.get("effective", {})
+        det = job.stack_metadata.get("detected", {})
+        if not preview_snapshot_id:
+            preview_snapshot_id = (
+                job.stack_metadata.get("preview_snapshot_id")
+                or (eff.get("preview_snapshot_id") if isinstance(eff, dict) else None)
+                or (det.get("preview_snapshot_id") if isinstance(det, dict) else None)
+            )
+        if not snapshot_fingerprint:
+            snapshot_fingerprint = (
+                job.stack_metadata.get("snapshot_fingerprint")
+                or (eff.get("snapshot_fingerprint") if isinstance(eff, dict) else None)
+                or (det.get("snapshot_fingerprint") if isinstance(det, dict) else None)
+            )
+
+    is_local = (job.source_repository or "").startswith("local://")
+
+    workspace, resolved_commit_or_fingerprint = job_service.acquire_intake_workspace(
+        job_id=str(job.job_id),
+        repo_url=job.source_repository,
+        revision=job.source_revision,
+        pinned_commit=pinned_commit,
+        git_token=payload.git_token,
+        source_type="local" if is_local else "git",
+        preview_snapshot_id=preview_snapshot_id,
+        snapshot_fingerprint=snapshot_fingerprint,
+        user_id=str(user.user_id),
+        is_admin=user.role in ("ADMIN", "SUPER_ADMIN"),
+    )
+
+    # Append audit event without credential leakage
+    correlation_id = getattr(request.state, "correlation_id", None)
+    audit = AuditEvent(
+        job_id=job.job_id,
+        event_type="JOB_INTAKE_COMPLETED",
+        actor_type="USER",
+        actor_id=str(user.user_id),
+        correlation_id=correlation_id,
+        target_resource=str(job.job_id),
+        payload={
+            "source_type": "local" if is_local else "git",
+            "resolved_commit": resolved_commit_or_fingerprint if not is_local else None,
+            "snapshot_fingerprint": resolved_commit_or_fingerprint if is_local else None,
+            "workspace_dir": workspace.name,
+            "pinned_commit_enforced": bool(pinned_commit),
+            "reused_staged_snapshot": bool(is_local and preview_snapshot_id),
+        },
+    )
+    db.add(audit)
+    await db.commit()
+    await db.refresh(job)
+    return _job_to_response(job, user.full_name)
+
+
+@router.post(
+    "/{job_id}/intake/local",
+    response_model=JobDetailResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Direct upload intake for local folder modernization job",
+    operation_id="jobs_intake_local",
+)
+async def intake_job_local(
+    job_id: str,
+    bundle: UploadFile = File(..., description="Zipped local project source bundle"),
+    expected_fingerprint: Optional[str] = Form(None, description="Optional expected snapshot fingerprint"),
+    request: Request = None,
+    access: Tuple[Job, User] = Depends(require_job_access(permission="job:intake")),
+    db: AsyncSession = Depends(get_db),
+) -> JobDetailResponse:
+    from app.models.audit import AuditEvent
+    import tempfile
+    from pathlib import Path
+    from app.services.local_source_adapter import LocalSourceAdapter
+
+    job, user = access
+    current_status = JobStatus(job.status)
+    if current_status == JobStatus.CREATED:
+        JobStateMachine.validate_transition(current_status, JobStatus.INTAKE)
+        job.status = JobStatus.INTAKE.value
+
+    # Extract expected fingerprint from metadata if not given in form
+    if not expected_fingerprint and isinstance(job.stack_metadata, dict):
+        eff = job.stack_metadata.get("effective", {})
+        det = job.stack_metadata.get("detected", {})
+        expected_fingerprint = (
+            job.stack_metadata.get("snapshot_fingerprint")
+            or (eff.get("snapshot_fingerprint") if isinstance(eff, dict) else None)
+            or (det.get("snapshot_fingerprint") if isinstance(det, dict) else None)
+        )
+
+    temp_zip = Path(tempfile.gettempdir()) / f"rebase_intake_{uuid.uuid4()}.zip"
+    try:
+        with open(temp_zip, "wb") as f:
+            while chunk := await bundle.read(1024 * 1024):
+                f.write(chunk)
+
+        adapter = LocalSourceAdapter()
+        workspace, fingerprint = adapter.materialize_direct_upload(
+            archive_path=temp_zip,
+            job_id=str(job.job_id),
+            expected_fingerprint=expected_fingerprint,
+        )
+
+        correlation_id = getattr(request.state, "correlation_id", None) if request else None
+        audit = AuditEvent(
+            job_id=job.job_id,
+            event_type="JOB_INTAKE_COMPLETED",
+            actor_type="USER",
+            actor_id=str(user.user_id),
+            correlation_id=correlation_id,
+            target_resource=str(job.job_id),
+            payload={
+                "source_type": "local",
+                "snapshot_fingerprint": fingerprint,
+                "workspace_dir": workspace.name,
+                "direct_upload": True,
+            },
+        )
+        db.add(audit)
+        await db.commit()
+        await db.refresh(job)
+        return _job_to_response(job, user.full_name)
+    finally:
+        if temp_zip.exists():
+            try:
+                temp_zip.unlink()
+            except Exception:
+                pass
+

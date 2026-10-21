@@ -103,12 +103,12 @@ class RBACPolicy:
 
     ROLE_PERMISSIONS: dict[str, set[str]] = {
         "SUPER_ADMIN": {
-            "job:create", "job:read", "job:pause_resume", "job:cancel",
+            "job:create", "job:read", "job:intake", "job:pause_resume", "job:cancel",
             "gate:review", "gate:approve_g1", "gate:approve_g2", "gate:approve_g3", "gate:approve_g4",
             "artifact:read", "artifact:download", "audit:read", "settings:update", "user:manage"
         },
         "ADMIN": {
-            "job:create", "job:read", "job:pause_resume", "job:cancel",
+            "job:create", "job:read", "job:intake", "job:pause_resume", "job:cancel",
             "gate:review", "gate:approve_g1", "gate:approve_g2", "gate:approve_g3", "gate:approve_g4",
             "artifact:read", "artifact:download", "audit:read", "settings:update"
         },

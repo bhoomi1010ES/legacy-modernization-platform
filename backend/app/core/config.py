@@ -67,7 +67,8 @@ try:
         # Autonomous Agents & LLM Model Providers
         ANTHROPIC_API_KEY: str = Field(default="", description="Anthropic API key for Claude 3.5 Sonnet specialist agents")
         OPENAI_API_KEY: str = Field(default="", description="OpenAI API key (optional fallback)")
-        DEFAULT_JOB_BUDGET_USD: float = Field(default=150.0, description="Default spend cap per job in USD")
+        DEFAULT_JOB_BUDGET_INR: float = Field(default=15000.0, description="Default spend cap per job in INR (Rupees)")
+        DEFAULT_JOB_BUDGET_USD: float = Field(default=15000.0, description="Default spend cap per job (INR platform currency)")
         MAX_REPAIR_ATTEMPTS: int = Field(default=3, description="Max inner-loop compile/test repair attempts")
         TOKEN_VELOCITY_LIMIT_PER_MINUTE: int = Field(default=100000, description="Token consumption rate limit")
 
@@ -143,7 +144,8 @@ except ImportError:
         ARTIFACT_STORAGE_PATH: str = os.getenv("ARTIFACT_STORAGE_PATH", "./artifacts")
         ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
         OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-        DEFAULT_JOB_BUDGET_USD: float = float(os.getenv("DEFAULT_JOB_BUDGET_USD", "150.0"))
+        DEFAULT_JOB_BUDGET_INR: float = float(os.getenv("DEFAULT_JOB_BUDGET_INR", "15000.0"))
+        DEFAULT_JOB_BUDGET_USD: float = float(os.getenv("DEFAULT_JOB_BUDGET_USD", "15000.0"))
         MAX_REPAIR_ATTEMPTS: int = int(os.getenv("MAX_REPAIR_ATTEMPTS", "3"))
         TOKEN_VELOCITY_LIMIT_PER_MINUTE: int = int(os.getenv("TOKEN_VELOCITY_LIMIT_PER_MINUTE", "100000"))
         SANDBOX_RUNTIME: str = os.getenv("SANDBOX_RUNTIME", "gVisor-rootless")

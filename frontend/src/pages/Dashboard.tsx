@@ -123,8 +123,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         />
         <MetricCard
           label="Budget Consumed"
-          value={`$${totalSpend.toFixed(2)}`}
-          note={`Cap: $${totalBudget.toFixed(2)} total`}
+          value={`₹${totalSpend.toFixed(2)}`}
+          note={`Cap: ₹${totalBudget.toFixed(2)} total`}
           icon={<Cpu size={16} color="var(--primary)" />}
         />
       </div>
@@ -234,8 +234,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       </div>
                     </td>
                     <td>
-                      <span style={{ fontWeight: 600 }}>${(job.cost || 0).toFixed(2)}</span>
-                      <span style={{ color: 'var(--muted-foreground)', fontSize: '10px' }}> / ${(job.budget || 0).toFixed(2)}</span>
+                      <span style={{ fontWeight: 600 }}>₹{(job.cost || 0).toFixed(2)}</span>
+                      <span style={{ color: 'var(--muted-foreground)', fontSize: '10px' }}> / ₹{(job.budget || 0).toFixed(2)}</span>
                     </td>
                     <td>
                       <button
