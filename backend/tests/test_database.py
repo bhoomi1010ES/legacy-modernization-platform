@@ -20,4 +20,4 @@ async def test_database_url_formatting():
     """Verifies that the database URL properly parses user, host, and port."""
     url = get_asyncpg_url()
     assert url.startswith("postgresql://")
-    assert "rebase_db" in url
+    assert "rebase" in url

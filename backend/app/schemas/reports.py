@@ -28,7 +28,7 @@ class DeliveryReportResponse(BaseModel):
     job_id: str
     project_name: str
     integration_branch: str
-    pull_request_url: str
+    pull_request_url: str | None = None
     equivalence_pct: float
     signed_waivers_count: int
     production_cutover_included: bool = Field(False, description="Explicit disclaimer: cutover migrations are not automated.")
