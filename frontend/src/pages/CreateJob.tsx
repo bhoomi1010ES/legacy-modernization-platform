@@ -67,12 +67,31 @@ interface TierOverrides {
 }
 
 export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) => {
-  const [name, setName] = useState('Payment Gateway Modernization');
-  const [sourceRepo, setSourceRepo] = useState('https://github.com/acme/payment-gateway');
+  const [name, setName] = useState('');
+  const [userEditedName, setUserEditedName] = useState(false);
+  const [sourceRepo, setSourceRepo] = useState('');
   const [revision, setRevision] = useState('main');
   const [gitToken, setGitToken] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [isPrivateRepo, setIsPrivateRepo] = useState(false);
+
+  const deriveProjectNameFromRepo = (url: string): string => {
+    if (!url) return '';
+    try {
+      const clean = url.trim().replace(/\/+$/, '').replace(/\.git$/i, '');
+      const segments = clean.split('/');
+      const repoSegment = segments[segments.length - 1] || '';
+      if (repoSegment && !['repo', 'git', 'github.com'].includes(repoSegment.toLowerCase())) {
+        const formatted = repoSegment
+          .replace(/[-_]/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+        return `${formatted} Modernization`;
+      }
+    } catch {
+      // ignore
+    }
+    return '';
+  };
 
   // Local Folder Source States
   const [sourceType, setSourceType] = useState<'git' | 'local'>('git');
@@ -144,6 +163,12 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
         setRevision(res.source_revision);
       }
       setSourceStack(res.summary_stack);
+      if (!userEditedName) {
+        const derived = deriveProjectNameFromRepo(repoUrl);
+        if (derived) {
+          setName(derived);
+        }
+      }
 
       // If detection succeeded without any token, this repository is public
       if (!activeToken.trim()) {
@@ -197,6 +222,10 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
       setLocalWarnings(res.warnings || []);
       const folderName = pathStr.trim().split(/[\\/]/).filter(Boolean).pop() || 'project';
       setLocalFolderName(folderName);
+      if (!userEditedName || !name) {
+        const formatted = folderName.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        setName(`${formatted} Modernization`);
+      }
       setUploadedZipName(null);
       setOverrides({});
       setEditingTier(null);
@@ -226,6 +255,10 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
       setUploadedZipName(file.name);
       setLocalFolderName(cleanName);
       setLocalPath('');
+      if (!userEditedName || !name) {
+        const formatted = cleanName.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        setName(`${formatted} Modernization`);
+      }
 
       const res = await api.detectLocalSourceStack(file, cleanName);
       if (reqId !== latestReqIdRef.current) return;
@@ -376,8 +409,9 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
       setPreviewSnapshotId(res.preview_snapshot_id || null);
       setSnapshotFingerprint(res.snapshot_fingerprint || null);
       setSourceStack(res.summary_stack);
-      if (name === 'Payment Gateway Modernization' || !name) {
-        setName(`${result.sourceName} Modernization`);
+      if (!userEditedName || !name) {
+        const formatted = result.sourceName.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        setName(`${formatted} Modernization`);
       }
       setOverrides({});
       setEditingTier(null);
@@ -421,8 +455,9 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
       setPreviewSnapshotId(res.preview_snapshot_id || null);
       setSnapshotFingerprint(res.snapshot_fingerprint || null);
       setSourceStack(res.summary_stack);
-      if (name === 'Payment Gateway Modernization' || !name) {
-        setName(`${result.sourceName} Modernization`);
+      if (!userEditedName || !name) {
+        const formatted = result.sourceName.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        setName(`${formatted} Modernization`);
       }
       setOverrides({});
       setEditingTier(null);
@@ -467,8 +502,11 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
       const firstLine = cleanTargetPlan.split('\n')[0].trim();
       const conciseTargetStack = (firstLine || 'TypeScript / Node.js 22 / NestJS').slice(0, 100);
 
+      const derivedFallback = deriveProjectNameFromRepo(sourceRepo) || (localFolderName ? `${localFolderName} Modernization` : 'Legacy Modernization Project');
+      const finalProjectName = name.trim() || derivedFallback;
+
       const created = await onSubmit({
-        name,
+        name: finalProjectName,
         source_repository: isLocal ? localRepoIdentifier : sourceRepo,
         source_revision: isLocal ? 'LOCAL' : revision,
         source_stack: sourceStack,
@@ -531,7 +569,29 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
             {/* Step 1: Source Discovery */}
             <div className="form-section">
               <h2>1. Source Repository & Architecture Discovery</h2>
-              <p>Select a Git repository or inspect a local project folder directly from your computer.</p>
+              <p>Provide a project identifier and select a Git repository or inspect a local project folder directly from your computer.</p>
+
+              {/* Project Name Field */}
+              <div className="form-field" style={{ marginBottom: '20px' }}>
+                <label htmlFor="project-name" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                  <Layers size={14} color="var(--primary)" />
+                  <span>Project Name</span>
+                  <span style={{ color: 'var(--destructive, #ef4444)' }}>*</span>
+                </label>
+                <input
+                  id="project-name"
+                  type="text"
+                  className="field"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setUserEditedName(true);
+                  }}
+                  placeholder="e.g., Cake Shop Modernization, SpendWise API"
+                  required
+                />
+                <small>A descriptive name to identify this modernization pipeline in dashboards and approval gates.</small>
+              </div>
 
               {/* Source Type Selector Tabs */}
               <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
@@ -602,6 +662,12 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
                         val = matches[0];
                       }
                       setSourceRepo(val);
+                      if (!userEditedName) {
+                        const derived = deriveProjectNameFromRepo(val);
+                        if (derived) {
+                          setName(derived);
+                        }
+                      }
                       if (detectError) setDetectError(null);
                     }}
                     placeholder="https://github.com/org/repo"

@@ -20,8 +20,9 @@ class VerificationReportResponse(BaseModel):
     behavioral_equivalence_pct: float
     regressions_count: int
     intended_differences_count: int
-    uncovered_code_pct: float
+    uncovered_code_pct: float | None
     differences: list[TestDifferenceClassification]
+    limitations: list[str] = Field(default_factory=list)
 
 
 class DeliveryReportResponse(BaseModel):
@@ -33,4 +34,4 @@ class DeliveryReportResponse(BaseModel):
     signed_waivers_count: int
     production_cutover_included: bool = Field(False, description="Explicit disclaimer: cutover migrations are not automated.")
     included_artifacts: list[str]
-    delivered_at: str
+    delivered_at: str | None

@@ -27,4 +27,4 @@ class ArtifactContentResponse(BaseModel):
     artifact_type: str
     version: int
     content_hash: str
-    content: dict[str, Any]
+    content: Any

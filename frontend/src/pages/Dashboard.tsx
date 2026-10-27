@@ -20,7 +20,7 @@ interface DashboardProps {
   gates: GateDetail[];
   onNavigate: (path: string) => void;
   onRefreshGates: () => void;
-  onGateDecision: (gateId: string, decision: any, rationale: string, waivers?: any[]) => Promise<void>;
+  onGateDecision: (gateId: string, decision: any, rationale: string, waivers?: any[], options?: Record<string, string>) => Promise<void>;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -261,8 +261,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <GateReviewModal
           gate={selectedGate}
           onClose={() => setSelectedGate(null)}
-          onSubmit={async (decision, rationale, waivers) => {
-            await onGateDecision(selectedGate.gate_id, decision, rationale, waivers);
+          onSubmit={async (decision, rationale, waivers, options) => {
+            await onGateDecision(selectedGate.gate_id, decision, rationale, waivers, options);
             onRefreshGates();
           }}
         />

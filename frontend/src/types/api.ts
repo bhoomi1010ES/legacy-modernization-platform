@@ -71,7 +71,7 @@ export interface VerificationReportResponse {
   behavioral_equivalence_pct: number;
   regressions_count: number;
   intended_differences_count: number;
-  uncovered_code_pct: number;
+    uncovered_code_pct: number | null;
   differences: Array<{
     test_name: string;
     module: string;
@@ -91,7 +91,7 @@ export interface DeliveryReportResponse {
   signed_waivers_count: number;
   production_cutover_included: boolean;
   included_artifacts: string[];
-  delivered_at: string;
+    delivered_at: string | null;
 }
 
 export interface TierComponent {

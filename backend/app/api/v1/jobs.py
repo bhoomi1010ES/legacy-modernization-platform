@@ -22,7 +22,7 @@ from app.schemas.jobs import (
 )
 from app.services.job_service import JobService
 from app.services.stack_detector import StackDetector
-from app.domain.state_machine import JobStateMachine
+from app.services.supervisor_service import supervisor_service
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 job_service = JobService()
@@ -324,16 +324,16 @@ async def get_job(
 )
 async def pause_job(
     job_id: str,
+    request: Request,
     access: Tuple[Job, User] = Depends(require_job_access(permission="job:pause_resume")),
     db: AsyncSession = Depends(get_db),
 ) -> JobDetailResponse:
     job, user = access
-    current_status = JobStatus(job.status)
-    JobStateMachine.validate_transition(current_status, JobStatus.PAUSED)
-    job.status = JobStatus.PAUSED.value
-    await db.commit()
-    await db.refresh(job)
-    return _job_to_response(job, user.full_name)
+    paused = await supervisor_service.pause(
+        db, job.job_id, actor_id=str(user.user_id), reason="Paused by authorized user.",
+        correlation_id=getattr(request.state, "correlation_id", None),
+    )
+    return _job_to_response(paused, user.full_name)
 
 
 @router.post(
@@ -345,16 +345,16 @@ async def pause_job(
 )
 async def resume_job(
     job_id: str,
+    request: Request,
     access: Tuple[Job, User] = Depends(require_job_access(permission="job:pause_resume")),
     db: AsyncSession = Depends(get_db),
 ) -> JobDetailResponse:
     job, user = access
-    current_status = JobStatus(job.status)
-    JobStateMachine.validate_transition(current_status, JobStatus.CONVERTING)
-    job.status = JobStatus.CONVERTING.value
-    await db.commit()
-    await db.refresh(job)
-    return _job_to_response(job, user.full_name)
+    resumed = await supervisor_service.resume(
+        db, job.job_id, actor_id=str(user.user_id),
+        correlation_id=getattr(request.state, "correlation_id", None),
+    )
+    return _job_to_response(resumed, user.full_name)
 
 
 @router.post(
@@ -372,10 +372,9 @@ async def cancel_job(
 ) -> JobDetailResponse:
     job, user = access
     correlation_id = getattr(request.state, "correlation_id", None)
-    cancelled_job = await job_service.cancel_job(
-        db=db,
-        job=job,
-        user=user,
+    cancelled_job = await supervisor_service.cancel(
+        db, job.job_id,
+        actor_id=str(user.user_id),
         correlation_id=correlation_id,
     )
     return _job_to_response(cancelled_job, user.full_name)
@@ -398,11 +397,6 @@ async def intake_job(
     from app.models.audit import AuditEvent
 
     job, user = access
-    current_status = JobStatus(job.status)
-    if current_status == JobStatus.CREATED:
-        JobStateMachine.validate_transition(current_status, JobStatus.INTAKE)
-        job.status = JobStatus.INTAKE.value
-
     # Extract pinned_commit if available from preview metadata
     pinned_commit = None
     snapshot_fingerprint = payload.snapshot_fingerprint
@@ -427,21 +421,18 @@ async def intake_job(
 
     is_local = (job.source_repository or "").startswith("local://")
 
-    workspace, resolved_commit_or_fingerprint = job_service.acquire_intake_workspace(
-        job_id=str(job.job_id),
-        repo_url=job.source_repository,
-        revision=job.source_revision,
-        pinned_commit=pinned_commit,
+    correlation_id = getattr(request.state, "correlation_id", None)
+    snapshot, inventory, job = await supervisor_service.execute_intake(
+        db, job.job_id,
+        actor_id=str(user.user_id),
+        user=user,
         git_token=payload.git_token,
-        source_type="local" if is_local else "git",
         preview_snapshot_id=preview_snapshot_id,
         snapshot_fingerprint=snapshot_fingerprint,
-        user_id=str(user.user_id),
-        is_admin=user.role in ("ADMIN", "SUPER_ADMIN"),
+        correlation_id=correlation_id,
     )
 
     # Append audit event without credential leakage
-    correlation_id = getattr(request.state, "correlation_id", None)
     audit = AuditEvent(
         job_id=job.job_id,
         event_type="JOB_INTAKE_COMPLETED",
@@ -451,9 +442,10 @@ async def intake_job(
         target_resource=str(job.job_id),
         payload={
             "source_type": "local" if is_local else "git",
-            "resolved_commit": resolved_commit_or_fingerprint if not is_local else None,
-            "snapshot_fingerprint": resolved_commit_or_fingerprint if is_local else None,
-            "workspace_dir": workspace.name,
+            "resolved_commit": snapshot.metadata.commit_sha,
+            "snapshot_fingerprint": snapshot.inventory_hash,
+            "inventory_hash": snapshot.inventory_hash,
+            "file_count": snapshot.metadata.file_count,
             "pinned_commit_enforced": bool(pinned_commit),
             "reused_staged_snapshot": bool(is_local and preview_snapshot_id),
         },
@@ -461,7 +453,9 @@ async def intake_job(
     db.add(audit)
     await db.commit()
     await db.refresh(job)
+    supervisor_service.schedule_drive(job.job_id, correlation_id=correlation_id)
     return _job_to_response(job, user.full_name)
+
 
 
 @router.post(
@@ -485,11 +479,6 @@ async def intake_job_local(
     from app.services.local_source_adapter import LocalSourceAdapter
 
     job, user = access
-    current_status = JobStatus(job.status)
-    if current_status == JobStatus.CREATED:
-        JobStateMachine.validate_transition(current_status, JobStatus.INTAKE)
-        job.status = JobStatus.INTAKE.value
-
     # Extract expected fingerprint from metadata if not given in form
     if not expected_fingerprint and isinstance(job.stack_metadata, dict):
         eff = job.stack_metadata.get("effective", {})
@@ -514,6 +503,14 @@ async def intake_job_local(
         )
 
         correlation_id = getattr(request.state, "correlation_id", None) if request else None
+        _, _, job = await supervisor_service.execute_intake(
+            db, job.job_id,
+            actor_id=str(user.user_id),
+            user=user,
+            snapshot_fingerprint=fingerprint,
+            workspace_override=workspace,
+            correlation_id=correlation_id,
+        )
         audit = AuditEvent(
             job_id=job.job_id,
             event_type="JOB_INTAKE_COMPLETED",
@@ -531,6 +528,7 @@ async def intake_job_local(
         db.add(audit)
         await db.commit()
         await db.refresh(job)
+        supervisor_service.schedule_drive(job.job_id, correlation_id=correlation_id)
         return _job_to_response(job, user.full_name)
     finally:
         if temp_zip.exists():

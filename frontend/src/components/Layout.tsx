@@ -53,6 +53,10 @@ export const Layout: React.FC<LayoutProps> = ({
         return ['Storage', 'Versioned Artifact Lineage'];
       case '/verification':
         return ['Quality Assurance', 'Dual-Harness Equivalence'];
+      case '/characterization':
+        return ['Quality Assurance', 'Characterization & Schema Review'];
+      case '/modules':
+        return ['Modernization', 'Module Execution & Repair'];
       case '/reports':
         return ['Delivery', 'Readiness & Cutover Packages'];
       case '/audit':
@@ -145,7 +149,13 @@ export const Layout: React.FC<LayoutProps> = ({
         </a>
 
         {/* Section 2: Quality & Assurance */}
+        <a href="#/modules" className={`nav-item ${currentPath === '/modules' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); onNavigate('/modules'); }}>
+          <FileCode size={15} /><span>Module Execution &amp; Repair</span>
+        </a>
         <div className="nav-label">Governance & QA</div>
+        <a href="#/characterization" className={`nav-item ${currentPath === '/characterization' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); onNavigate('/characterization'); }}>
+          <ShieldCheck size={15} /><span>Characterization &amp; Schema</span>
+        </a>
         <a
           href="#/verification"
           className={`nav-item ${currentPath === '/verification' ? 'active' : ''}`}
@@ -250,7 +260,7 @@ export const Layout: React.FC<LayoutProps> = ({
           </div>
         </header>
 
-        <section className="content">
+        <section className={`content ${currentPath === '/code' ? 'content-workspace-flush' : ''}`}>
           {children}
         </section>
       </main>

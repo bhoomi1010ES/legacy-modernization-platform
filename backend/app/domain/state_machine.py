@@ -10,19 +10,24 @@ class JobStateMachine:
     """Enforces deterministic lifecycle transitions for modernization jobs."""
 
     ALLOWED_TRANSITIONS: dict[JobStatus, set[JobStatus]] = {
-        JobStatus.CREATED: {JobStatus.INTAKE, JobStatus.CANCELLED},
-        JobStatus.INTAKE: {JobStatus.ANALYZING, JobStatus.FAILED, JobStatus.CANCELLED},
-        JobStatus.ANALYZING: {JobStatus.AWAITING_GATE_G1, JobStatus.FAILED, JobStatus.CANCELLED},
-        JobStatus.AWAITING_GATE_G1: {JobStatus.CHARACTERIZING, JobStatus.FAILED, JobStatus.CANCELLED},
-        JobStatus.CHARACTERIZING: {JobStatus.AWAITING_GATE_G2, JobStatus.FAILED, JobStatus.CANCELLED},
-        JobStatus.AWAITING_GATE_G2: {JobStatus.PLANNING, JobStatus.CHARACTERIZING, JobStatus.CANCELLED},
-        JobStatus.PLANNING: {JobStatus.AWAITING_GATE_G3, JobStatus.FAILED, JobStatus.CANCELLED},
-        JobStatus.AWAITING_GATE_G3: {JobStatus.CONVERTING, JobStatus.PLANNING, JobStatus.CANCELLED},
+        JobStatus.CREATED: {JobStatus.INTAKE, JobStatus.PAUSED, JobStatus.CANCELLED},
+        JobStatus.INTAKE: {JobStatus.ANALYZING, JobStatus.PAUSED, JobStatus.FAILED, JobStatus.CANCELLED},
+        JobStatus.ANALYZING: {JobStatus.AWAITING_GATE_G1, JobStatus.PAUSED, JobStatus.FAILED, JobStatus.CANCELLED},
+        JobStatus.AWAITING_GATE_G1: {JobStatus.CHARACTERIZING, JobStatus.ANALYZING, JobStatus.PAUSED, JobStatus.FAILED, JobStatus.CANCELLED},
+        JobStatus.CHARACTERIZING: {JobStatus.AWAITING_GATE_G2, JobStatus.PAUSED, JobStatus.FAILED, JobStatus.CANCELLED},
+        JobStatus.AWAITING_GATE_G2: {JobStatus.PLANNING, JobStatus.CHARACTERIZING, JobStatus.PAUSED, JobStatus.CANCELLED},
+        JobStatus.PLANNING: {JobStatus.AWAITING_GATE_G3, JobStatus.PAUSED, JobStatus.FAILED, JobStatus.CANCELLED},
+        JobStatus.AWAITING_GATE_G3: {JobStatus.CONVERTING, JobStatus.PLANNING, JobStatus.PAUSED, JobStatus.CANCELLED},
         JobStatus.CONVERTING: {JobStatus.VERIFYING, JobStatus.PAUSED, JobStatus.FAILED, JobStatus.CANCELLED},
-        JobStatus.VERIFYING: {JobStatus.CONVERTING, JobStatus.INTEGRATING, JobStatus.FAILED, JobStatus.CANCELLED},
-        JobStatus.INTEGRATING: {JobStatus.AWAITING_GATE_G4, JobStatus.FAILED, JobStatus.CANCELLED},
-        JobStatus.AWAITING_GATE_G4: {JobStatus.COMPLETED, JobStatus.CONVERTING, JobStatus.CANCELLED},
-        JobStatus.PAUSED: {JobStatus.CONVERTING, JobStatus.CANCELLED},
+        JobStatus.VERIFYING: {JobStatus.CONVERTING, JobStatus.INTEGRATING, JobStatus.PAUSED, JobStatus.FAILED, JobStatus.CANCELLED},
+        JobStatus.INTEGRATING: {JobStatus.AWAITING_GATE_G4, JobStatus.PAUSED, JobStatus.FAILED, JobStatus.CANCELLED},
+        JobStatus.AWAITING_GATE_G4: {JobStatus.COMPLETED, JobStatus.CONVERTING, JobStatus.PAUSED, JobStatus.CANCELLED},
+        JobStatus.PAUSED: {
+            JobStatus.INTAKE, JobStatus.ANALYZING, JobStatus.AWAITING_GATE_G1,
+            JobStatus.CHARACTERIZING, JobStatus.AWAITING_GATE_G2, JobStatus.PLANNING,
+            JobStatus.AWAITING_GATE_G3, JobStatus.CONVERTING, JobStatus.VERIFYING,
+            JobStatus.INTEGRATING, JobStatus.AWAITING_GATE_G4, JobStatus.CANCELLED,
+        },
         JobStatus.COMPLETED: set(),  # Terminal state
         JobStatus.FAILED: set(),     # Terminal state
         JobStatus.CANCELLED: set(),  # Terminal state
@@ -103,22 +108,29 @@ class RBACPolicy:
 
     ROLE_PERMISSIONS: dict[str, set[str]] = {
         "SUPER_ADMIN": {
+            "integration:run", "delivery:publish",
+            "module:convert", "module:repair", "module:waive",
             "job:create", "job:read", "job:intake", "job:pause_resume", "job:cancel",
             "gate:review", "gate:approve_g1", "gate:approve_g2", "gate:approve_g3", "gate:approve_g4",
-            "artifact:read", "artifact:download", "audit:read", "settings:update", "user:manage"
+            "artifact:read", "artifact:download", "artifact:publish_diagnostic", "audit:read", "settings:update", "user:manage"
         },
         "ADMIN": {
+            "integration:run", "delivery:publish",
+            "module:convert", "module:repair", "module:waive",
             "job:create", "job:read", "job:intake", "job:pause_resume", "job:cancel",
             "gate:review", "gate:approve_g1", "gate:approve_g2", "gate:approve_g3", "gate:approve_g4",
-            "artifact:read", "artifact:download", "audit:read", "settings:update"
+            "artifact:read", "artifact:download", "artifact:publish_diagnostic", "audit:read", "settings:update"
         },
         "REVIEWER": {
+            "module:waive",
             "job:read", "job:pause_resume",
             "gate:review", "gate:approve_g1", "gate:approve_g2", "gate:approve_g3", "gate:approve_g4",
             "artifact:read", "artifact:download", "audit:read"
         },
         "DEVELOPER": {
-            "job:read", "gate:review", "artifact:read", "artifact:download", "audit:read"
+            "integration:run",
+            "module:convert", "module:repair",
+            "job:read", "gate:review", "artifact:read", "artifact:download", "artifact:publish_diagnostic", "audit:read"
         },
         "VIEWER": {
             "job:read", "gate:review", "artifact:read"

@@ -5,6 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -12,6 +13,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    JSON,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, GUID, utc_now
@@ -27,16 +29,26 @@ class AgentRun(Base):
         GUID, ForeignKey("jobs.job_id", ondelete="CASCADE"), nullable=False, index=True
     )
     agent_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    task_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    correlation_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    model_provider: Mapped[str] = mapped_column(String(50), default="fake", nullable=False)
     model_identifier: Mapped[str] = mapped_column(
-        String(100), default="claude-3-5-sonnet-20241022", nullable=False
+        String(100), default="fake-model-v1", nullable=False
     )
-    status: Mapped[str] = mapped_column(String(50), default="COMPLETED", nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="QUEUED", nullable=False)
     input_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cost_usd: Mapped[Decimal] = mapped_column(
         Numeric(10, 4), default=Decimal("0.0000"), nullable=False
     )
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    failure_classification: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    task_payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    trace_payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    output_payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    input_artifact_refs: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    output_artifact_refs: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )

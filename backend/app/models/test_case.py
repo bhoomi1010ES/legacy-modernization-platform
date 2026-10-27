@@ -73,6 +73,8 @@ class TestResult(Base):
     executed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
+    invalidated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    invalidation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         CheckConstraint("outcome IN ('PASSED', 'FAILED')", name="chk_test_outcome"),

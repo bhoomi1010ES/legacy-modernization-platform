@@ -122,32 +122,47 @@ def test_detect_stack_api_integration(client: TestClient):
 
 def test_gate_decision_api_integration(client: TestClient):
     """Verifies approval gate decision submission and validation via HTTP API."""
+    client.post(
+        "/api/v1/auth/login",
+        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+    )
+
+    create_payload = {
+        "name": "Gate Decision Integration Service",
+        "source_repository": "https://github.com/acme/gate-decision-service",
+        "source_revision": "main",
+        "source_stack": "Java 11 / Spring Boot",
+        "target_stack": "TypeScript / Node.js 22 / NestJS",
+        "budget": 200.0,
+        "max_repair_attempts": 3,
+        "constraints": "Strict compliance with schema",
+    }
+    create_resp = client.post("/api/v1/jobs", json=create_payload)
+    assert create_resp.status_code == 201
+    job = create_resp.json()
+    job_id = job["job_id"]
+
+    import asyncio
+    from app.core.database import AsyncSessionLocal
+    from app.models.job import Job
+    from sqlalchemy import select
+    import uuid
+
+    async def _set_awaiting():
+        async with AsyncSessionLocal() as session:
+            j = (await session.execute(select(Job).where(Job.job_id == uuid.UUID(job_id)))).scalar_one()
+            j.status = "AWAITING_GATE_G1"
+            await session.commit()
+    asyncio.run(_set_awaiting())
+
     # 1. Fetch pending gates
     pending_resp = client.get("/api/v1/gates/pending")
     assert pending_resp.status_code == 200
     pending_items = pending_resp.json()["items"]
-    if not pending_items:
-        import asyncio
-        from app.core.database import AsyncSessionLocal
-        from app.models.job import Job
-        from sqlalchemy import select
-
-        async def _ensure_pending():
-            async with AsyncSessionLocal() as session:
-                res = await session.execute(select(Job).limit(1))
-                j = res.scalar_one_or_none()
-                if j:
-                    j.status = "AWAITING_GATE_G1"
-                    await session.commit()
-        asyncio.run(_ensure_pending())
-        pending_resp = client.get("/api/v1/gates/pending")
-        pending_items = pending_resp.json()["items"]
-
     assert len(pending_items) > 0
 
-    target_gate = pending_items[0]
+    target_gate = next(item for item in pending_items if item["job_id"] == job_id)
     gate_id = target_gate["gate_id"]
-    job_id = target_gate["job_id"]
 
     # 2. Reject short rationale (< 10 chars) -> 422 Unprocessable Content (Schema validation)
     short_rationale_resp = client.post(

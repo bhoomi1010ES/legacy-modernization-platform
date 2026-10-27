@@ -1,6 +1,8 @@
 """Artifact deliverables router with cryptographic integrity validation and lineage tracking."""
 
 import json
+import logging
+from fastapi.responses import Response
 from typing import Any, Dict, Optional, Tuple
 import uuid
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -8,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, require_job_access
-from app.core.errors import NotFoundException
+from app.core.errors import NotFoundException, ForbiddenException
 from app.models.artifact import Artifact
 from app.models.job import Job
 from app.models.user import User
@@ -21,6 +23,7 @@ from app.services.artifact_service import ArtifactService
 
 router = APIRouter(prefix="/jobs/{job_id}/artifacts", tags=["Artifacts"])
 artifact_service = ArtifactService()
+logger = logging.getLogger(__name__)
 
 
 class CreateArtifactPayload(BaseModel):
@@ -29,6 +32,16 @@ class CreateArtifactPayload(BaseModel):
     content: dict[str, Any] = Field(..., description="JSON content payload.")
     producing_agent: str = Field("ModernizationAgent", description="Authoring agent name.")
     derived_from: list[str] = Field(default_factory=list, description="Predecessor hashes.")
+
+
+@router.get("/{artifact_id}/download", operation_id="artifacts_download")
+async def download_artifact(artifact_id: uuid.UUID, access=Depends(require_job_access("artifact:download")), db=Depends(get_db)):
+    try:
+        artifact, raw = await artifact_service.get_artifact_content(db, access[0].job_id, artifact_id)
+        return Response(content=raw, media_type=artifact.media_type, headers={"Content-Disposition": f'attachment; filename="{artifact.artifact_id}.json"', "X-Content-SHA256": artifact.content_hash, "X-Content-Type-Options": "nosniff"})
+    except Exception:
+        logger.exception("artifacts.download_artifact failed")
+        raise
 
 
 def _artifact_to_response(art: Artifact) -> ArtifactResponse:
@@ -76,11 +89,24 @@ async def create_artifact(
     job_id: str,
     payload: CreateArtifactPayload,
     request: Request,
-    access: Tuple[Job, User] = Depends(require_job_access(permission="artifact:read")),
+    access: Tuple[Job, User] = Depends(require_job_access(permission="artifact:publish_diagnostic")),
     db: AsyncSession = Depends(get_db),
 ) -> ArtifactResponse:
     job, user = access
     correlation_id = getattr(request.state, "correlation_id", None)
+    normalized_type = "".join(ch for ch in payload.artifact_type.upper() if ch.isalnum())
+    workflow_owned = {
+        "REPOSITORYSNAPSHOT", "REPOSITORYINVENTORY", "LEGACYMODEL",
+        "TARGETBLUEPRINT", "FEASIBILITYREPORT", "CHARACTERIZATIONSUITE",
+        "SCHEMAMIGRATIONPLAN", "CONVERSIONPLAN", "CHANGESET",
+        "VERIFICATIONREPORT", "SYSTEMVERIFICATION", "SYSTEMVERIFICATIONREPORT",
+        "INTEGRATEDWORKSPACE", "INTEGRATIONREPORT", "JOBREPORT", "SBOM",
+        "DELIVERYRECORD", "PULLREQUESTRECORD",
+    }
+    if normalized_type in workflow_owned:
+        raise ForbiddenException("Workflow-owned evidence can only be published by a supervisor-dispatched agent")
+    if not normalized_type.startswith(("DIAGNOSTIC", "USERNOTE", "ATTACHMENT")):
+        raise ForbiddenException("API callers may publish only diagnostic, user-note, or attachment artifacts")
     content_bytes = json.dumps(payload.content, sort_keys=True).encode("utf-8")
 
     art = await artifact_service.create_artifact(
@@ -89,7 +115,7 @@ async def create_artifact(
         artifact_type=payload.artifact_type,
         version=payload.version,
         content_bytes=content_bytes,
-        producing_agent=payload.producing_agent,
+        producing_agent=f"API_USER:{user.user_id}",
         derived_from=payload.derived_from,
         user=user,
         correlation_id=correlation_id,
@@ -138,7 +164,10 @@ async def get_artifact_content(
     except ValueError:
         raise NotFoundException("Artifact", artifact_id)
     artifact, content_bytes = await artifact_service.get_artifact_content(db, job.job_id, art_uuid)
-    parsed_json = json.loads(content_bytes.decode("utf-8"))
+    try:
+        parsed_json = json.loads(content_bytes.decode("utf-8"))
+    except Exception:
+        parsed_json = {"raw": content_bytes.decode("utf-8", errors="replace")}
     return ArtifactContentResponse(
         artifact_id=str(artifact.artifact_id),
         artifact_type=artifact.artifact_type,

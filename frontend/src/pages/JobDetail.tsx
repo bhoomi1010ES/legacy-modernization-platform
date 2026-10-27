@@ -1,8 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import type { Job, GateDetail, Artifact, AgentRun } from '../types/domain';
+import type { Job, GateDetail, Artifact, AgentRun, WorkflowEvent, WorkflowState } from '../types/domain';
+import type {
+  RepositorySnapshot,
+  RepositoryInventory,
+  LegacyModel,
+  FeasibilityReport,
+  FeasibilityCapability,
+  TargetBlueprint,
+  ConversionPlan,
+} from '../types/phase4';
 import { StatusBadge } from '../components/StatusBadge';
 import { PipelineProgress } from '../components/PipelineProgress';
+import { WorkflowProgress } from '../components/WorkflowProgress';
 import { GateReviewModal } from '../components/GateReviewModal';
+import { InventoryBrowser } from '../components/phase4/InventoryBrowser';
+import { FeasibilityView } from '../components/phase4/FeasibilityView';
+import { BlueprintView } from '../components/phase4/BlueprintView';
+import { ConversionPlanView } from '../components/phase4/ConversionPlanView';
+import { GateDetailExplanationView } from '../components/GateDetailExplanationView';
 import { api } from '../services/api';
 import {
   Layers,
@@ -17,21 +32,36 @@ import {
   CheckCircle2,
   Clock,
   ArrowRight,
+  FolderTree,
+  Boxes,
 } from 'lucide-react';
 
 interface JobDetailProps {
   jobId: string;
   onNavigate: (path: string) => void;
-  onGateDecision: (gateId: string, decision: any, rationale: string, waivers?: any[]) => Promise<void>;
+  onGateDecision: (gateId: string, decision: any, rationale: string, waivers?: any[], options?: Record<string, string>) => Promise<void>;
 }
 
 export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateDecision }) => {
   const [job, setJob] = useState<Job | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'feasibility' | 'tests' | 'blueprint' | 'verification' | 'agents'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'feasibility' | 'blueprint' | 'planner' | 'tests' | 'verification' | 'agents'>('overview');
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [agents, setAgents] = useState<AgentRun[]>([]);
   const [activeGate, setActiveGate] = useState<GateDetail | null>(null);
+  const [gates, setGates] = useState<GateDetail[]>([]);
   const [loading, setLoading] = useState(true);
+  const [workflow, setWorkflow] = useState<WorkflowState | null>(null);
+  const [workflowEvents, setWorkflowEvents] = useState<WorkflowEvent[]>([]);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
+
+  // Phase 4 states
+  const [repositoryData, setRepositoryData] = useState<{ snapshot: RepositorySnapshot; inventory: RepositoryInventory } | null>(null);
+  const [legacyModel, setLegacyModel] = useState<LegacyModel | null>(null);
+  const [feasibilityReport, setFeasibilityReport] = useState<FeasibilityReport | null>(null);
+  const [gapsRequiringG1, setGapsRequiringG1] = useState<FeasibilityCapability[]>([]);
+  const [targetBlueprint, setTargetBlueprint] = useState<TargetBlueprint | null>(null);
+  const [conversionPlan, setConversionPlan] = useState<ConversionPlan | null>(null);
 
   useEffect(() => {
     loadJobData();
@@ -43,15 +73,47 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateD
       const j = await api.getJob(jobId);
       setJob(j);
 
-      const arts = await api.getArtifacts(jobId);
-      setArtifacts(arts);
+      const [
+        workflowResult,
+        eventsResult,
+        artifactResult,
+        agentResult,
+        gateResult,
+        repoResult,
+        analysisResult,
+        feasResult,
+        bpResult,
+        planResult,
+      ] = await Promise.allSettled([
+        api.getWorkflow(jobId),
+        api.getWorkflowEvents(jobId),
+        api.getArtifacts(jobId),
+        api.getAgents(jobId),
+        api.getAllGates(jobId),
+        api.getRepository(jobId),
+        api.getAnalysis(jobId),
+        api.getFeasibility(jobId),
+        api.getBlueprint(jobId),
+        api.getConversionPlan(jobId),
+      ]);
 
-      const ags = await api.getAgents(jobId);
-      setAgents(ags);
-
-      const gates = await api.getAllGates();
-      const jobGate = gates.find((g) => g.job_id === jobId && g.status === 'PENDING');
+      setWorkflow(workflowResult.status === 'fulfilled' ? workflowResult.value : null);
+      setWorkflowEvents(eventsResult.status === 'fulfilled' ? eventsResult.value : []);
+      setArtifacts(artifactResult.status === 'fulfilled' ? artifactResult.value : []);
+      setAgents(agentResult.status === 'fulfilled' ? agentResult.value : []);
+      const fetchedGates = gateResult.status === 'fulfilled' ? gateResult.value : [];
+      setGates(fetchedGates);
+      const jobGate = fetchedGates.find((g) => g.job_id === jobId && g.status === 'PENDING');
       setActiveGate(jobGate || null);
+
+      if (repoResult.status === 'fulfilled') setRepositoryData(repoResult.value);
+      if (analysisResult.status === 'fulfilled') setLegacyModel(analysisResult.value.legacy_model);
+      if (feasResult.status === 'fulfilled') {
+        setFeasibilityReport(feasResult.value.feasibility_report);
+        setGapsRequiringG1(feasResult.value.gaps_requiring_g1 || []);
+      }
+      if (bpResult.status === 'fulfilled') setTargetBlueprint(bpResult.value.target_blueprint);
+      if (planResult.status === 'fulfilled') setConversionPlan(planResult.value.conversion_plan);
     } finally {
       setLoading(false);
     }
@@ -59,20 +121,23 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateD
 
   const handlePause = async () => {
     if (!job) return;
-    const updated = await api.pauseJob(job.job_id);
-    setJob(updated);
+    try { setActionBusy(true); setActionError(''); await api.pauseJob(job.job_id); await loadJobData(); }
+    catch (error) { setActionError(error instanceof Error ? error.message : 'Unable to pause workflow.'); }
+    finally { setActionBusy(false); }
   };
 
   const handleResume = async () => {
     if (!job) return;
-    const updated = await api.resumeJob(job.job_id);
-    setJob(updated);
+    try { setActionBusy(true); setActionError(''); await api.resumeJob(job.job_id); await loadJobData(); }
+    catch (error) { setActionError(error instanceof Error ? error.message : 'Unable to resume workflow.'); }
+    finally { setActionBusy(false); }
   };
 
   const handleCancel = async () => {
     if (!job || !confirm('Are you sure you want to cancel this modernization job?')) return;
-    const updated = await api.cancelJob(job.job_id);
-    setJob(updated);
+    try { setActionBusy(true); setActionError(''); await api.cancelJob(job.job_id); await loadJobData(); }
+    catch (error) { setActionError(error instanceof Error ? error.message : 'Unable to cancel workflow.'); }
+    finally { setActionBusy(false); }
   };
 
   if (loading || !job) {
@@ -106,7 +171,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateD
 
         {/* Action Controls */}
         <div className="heading-actions">
-          {activeGate && (
+          {activeGate && (activeGate.allowed_actions === undefined || activeGate.allowed_actions.length > 0) && (
             <button
               className="button button-primary"
               onClick={() => setActiveGate(activeGate)}
@@ -116,22 +181,22 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateD
             </button>
           )}
 
-          {job.status === 'CONVERTING' && (
-            <button className="button button-secondary" onClick={handlePause}>
+          {workflow?.allowed_actions.includes('pause') && (
+            <button className="button button-secondary" onClick={handlePause} disabled={actionBusy}>
               <Pause size={14} />
               <span>Pause Job</span>
             </button>
           )}
 
-          {job.status === 'PAUSED' && (
-            <button className="button button-secondary" onClick={handleResume}>
+          {workflow?.allowed_actions.includes('resume') && (
+            <button className="button button-secondary" onClick={handleResume} disabled={actionBusy}>
               <Play size={14} />
               <span>Resume Job</span>
             </button>
           )}
 
-          {job.status !== 'COMPLETED' && job.status !== 'CANCELLED' && (
-            <button className="button button-secondary" onClick={handleCancel}>
+          {(workflow?.allowed_actions.includes('cancel') ?? (job.status !== 'COMPLETED' && job.status !== 'CANCELLED')) && (
+            <button className="button button-secondary" onClick={handleCancel} disabled={actionBusy}>
               <XCircle size={14} />
               <span>Cancel</span>
             </button>
@@ -139,8 +204,8 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateD
         </div>
       </div>
 
-      {/* 7-Stage Pipeline Visualizer */}
-      <PipelineProgress status={job.status} />
+      {actionError && <div className="safe-error"><ShieldAlert size={16} /><div><strong>Workflow action failed</strong><span>{actionError}</span></div></div>}
+      {workflow ? <WorkflowProgress workflow={workflow} events={workflowEvents} /> : <PipelineProgress status={job.status} />}
 
       {/* Multi-Tab Navigation */}
       <div className="tabs">
@@ -151,28 +216,40 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateD
           Job Overview
         </button>
         <button
+          className={`tab ${activeTab === 'inventory' ? 'active' : ''}`}
+          onClick={() => setActiveTab('inventory')}
+        >
+          Repository Inventory
+        </button>
+        <button
           className={`tab ${activeTab === 'feasibility' ? 'active' : ''}`}
           onClick={() => setActiveTab('feasibility')}
         >
-          Feasibility & Gaps
+          Target Feasibility (Gate G1)
         </button>
         <button
           className={`tab ${activeTab === 'tests' ? 'active' : ''}`}
           onClick={() => setActiveTab('tests')}
         >
-          Characterization Suite
+          Characterization Suite (Gate G2)
         </button>
         <button
           className={`tab ${activeTab === 'blueprint' ? 'active' : ''}`}
           onClick={() => setActiveTab('blueprint')}
         >
-          Target Blueprint & Waves
+          Target Blueprint
+        </button>
+        <button
+          className={`tab ${activeTab === 'planner' ? 'active' : ''}`}
+          onClick={() => setActiveTab('planner')}
+        >
+          Conversion Plan & DAG (Gate G3)
         </button>
         <button
           className={`tab ${activeTab === 'verification' ? 'active' : ''}`}
           onClick={() => setActiveTab('verification')}
         >
-          Verification & Drift
+          Verification & Drift (Gate G4)
         </button>
         <button
           className={`tab ${activeTab === 'agents' ? 'active' : ''}`}
@@ -199,7 +276,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateD
                 </div>
                 <div>
                   <span style={{ color: 'var(--muted-foreground)' }}>Discovered Modules:</span>
-                  <div style={{ fontWeight: 600, marginTop: '4px' }}>{job.modules} domain packages</div>
+                  <div style={{ fontWeight: 600, marginTop: '4px' }}>{legacyModel?.modules.length ?? job.modules} domain packages</div>
                 </div>
                 <div>
                   <span style={{ color: 'var(--muted-foreground)' }}>Max Inner-Loop Retries:</span>
@@ -265,7 +342,8 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateD
                 <div style={{ fontSize: '10px', color: 'var(--muted-foreground)', lineHeight: 1.6 }}>
                   Container Sandboxes: <strong>Rootless gVisor</strong><br />
                   Secret Redaction: <strong>Enforced</strong><br />
-                  Human Oversight: <strong>Mandatory G1–G4</strong>
+                  Human Oversight: <strong>Mandatory G1–G4</strong><br />
+                  Phase 4 Boundary: <strong>Analysis & Planning Only (No CodeWriter)</strong>
                 </div>
               </div>
             </div>
@@ -273,120 +351,90 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateD
         </div>
       )}
 
-      {/* Tab 2: Feasibility */}
+      {/* Tab 2: Inventory & Discovered Modules */}
+      {activeTab === 'inventory' && (
+        <InventoryBrowser
+          snapshot={repositoryData?.snapshot || null}
+          inventory={repositoryData?.inventory || null}
+          legacyModel={legacyModel}
+        />
+      )}
+
+      {/* Tab 3: Feasibility & G1 Decisions */}
       {activeTab === 'feasibility' && (
-        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px', backgroundColor: 'var(--card)' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 650, marginBottom: '10px' }}>Target Stack Feasibility Assessment (Gate G1)</h2>
-          <p style={{ fontSize: '12px', color: 'var(--muted-foreground)', marginBottom: '20px' }}>
-            Analysis conducted by the Architect specialist agent mapping Java 11 Spring Boot idioms into Node.js 22 / NestJS equivalents.
-          </p>
-
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Legacy Java Idiom</th>
-                  <th>Target TypeScript Pattern</th>
-                  <th>Complexity</th>
-                  <th>Resolution Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><code>@RestController + @RequestMapping</code></td>
-                  <td>NestJS <code>@Controller() + @Get() / @Post()</code></td>
-                  <td>Low</td>
-                  <td><span className="badge green"><span className="dot" />1:1 Mapping</span></td>
-                </tr>
-                <tr>
-                  <td><code>Spring Data JPA + Hibernate</code></td>
-                  <td>Prisma Client / TypeORM repository injection</td>
-                  <td>Medium</td>
-                  <td><span className="badge green"><span className="dot" />Resolved</span></td>
-                </tr>
-                <tr>
-                  <td><code>Jackson ObjectMapper Polymorphism</code></td>
-                  <td><code>class-transformer + class-validator</code></td>
-                  <td>High</td>
-                  <td><span className="badge amber"><span className="dot" />Signed in G1</span></td>
-                </tr>
-                <tr>
-                  <td><code>Spring Security Filter Chain</code></td>
-                  <td>NestJS <code>CanActivate</code> AuthGuard + Session Middleware</td>
-                  <td>Medium</td>
-                  <td><span className="badge green"><span className="dot" />Standardized</span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <GateDetailExplanationView
+            gateType="G1"
+            job={job}
+            gate={gates.find((g) => g.gate_type === 'G1') || activeGate}
+            feasibilityReport={feasibilityReport}
+          />
+          <FeasibilityView
+            jobId={job.job_id}
+            feasibilityReport={feasibilityReport}
+            gapsRequiringG1={gapsRequiringG1}
+            onDecisionSubmitted={loadJobData}
+          />
         </div>
       )}
 
-      {/* Tab 3: Characterization Suite */}
-      {activeTab === 'tests' && (
-        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px', backgroundColor: 'var(--card)' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 650, marginBottom: '10px' }}>Frozen Characterization Test Harness (Gate G2)</h2>
-          <p style={{ fontSize: '12px', color: 'var(--muted-foreground)', marginBottom: '20px' }}>
-            312 black-box characterization tests recorded from legacy execution. All outputs and side effects are frozen in <code>CharacterizationSuite_v1.json</code>.
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
-            <div style={{ padding: '14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
-              <div style={{ fontSize: '11px', color: 'var(--muted-foreground)' }}>Total Captured Vectors</div>
-              <strong style={{ fontSize: '22px' }}>312</strong>
-            </div>
-            <div style={{ padding: '14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
-              <div style={{ fontSize: '11px', color: 'var(--muted-foreground)' }}>Passing Target Replay</div>
-              <strong style={{ fontSize: '22px', color: 'var(--success)' }}>308 (98.7%)</strong>
-            </div>
-            <div style={{ padding: '14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
-              <div style={{ fontSize: '11px', color: 'var(--muted-foreground)' }}>Cryptographic Hash</div>
-              <code style={{ fontSize: '10px', fontFamily: 'var(--font-mono)' }}>sha256:4a9918231c55490a...</code>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 4: Blueprint & Waves */}
+      {/* Tab 4: Target Blueprint */}
       {activeTab === 'blueprint' && (
-        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px', backgroundColor: 'var(--card)' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 650, marginBottom: '10px' }}>Module Dependency DAG & Wave Conversion Plan (Gate G3)</h2>
-          <p style={{ fontSize: '12px', color: 'var(--muted-foreground)', marginBottom: '20px' }}>
-            18 modules scheduled across 4 topological waves. Modules in the same wave run in parallel sandboxed CodeWriter workers.
-          </p>
+        <BlueprintView blueprint={targetBlueprint} />
+      )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px 16px', backgroundColor: 'var(--secondary)' }}>
-              <strong>Wave 1: Common Entities & DTOs (4 modules)</strong> · Completed · 100% Equivalence
-            </div>
-            <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px 16px', backgroundColor: 'var(--secondary)' }}>
-              <strong>Wave 2: Database Repositories & Data Access (5 modules)</strong> · Completed · 99.2% Equivalence
-            </div>
-            <div style={{ border: '1px solid var(--primary)', borderRadius: 'var(--radius-md)', padding: '12px 16px', backgroundColor: 'var(--accent)' }}>
-              <strong>Wave 3: Domain Business Services (6 modules)</strong> · In Progress · Active CodeWriter Workers
-            </div>
-            <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px 16px' }}>
-              <strong>Wave 4: HTTP Controllers & Route Mappings (3 modules)</strong> · Queued
-            </div>
+      {/* Tab 5: Conversion Plan & DAG (G3) */}
+      {activeTab === 'planner' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <GateDetailExplanationView
+            gateType="G3"
+            job={job}
+            gate={gates.find((g) => g.gate_type === 'G3') || activeGate}
+            conversionPlan={conversionPlan}
+          />
+          <ConversionPlanView
+            plan={conversionPlan}
+            onRevisionRequested={async (reason) => {
+              await api.submitConversionPlanRevision(job.job_id, { revision_reason: reason });
+              await loadJobData();
+            }}
+          />
+        </div>
+      )}
+
+      {/* Tab 6: Characterization Suite (G2) */}
+      {activeTab === 'tests' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <GateDetailExplanationView
+            gateType="G2"
+            job={job}
+            gate={gates.find((g) => g.gate_type === 'G2') || activeGate}
+          />
+        </div>
+      )}
+
+      {/* Tab 7: Verification & Diff (G4) */}
+      {activeTab === 'verification' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <GateDetailExplanationView
+            gateType="G4"
+            job={job}
+            gate={gates.find((g) => g.gate_type === 'G4') || activeGate}
+          />
+          <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px', backgroundColor: 'var(--card)' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: 650, marginBottom: '10px' }}>Dual-Harness Behavioral Verification (Gate G4)</h2>
+            <p style={{ fontSize: '12px', color: 'var(--muted-foreground)', marginBottom: '20px' }}>
+              Both legacy and converted services executed against identical fixtures. Zero unintended regressions detected.
+            </p>
+            <button className="button button-primary" onClick={() => onNavigate('/verification')}>
+              Open Full Verification Suite
+              <ArrowRight size={14} />
+            </button>
           </div>
         </div>
       )}
 
-      {/* Tab 5: Verification & Diff */}
-      {activeTab === 'verification' && (
-        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px', backgroundColor: 'var(--card)' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 650, marginBottom: '10px' }}>Dual-Harness Behavioral Verification (Gate G4)</h2>
-          <p style={{ fontSize: '12px', color: 'var(--muted-foreground)', marginBottom: '20px' }}>
-            Both legacy and converted services executed against identical fixtures. Zero unintended regressions detected.
-          </p>
-          <button className="button button-primary" onClick={() => onNavigate('/verification')}>
-            Open Full Verification Suite
-            <ArrowRight size={14} />
-          </button>
-        </div>
-      )}
-
-      {/* Tab 6: Agents */}
+      {/* Tab 8: Agents */}
       {activeTab === 'agents' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
           {agents.map((ag) => (
@@ -410,9 +458,10 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateD
       {activeGate && (
         <GateReviewModal
           gate={activeGate}
+          job={job}
           onClose={() => setActiveGate(null)}
-          onSubmit={async (decision, rationale, waivers) => {
-            await onGateDecision(activeGate.gate_id, decision, rationale, waivers);
+          onSubmit={async (decision, rationale, waivers, options) => {
+            await onGateDecision(activeGate.gate_id, decision, rationale, waivers, options);
             await loadJobData();
           }}
         />

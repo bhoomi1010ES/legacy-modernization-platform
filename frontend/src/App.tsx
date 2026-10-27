@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Job, GateDetail, AgentRun, Artifact, User } from './types/domain';
+import type { Job, GateDetail, Artifact, User } from './types/domain';
 import type { JobCreateRequest } from './types/api';
 import { api } from './services/api';
 import { Layout } from './components/Layout';
@@ -17,6 +17,8 @@ import { Audit } from './pages/Audit';
 import { Catalog } from './pages/Catalog';
 import { Settings } from './pages/Settings';
 import { CodeWorkspace } from './pages/CodeWorkspace';
+import { Characterization } from './pages/Characterization';
+import { ModuleExecution } from './pages/ModuleExecution';
 
 export const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState<string>(() => {
@@ -26,7 +28,6 @@ export const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [gates, setGates] = useState<GateDetail[]>([]);
-  const [agents, setAgents] = useState<AgentRun[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -47,6 +48,14 @@ export const App: React.FC = () => {
     window.location.hash = path;
   };
 
+  const loadGatesForJobs = async (jobItems: Job[]) => {
+    if (!jobItems.length) return api.getAllGates().catch(() => []);
+    const results = await Promise.allSettled(jobItems.map((job) => api.getAllGates(job.job_id)));
+    const collected = results.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
+    const unique = new Map(collected.map((gate) => [gate.gate_id, gate]));
+    return [...unique.values()].sort((a, b) => Date.parse(b.requested_at) - Date.parse(a.requested_at));
+  };
+
   useEffect(() => {
     loadInitialData();
   }, []);
@@ -61,19 +70,12 @@ export const App: React.FC = () => {
         const jobRes = await api.getJobs().catch(() => ({ items: [], total: 0 }));
         setJobs(jobRes.items);
 
-        const allGates = await api.getAllGates().catch(() => []);
+        const allGates = await loadGatesForJobs(jobRes.items);
         setGates(allGates);
 
-        const firstJobId = jobRes.items[0]?.job_id;
-        if (firstJobId) {
-          const ags = await api.getAgents(firstJobId).catch(() => []);
-          setAgents(ags);
-          const arts = await api.getArtifacts(firstJobId).catch(() => []);
-          setArtifacts(arts);
-        } else {
-          setAgents([]);
-          setArtifacts([]);
-        }
+        const artResults = await Promise.allSettled(jobRes.items.map((j) => api.getArtifacts(j.job_id)));
+        const allArts = artResults.flatMap((r) => r.status === 'fulfilled' ? r.value : []);
+        setArtifacts(allArts);
       }
     } finally {
       setLoading(false);
@@ -84,17 +86,26 @@ export const App: React.FC = () => {
     gateId: string,
     decision: any,
     rationale: string,
-    waivers?: any[]
+    waivers?: any[],
+    options?: Record<string, string>,
   ) => {
-    await api.submitGateDecision(gateId, { decision, rationale, waivers });
-    const updatedGates = await api.getAllGates();
-    setGates(updatedGates);
+    await api.submitGateDecision(gateId, { decision, rationale, waivers, options });
     const updatedJobs = await api.getJobs();
     setJobs(updatedJobs.items);
+    setGates(await loadGatesForJobs(updatedJobs.items));
   };
 
   const handleCreateJob = async (req: JobCreateRequest) => {
     const created = await api.createJob(req);
+    // Automatically trigger intake in background to acquire repo and build file inventory
+    api.intakeJob(
+      created.job_id,
+      req.git_token,
+      req.preview_snapshot_id,
+      req.snapshot_fingerprint
+    ).catch((err) => {
+      console.warn('Background intake trigger warning:', err);
+    });
     const updatedJobs = await api.getJobs();
     setJobs(updatedJobs.items);
     return created;
@@ -105,15 +116,11 @@ export const App: React.FC = () => {
     try {
       const jobRes = await api.getJobs().catch(() => ({ items: [], total: 0 }));
       setJobs(jobRes.items);
-      const allGates = await api.getAllGates().catch(() => []);
+      const allGates = await loadGatesForJobs(jobRes.items);
       setGates(allGates);
-      const firstJobId = jobRes.items[0]?.job_id;
-      if (firstJobId) {
-        const ags = await api.getAgents(firstJobId).catch(() => []);
-        setAgents(ags);
-        const arts = await api.getArtifacts(firstJobId).catch(() => []);
-        setArtifacts(arts);
-      }
+      const artResults = await Promise.allSettled(jobRes.items.map((j) => api.getArtifacts(j.job_id)));
+      const allArts = artResults.flatMap((r) => r.status === 'fulfilled' ? r.value : []);
+      setArtifacts(allArts);
     } catch {
       // ignore
     }
@@ -125,7 +132,6 @@ export const App: React.FC = () => {
     setUser(null);
     setJobs([]);
     setGates([]);
-    setAgents([]);
     setArtifacts([]);
     navigate('/login');
   };
@@ -160,7 +166,7 @@ export const App: React.FC = () => {
           gates={gates}
           onNavigate={navigate}
           onRefreshGates={async () => {
-            const all = await api.getAllGates();
+            const all = await loadGatesForJobs(jobs);
             setGates(all);
           }}
           onGateDecision={handleGateDecision}
@@ -175,6 +181,11 @@ export const App: React.FC = () => {
     }
     if (currentPath.startsWith('/jobs/')) {
       const jobId = currentPath.replace('/jobs/', '');
+      try {
+        localStorage.setItem('rebase_active_job_id', jobId);
+      } catch {
+        // ignore storage errors
+      }
       return (
         <JobDetail
           jobId={jobId}
@@ -188,7 +199,7 @@ export const App: React.FC = () => {
         <ApprovalGates
           gates={gates}
           onRefreshGates={async () => {
-            const all = await api.getAllGates();
+            const all = await loadGatesForJobs(jobs);
             setGates(all);
           }}
           onGateDecision={handleGateDecision}
@@ -197,16 +208,22 @@ export const App: React.FC = () => {
       );
     }
     if (currentPath === '/agents') {
-      return <AgentWorkspace agents={agents} />;
+      return <AgentWorkspace jobs={jobs} />;
     }
     if (currentPath === '/artifacts') {
-      return <Artifacts artifacts={artifacts} />;
+      return <Artifacts artifacts={artifacts} jobs={jobs} />;
+    }
+    if (currentPath === '/characterization') {
+      return <Characterization jobs={jobs} />;
+    }
+    if (currentPath === '/modules') {
+      return <ModuleExecution jobs={jobs} />;
     }
     if (currentPath === '/verification') {
       return <Verification onNavigate={navigate} />;
     }
     if (currentPath === '/reports') {
-      return <Reports />;
+      return <Reports jobs={jobs} />;
     }
     if (currentPath === '/audit') {
       return <Audit />;
@@ -217,8 +234,8 @@ export const App: React.FC = () => {
     if (currentPath === '/settings') {
       return <Settings />;
     }
-    if (currentPath === '/code') {
-      return <CodeWorkspace />;
+    if (currentPath === '/code' || currentPath.startsWith('/code')) {
+      return <CodeWorkspace jobs={jobs} onNavigate={navigate} />;
     }
 
     return (
@@ -227,7 +244,7 @@ export const App: React.FC = () => {
         gates={gates}
         onNavigate={navigate}
         onRefreshGates={async () => {
-          const all = await api.getAllGates();
+          const all = await loadGatesForJobs(jobs);
           setGates(all);
         }}
         onGateDecision={handleGateDecision}

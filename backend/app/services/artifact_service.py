@@ -33,6 +33,7 @@ class ArtifactService:
         extra_metadata: Optional[Dict[str, Any]] = None,
         user: Optional[User] = None,
         correlation_id: Optional[str] = None,
+        commit: bool = True,
     ) -> Artifact:
         """Publishes an immutable artifact version using staged-write compensation."""
         # 1. Enforce uniqueness: an existing version must never be overwritten
@@ -94,7 +95,10 @@ class ArtifactService:
         db.add(audit)
 
         try:
-            await db.commit()
+            if commit:
+                await db.commit()
+            else:
+                await db.flush()
             await db.refresh(artifact)
             return artifact
         except Exception as e:

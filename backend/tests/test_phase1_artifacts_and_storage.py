@@ -157,3 +157,47 @@ async def test_artifact_lineage_and_integrity_check():
         )
         assert bytes_out == v2_bytes
         assert storage.compute_sha256(bytes_out) == retrieved_art.content_hash
+
+
+@pytest.mark.asyncio
+async def test_artifact_content_endpoint_supports_lists_and_any_json(monkeypatch):
+    """Proves get_artifact_content supports arbitrary JSON (lists, dicts, arrays) without error."""
+    from app.api.v1 import artifacts as artifacts_mod
+    storage = InMemoryStorageAdapter()
+    service = ArtifactService(storage_adapter=storage)
+    monkeypatch.setattr(artifacts_mod, "artifact_service", service)
+
+    async with AsyncSessionLocal() as db_session:
+        user_res = await db_session.execute(select(User).limit(1))
+        owner = user_res.scalar_one()
+
+        job_id = uuid.uuid4()
+        job = Job(
+            job_id=job_id,
+            name="Artifact Array Test Job",
+            source_repository="https://github.com/acme/arrays",
+            status="PLANNING",
+            owner_user_id=owner.user_id,
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        list_payload = [{"id": 1, "name": "Item 1"}, {"id": 2, "name": "Item 2"}]
+        data_bytes = json.dumps(list_payload).encode("utf-8")
+        art = await service.create_artifact(
+            db=db_session,
+            job_id=job_id,
+            artifact_type="ModuleManifest",
+            version=1,
+            content_bytes=data_bytes,
+            producing_agent="PlannerAgent",
+        )
+
+        from app.api.v1.artifacts import get_artifact_content
+        res = await get_artifact_content(
+            job_id=str(job_id),
+            artifact_id=str(art.artifact_id),
+            access=(job, owner),
+            db=db_session,
+        )
+        assert res.content == list_payload

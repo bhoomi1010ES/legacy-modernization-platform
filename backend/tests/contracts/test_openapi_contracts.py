@@ -64,6 +64,10 @@ def test_health_and_readiness_endpoints(client: TestClient):
 
 def test_standardized_error_envelope_on_validation_failure(client: TestClient):
     """Validates that 422 Unprocessable Entity returns the standardized ErrorEnvelope."""
+    client.post(
+        "/api/v1/auth/login",
+        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+    )
     # Submit invalid budget < 50.0 and short name < 2 chars
     invalid_payload = {
         "name": "A",
@@ -84,6 +88,10 @@ def test_standardized_error_envelope_on_validation_failure(client: TestClient):
 
 def test_standardized_error_envelope_on_not_found(client: TestClient):
     """Validates that 404 Not Found returns the standardized ErrorEnvelope."""
+    client.post(
+        "/api/v1/auth/login",
+        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+    )
     response = client.get("/api/v1/jobs/JOB-NONEXISTENT")
     assert response.status_code == 404
     body = response.json()

@@ -1,6 +1,7 @@
 """FastAPI application entrypoint for the Modernization Platform API."""
 
 from uuid import uuid4
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,17 @@ from app.core.config import settings
 from app.core.errors import ErrorDetail, ErrorEnvelope, ErrorPayload, PlatformException
 
 
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Reconcile durable state and expired worker leases after restart."""
+    from app.core.database import AsyncSessionLocal
+    from app.services.supervisor_service import supervisor_service
+
+    async with AsyncSessionLocal() as db:
+        await supervisor_service.recover_active_jobs(db)
+    yield
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.PROJECT_NAME,
@@ -18,6 +30,7 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=lifespan,
     )
 
     # CORS configuration for browser clients

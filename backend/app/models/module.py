@@ -2,13 +2,16 @@
 
 import uuid
 from datetime import datetime
-from typing import Optional
+from decimal import Decimal
+from typing import Any, List, Optional
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
     Integer,
+    JSON,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -32,6 +35,14 @@ class Module(Base, TimestampMixin):
     risk_level: Mapped[str] = mapped_column(String(20), default="MEDIUM", nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="PENDING", nullable=False)
     wave_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    dependency_module_ids: Mapped[List[Any]] = mapped_column(JSON, default=list, nullable=False)
+    budget_limit_usd: Mapped[Decimal] = mapped_column(Numeric(10, 4), default=Decimal("0.0000"), nullable=False)
+    budget_used_usd: Mapped[Decimal] = mapped_column(Numeric(10, 4), default=Decimal("0.0000"), nullable=False)
+    lease_owner: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    lease_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_generation: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    lease_heartbeat_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     __table_args__ = (
         CheckConstraint("risk_level IN ('LOW', 'MEDIUM', 'HIGH')", name="chk_module_risk_level"),
@@ -67,6 +78,7 @@ class ModuleAttempt(Base):
     completed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    lease_generation: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     __table_args__ = (
         UniqueConstraint("module_id", "attempt_number", name="uq_module_attempt_number"),

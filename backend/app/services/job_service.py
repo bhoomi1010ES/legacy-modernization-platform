@@ -196,29 +196,12 @@ class JobService:
         user: User,
         correlation_id: Optional[str] = None,
     ) -> Job:
-        """Validates state machine and cancels active job transactionally."""
-        current_status = JobStatus(job.status)
-        if current_status == JobStatus.CANCELLED:
-            return job  # Idempotent cancellation
-
-        # Enforce DAG state machine constraints
-        JobStateMachine.validate_transition(current_status, JobStatus.CANCELLED)
-
-        job.status = JobStatus.CANCELLED.value
-
-        audit = AuditEvent(
-            job_id=job.job_id,
-            event_type="JOB_CANCELLED",
-            actor_type="USER",
-            actor_id=str(user.user_id),
+        """Compatibility facade; cancellation is owned by SupervisorService."""
+        from app.services.supervisor_service import supervisor_service
+        return await supervisor_service.cancel(
+            db, job.job_id, actor_id=str(user.user_id),
             correlation_id=correlation_id,
-            target_resource=str(job.job_id),
-            payload={"previous_status": current_status.value},
         )
-        db.add(audit)
-        await db.commit()
-        await db.refresh(job)
-        return job
 
     def acquire_intake_workspace(
         self,

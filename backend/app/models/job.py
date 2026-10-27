@@ -26,6 +26,9 @@ class Job(Base, TimestampMixin):
     job_id: Mapped[uuid.UUID] = mapped_column(
         GUID, primary_key=True, default=uuid.uuid4
     )
+    workflow_id: Mapped[uuid.UUID] = mapped_column(
+        GUID, default=uuid.uuid4, nullable=False, unique=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     source_repository: Mapped[str] = mapped_column(String(512), nullable=False)
     source_revision: Mapped[str] = mapped_column(String(128), default="HEAD", nullable=False)
@@ -42,6 +45,21 @@ class Job(Base, TimestampMixin):
     target_repository: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     integration_branch: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     stack_metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    workflow_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    workflow_phase: Mapped[str] = mapped_column(String(50), default="INTAKE", nullable=False, index=True)
+    active_node: Mapped[str] = mapped_column(String(100), default="created", nullable=False)
+    paused_from_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    blocking_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    workflow_retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_parallel_tasks: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    provider_concurrency_limit: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    sandbox_concurrency_limit: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    last_checkpoint_sequence: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_transition: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    terminal_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    orchestration_owner: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    orchestration_lease_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    orchestration_generation: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     __table_args__ = (
         CheckConstraint(
@@ -52,6 +70,12 @@ class Job(Base, TimestampMixin):
         ),
         Index("ix_jobs_owner_status", "owner_user_id", "status"),
         Index("ix_jobs_created_at_desc", "created_at"),
+        CheckConstraint(
+            "workflow_phase IN ('INTAKE', 'G1', 'CHARACTERIZATION', 'SCHEMA_DATA', 'G2', "
+            "'PLANNING', 'G3', 'CONVERSION', 'VERIFICATION', 'INTEGRATION', 'G4', "
+            "'COMPLETED', 'FAILED', 'CANCELLED')",
+            name="chk_job_workflow_phase",
+        ),
     )
 
     # Relationships
@@ -64,6 +88,9 @@ class Job(Base, TimestampMixin):
     gate_decisions = relationship("GateDecision", back_populates="job", cascade="all, delete-orphan")
     audit_events = relationship("AuditEvent", back_populates="job", cascade="all, delete-orphan")
     budget_records = relationship("BudgetUsage", back_populates="job", cascade="all, delete-orphan")
+    workflow_checkpoints = relationship("WorkflowCheckpoint", back_populates="job", cascade="all, delete-orphan")
+    workflow_gates = relationship("WorkflowGate", back_populates="job", cascade="all, delete-orphan")
+    workflow_outbox_events = relationship("WorkflowOutbox", back_populates="job", cascade="all, delete-orphan")
 
 
 class JobMembership(Base):

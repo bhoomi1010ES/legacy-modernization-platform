@@ -902,7 +902,12 @@ class StackDetector:
     ) -> Optional[Dict[str, Any]]:
         """Parses Maven pom.xml using standard XML parser without entity resolution."""
         try:
-            root = ET.fromstring(content)
+            # Repository manifests are untrusted. Reject DTD/entity declarations
+            # and oversized input before the standard parser sees them.
+            if len(content.encode("utf-8")) > 1048576 or "<!DOCTYPE" in content.upper() or "<!ENTITY" in content.upper():
+                inventory.warnings.append(f"Unsupported XML declarations or oversized manifest in {manifest.relative_path}")
+                return None
+            root = ET.fromstring(content)  # nosec B314
         except Exception as e:
             inventory.warnings.append(f"Malformed XML in {manifest.relative_path}: {str(e)}")
             return None

@@ -13,6 +13,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = ''
     case 'COMPLETED':
     case 'APPROVED':
     case 'Completed':
+    case 'SUCCEEDED':
       color = 'green';
       break;
     case 'CONVERTING':
@@ -22,6 +23,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = ''
     case 'CHARACTERIZING':
     case 'ANALYZING':
     case 'INTAKE':
+    case 'RUNNING':
       color = 'blue';
       break;
     case 'AWAITING_GATE_G1':
@@ -30,10 +32,15 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = ''
     case 'AWAITING_GATE_G4':
     case 'PENDING':
     case 'PAUSED':
+    case 'QUEUED':
+    case 'BLOCKED':
       color = 'amber';
       break;
     case 'FAILED':
     case 'REJECTED':
+    case 'NEEDS_CHANGES':
+    case 'INVALIDATED':
+    case 'TIMED_OUT':
     case 'CANCELLED':
       color = 'red';
       break;

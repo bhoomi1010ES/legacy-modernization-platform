@@ -16,6 +16,30 @@ try:
         # Environment & Server
         ENVIRONMENT: str = Field(default="development", description="Runtime environment: development, staging, production, testing")
         DEBUG: bool = Field(default=True, description="Enable debug mode and detailed exception logs")
+        PHASE5_LEGACY_IMAGE: str = Field(
+            default="phase5-legacy-fixture@sha256:c4b08a30ed93afecac971193131d4dadcbea7d112915749b7864a38676d481fb",
+            description="Immutable digest of Phase 5 legacy fixture Docker image",
+        )
+        PHASE5_LEGACY_COMMAND_JSON: str = Field(
+            default='["python", "/adapter.py"]',
+            description="Command argv for Phase 5 legacy adapter execution",
+        )
+        PHASE6_SANDBOX_IMAGE: str = ""
+        PHASE6_CHECK_COMMANDS_JSON: str = "[]"
+        PHASE6_TARGET_COMMAND_JSON: str = "[]"
+        PHASE6_SANDBOX_PYTHON: str = "/usr/local/bin/python"
+        PHASE6_SANDBOX_TIMEOUT: int = Field(default=180, ge=1, le=600)
+        PHASE6_MODEL_PROVIDER: str = ""
+        PHASE6_MODEL_IDENTIFIER: str = ""
+        PHASE6_MAX_OUTPUT_TOKENS: int = Field(default=8192, ge=128, le=32768)
+        PHASE6_MAX_TASK_COST_USD: float = Field(default=1.0, gt=0, le=100)
+        PHASE7_CHECK_COMMANDS_JSON: str = "[]"
+        PHASE7_SBOM_TOOL: str = ""
+        PHASE7_PR_PROVIDER: str = ""
+        PHASE7_GITHUB_REPOSITORY: str = ""
+        PHASE7_GITHUB_TOKEN: str = ""
+        PHASE7_GITHUB_API_URL: str = "https://api.github.com"
+        PHASE7_PR_BASE_BRANCH: str = "main"
         PROJECT_NAME: str = Field(default="Multi-Agent Legacy Code Modernization Platform API", description="Service name")
         VERSION: str = Field(default="1.0.0", description="API Version")
         API_V1_PREFIX: str = Field(default="/api/v1", description="Prefix for v1 REST endpoints")
@@ -67,6 +91,7 @@ try:
         # Autonomous Agents & LLM Model Providers
         ANTHROPIC_API_KEY: str = Field(default="", description="Anthropic API key for Claude 3.5 Sonnet specialist agents")
         OPENAI_API_KEY: str = Field(default="", description="OpenAI API key (optional fallback)")
+        OPENROUTER_API_KEY: str = Field(default="", description="OpenRouter API key for LLM model routing")
         DEFAULT_JOB_BUDGET_INR: float = Field(default=15000.0, description="Default spend cap per job in INR (Rupees)")
         DEFAULT_JOB_BUDGET_USD: float = Field(default=15000.0, description="Default spend cap per job (INR platform currency)")
         MAX_REPAIR_ATTEMPTS: int = Field(default=3, description="Max inner-loop compile/test repair attempts")
@@ -77,6 +102,19 @@ try:
         SANDBOX_NETWORK_EGRESS: str = Field(default="air-gapped", description="Container egress: air-gapped or package-whitelist")
         ENFORCE_SECRET_REDACTION: bool = Field(default=True, description="Automatically mask credentials before storage")
         MIN_RATIONALE_LENGTH: int = Field(default=10, description="Minimum characters required for gate approval rationales")
+
+        @field_validator("DEBUG", mode="before")
+        @classmethod
+        def parse_debug_bool(cls, v: Any) -> bool:
+            if isinstance(v, bool):
+                return v
+            if isinstance(v, str):
+                v_lower = v.strip().lower()
+                if v_lower in ("true", "1", "t", "yes", "y", "debug", "dev", "development"):
+                    return True
+                if v_lower in ("false", "0", "f", "no", "n", "release", "prod", "production"):
+                    return False
+            return bool(v)
 
         @field_validator("CORS_ALLOWED_ORIGINS", "ALLOWED_HOSTS")
         @classmethod
@@ -119,6 +157,24 @@ except ImportError:
     class Settings(BaseModel):  # type: ignore[no-redef]
         ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
         DEBUG: bool = os.getenv("DEBUG", "true").lower() in ("true", "1", "t")
+        PHASE5_LEGACY_IMAGE: str = os.getenv("PHASE5_LEGACY_IMAGE", "phase5-legacy-fixture@sha256:c4b08a30ed93afecac971193131d4dadcbea7d112915749b7864a38676d481fb")
+        PHASE5_LEGACY_COMMAND_JSON: str = os.getenv("PHASE5_LEGACY_COMMAND_JSON", '["python", "/adapter.py"]')
+        PHASE6_SANDBOX_IMAGE: str = os.getenv("PHASE6_SANDBOX_IMAGE", "")
+        PHASE6_CHECK_COMMANDS_JSON: str = os.getenv("PHASE6_CHECK_COMMANDS_JSON", "[]")
+        PHASE6_TARGET_COMMAND_JSON: str = os.getenv("PHASE6_TARGET_COMMAND_JSON", "[]")
+        PHASE6_SANDBOX_PYTHON: str = "/usr/local/bin/python"
+        PHASE6_SANDBOX_TIMEOUT: int = 180
+        PHASE6_MODEL_PROVIDER: str = os.getenv("PHASE6_MODEL_PROVIDER", "")
+        PHASE6_MODEL_IDENTIFIER: str = os.getenv("PHASE6_MODEL_IDENTIFIER", "")
+        PHASE6_MAX_OUTPUT_TOKENS: int = 8192
+        PHASE6_MAX_TASK_COST_USD: float = 1.0
+        PHASE7_CHECK_COMMANDS_JSON: str = os.getenv("PHASE7_CHECK_COMMANDS_JSON", "[]")
+        PHASE7_SBOM_TOOL: str = os.getenv("PHASE7_SBOM_TOOL", "")
+        PHASE7_PR_PROVIDER: str = os.getenv("PHASE7_PR_PROVIDER", "")
+        PHASE7_GITHUB_REPOSITORY: str = os.getenv("PHASE7_GITHUB_REPOSITORY", "")
+        PHASE7_GITHUB_TOKEN: str = os.getenv("PHASE7_GITHUB_TOKEN", "")
+        PHASE7_GITHUB_API_URL: str = os.getenv("PHASE7_GITHUB_API_URL", "https://api.github.com")
+        PHASE7_PR_BASE_BRANCH: str = os.getenv("PHASE7_PR_BASE_BRANCH", "main")
         PROJECT_NAME: str = os.getenv("PROJECT_NAME", "Multi-Agent Legacy Code Modernization Platform API")
         VERSION: str = os.getenv("VERSION", "1.0.0")
         API_V1_PREFIX: str = os.getenv("API_V1_PREFIX", "/api/v1")

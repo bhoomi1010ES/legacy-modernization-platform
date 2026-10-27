@@ -1,5 +1,7 @@
 # TDD: Multi-Agent Legacy Code
 # Modernization Platform
+
+Phase 5 implementation and current runtime/schema adapter boundaries: [Characterization and schema/data review](phase-5/implementation.md).
 Oct 13, 2026 · @Raj
 ## 1. Overview and goals
 The platform takes a legacy codebase and a target tech stack as job inputs and returns a

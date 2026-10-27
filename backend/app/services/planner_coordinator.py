@@ -1,0 +1,576 @@
+"""Planner Coordinator: Orchestrates parallel module planners, aggregates plans, and persists ConversionPlan."""
+
+import asyncio
+from decimal import Decimal
+import hashlib
+import json
+import logging
+from typing import Any, Dict, List, Optional
+import uuid
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models.job import Job
+from app.core.errors import ConflictException, NotFoundException
+from app.models.artifact import Artifact
+from app.models.job import Job
+from app.models.phase4 import (
+    ConversionPlanDependencyModel,
+    ConversionPlanModel,
+    ConversionPlanModuleModel,
+    ConversionPlanTaskModel,
+    FeasibilityDecisionModel,
+    FeasibilityReportModel,
+    PlannerOutputModel,
+    PlannerRunModel,
+    RepositorySnapshotModel,
+    TargetBlueprintModel,
+)
+from app.models.user import User
+from app.models.workflow import WorkflowGate
+from app.schemas.phase4 import (
+    ConversionPlan,
+    G1DecisionRecord,
+    G1DecisionType,
+    LegacyModel,
+    ModulePlanningUnit,
+    PlanningContext,
+    PlanningTask,
+    TargetBlueprint,
+)
+from app.services.artifact_service import ArtifactService
+from app.services.module_planner import ModulePlanner
+from app.services.plan_aggregator import plan_aggregator
+
+logger = logging.getLogger(__name__)
+
+
+class PlannerCoordinator:
+    """Coordinates parallel module-level planners, detects scope gaps, and coordinates aggregation."""
+
+    def __init__(self, artifact_service: Optional[ArtifactService] = None):
+        try:
+            self.artifact_service = artifact_service or ArtifactService()
+        except Exception as exc:
+            logger.exception("PlannerCoordinator init failed | %s: %s", type(exc).__name__, exc)
+            raise
+
+    def coordinate_planning(
+        self,
+        job_id: str,
+        blueprint: TargetBlueprint,
+        legacy_model: LegacyModel,
+        version: int = 1,
+        context: Optional[PlanningContext] = None,
+    ) -> ConversionPlan:
+        """Synchronously coordinates planning for all components in blueprint and legacy model incorporating full context."""
+        try:
+            # Section 21: Check for unresolved feasibility gaps without G1 decisions
+            if context and context.feasibility_report:
+                report = context.feasibility_report
+                gap_capabilities = [
+                    c for c in report.capabilities
+                    if str(getattr(c, "classification", "")).upper() in ("UNSUPPORTED", "SUBSTITUTE", "CUSTOM_BUILD", "UNKNOWN")
+                    or (hasattr(getattr(c, "classification", None), "value") and c.classification.value in ("UNSUPPORTED", "SUBSTITUTE", "CUSTOM_BUILD", "UNKNOWN"))
+                ]
+                if gap_capabilities:
+                    decided_caps = {d.capability_id for d in context.g1_decisions if d.capability_id}
+                    has_general_decision = any(not d.capability_id for d in context.g1_decisions)
+                    for cap in gap_capabilities:
+                        if not has_general_decision and cap.capability_id not in decided_caps:
+                            cap_id = getattr(cap, "capability_id", "unknown")
+                            raise ConflictException(f"Planner blocked: unresolved feasibility gap for capability '{cap_id}' without G1 decision.")
+
+            components = blueprint.components or []
+            planning_units: List[ModulePlanningUnit] = []
+            for comp in components:
+                planner = ModulePlanner(module_id=comp.component_id, component=comp, context=context)
+                unit = planner.plan_module(blueprint=blueprint, legacy_model=legacy_model)
+                if unit is not None:
+                    planning_units.append(unit)
+
+            if not planning_units and legacy_model.modules:
+                for mod in legacy_model.modules:
+                    planner = ModulePlanner(module_id=mod.module_id, context=context)
+                    unit = planner.plan_module(blueprint=blueprint, legacy_model=legacy_model, legacy_module=mod)
+                    if unit is not None:
+                        planning_units.append(unit)
+
+            # Section 17: Schema / Data constraint module injection
+            if context and context.schema_data_plan:
+                schema_plan = context.schema_data_plan
+                tables = schema_plan.get("tables", []) or schema_plan.get("table_mappings", [])
+                if tables and not any(u.module_id == "mod_db_migration" for u in planning_units):
+                    db_task = PlanningTask(
+                        task_id="task_db_migration_001",
+                        module_id="mod_db_migration",
+                        title="Execute Schema & Data Migrations",
+                        description=f"Apply DDL transformations, schema constraints, and verification queries for {len(tables)} tables.",
+                        estimate_hours=3.0,
+                        risk="MEDIUM",
+                        acceptance_criteria=[
+                            "Target database schema applied cleanly with all constraints and indices",
+                            "Rollback script tested and verified in disposable target environment",
+                            "Data migration validation queries return 100% parity",
+                        ],
+                        dependencies=[],
+                    )
+                    for u in planning_units:
+                        if "mod_db_migration" not in u.dependencies:
+                            u.dependencies.append("mod_db_migration")
+
+                    db_unit = ModulePlanningUnit(
+                        module_id="mod_db_migration",
+                        responsibility="Database schema migration, constraint application, and data verification",
+                        source_scope=["db/schema.sql"],
+                        target_scope=["migrations/001_initial.sql"],
+                        dependencies=[],
+                        interfaces=["migration_runner"],
+                        migration_steps=["Run DDL migration", "Validate constraints", "Run rollback test"],
+                        implementation_tasks=[db_task],
+                        required_tests=["test_schema_migration_ddl", "test_schema_migration_rollback"],
+                        acceptance_criteria=["Target database schema applied cleanly with all constraints and indices"],
+                        estimate_hours=3.0,
+                        risk="MEDIUM",
+                        required_tools=["schema_migrator", "postgres_validator"],
+                        environment_requirements=["Isolated Container Sandbox", "Target Runtime"],
+                        data_considerations="Core database migration on which all application modules depend.",
+                    )
+                    planning_units.insert(0, db_unit)
+
+            return plan_aggregator.aggregate_plan(
+                job_id=job_id,
+                blueprint_version=blueprint.version,
+                planning_units=planning_units,
+                version=version,
+                context=context,
+            )
+        except Exception as exc:
+            logger.exception("coordinate_planning failed | job_id=%s | %s: %s", job_id, type(exc).__name__, exc)
+            raise
+
+    async def run_single_module_planner(
+        self,
+        module_id: str,
+        blueprint: TargetBlueprint,
+        legacy_model: LegacyModel,
+        context: Optional[PlanningContext] = None,
+    ) -> Optional[ModulePlanningUnit]:
+        """Run a single module planner in thread pool for parallel execution."""
+        try:
+            comp = next(
+                (c for c in blueprint.components if c.component_id == f"comp_{module_id.replace('mod_', '')}"),
+                blueprint.components[0] if blueprint.components else None,
+            )
+            planner = ModulePlanner(module_id=module_id, component=comp, context=context)
+            loop = asyncio.get_running_loop()
+            unit = await loop.run_in_executor(None, planner.plan_module, blueprint, legacy_model)
+            return unit
+        except Exception as exc:
+            logger.exception("run_single_module_planner failed | module=%s | %s: %s", module_id, type(exc).__name__, exc)
+            raise
+
+    async def execute_planning(
+        self,
+        db: AsyncSession,
+        job: Job,
+        blueprint: TargetBlueprint,
+        legacy_model: LegacyModel,
+        user: Optional[User] = None,
+        correlation_id: Optional[str] = None,
+        context: Optional[PlanningContext] = None,
+    ) -> ConversionPlan:
+        """Runs parallel feature planners, aggregates plan, persists database records, and publishes artifact."""
+        try:
+            job_id_str = str(job.job_id)
+
+            # Build PlanningContext if not explicitly provided
+            if context is None:
+                feas_model = (
+                    await db.execute(
+                        select(FeasibilityReportModel)
+                        .options(selectinload(FeasibilityReportModel.capabilities))
+                        .where(FeasibilityReportModel.job_id == job.job_id)
+                        .order_by(FeasibilityReportModel.version.desc())
+                    )
+                ).scalars().first()
+                feas_report_obj = None
+                if feas_model:
+                    try:
+                        from app.schemas.phase4 import FeasibilityCapability, FeasibilityReport, ToolReadiness
+                        caps = []
+                        for c in (feas_model.capabilities or []):
+                            caps.append(
+                                FeasibilityCapability(
+                                    capability_id=c.capability_id,
+                                    category=c.category,
+                                    legacy_requirement=c.legacy_requirement,
+                                    target_requirement=c.target_requirement,
+                                    classification=c.classification,
+                                    confidence=c.confidence,
+                                    evidence=c.evidence or [],
+                                    tool_dependency=c.tool_dependency,
+                                    effort=c.effort or "MEDIUM",
+                                    risk=c.risk or "MEDIUM",
+                                    verification_impact=c.verification_impact,
+                                    recommendation=c.recommendation,
+                                )
+                            )
+                        feas_report_obj = FeasibilityReport(
+                            report_id=str(feas_model.report_id),
+                            job_id=job_id_str,
+                            version=feas_model.version,
+                            blueprint_version=feas_model.blueprint_version,
+                            legacy_model_version=feas_model.legacy_model_version,
+                            capabilities=caps,
+                            tool_readiness=[],
+                            overall_feasibility_score=feas_model.overall_score,
+                            unsupported_count=feas_model.unsupported_count,
+                            custom_build_count=feas_model.custom_build_count,
+                            substitute_count=feas_model.substitute_count,
+                            unknown_count=feas_model.unknown_count,
+                            summary=feas_model.summary or "",
+                            content_hash=feas_model.content_hash,
+                        )
+                    except Exception as e:
+                        logger.warning("Could not reconstruct FeasibilityReport from model: %s", e)
+
+                decisions_db = (
+                    await db.execute(
+                        select(FeasibilityDecisionModel)
+                        .where(FeasibilityDecisionModel.job_id == job.job_id)
+                        .order_by(FeasibilityDecisionModel.created_at.asc())
+                    )
+                ).scalars().all()
+                g1_decisions = [
+                    G1DecisionRecord(
+                        decision_id=str(d.decision_id),
+                        job_id=job_id_str,
+                        capability_id=d.capability_id,
+                        decision=d.decision,
+                        reason=d.reason,
+                        actor=d.actor,
+                        previous_feasibility_version=d.previous_feasibility_version,
+                        resulting_blueprint_version=d.resulting_blueprint_version,
+                    ) for d in decisions_db
+                ]
+                g1_gate = (
+                    await db.execute(
+                        select(WorkflowGate).where(
+                            WorkflowGate.job_id == job.job_id,
+                            WorkflowGate.gate_type == "G1",
+                            WorkflowGate.status == "APPROVED",
+                        )
+                    )
+                ).scalars().first()
+                if g1_gate and not any(not d.capability_id for d in g1_decisions):
+                    g1_decisions.append(
+                        G1DecisionRecord(
+                            decision_id=str(g1_gate.gate_id),
+                            job_id=job_id_str,
+                            capability_id=None,
+                            decision=G1DecisionType.ACCEPT_SUBSTITUTE,
+                            reason="Gate G1 approved: blueprint and feasibility accepted",
+                            actor="REVIEWER",
+                            previous_feasibility_version=feas_model.version if feas_model else 1,
+                            resulting_blueprint_version=blueprint.version,
+                        )
+                    )
+
+                char_art = (
+                    await db.execute(
+                        select(Artifact)
+                        .where(
+                            Artifact.job_id == job.job_id,
+                            Artifact.artifact_type.in_(("CHARACTERIZATION_SUITE", "CharacterizationSuite")),
+                        )
+                        .order_by(Artifact.version.desc())
+                    )
+                ).scalars().first()
+                char_suite = None
+                char_coverage = None
+                if char_art:
+                    try:
+                        content_bytes = await self.artifact_service.storage.get_object(char_art.storage_path)
+                        char_suite = json.loads(content_bytes.decode("utf-8"))
+                        if isinstance(char_suite, dict):
+                            char_suite["content_hash"] = char_art.content_hash
+                            char_coverage = char_suite.get("coverage") or char_suite.get("coverage_report")
+                    except Exception:
+                        char_suite = {"content_hash": char_art.content_hash}
+                    if not char_suite:
+                        char_suite = {"content_hash": char_art.content_hash}
+
+                schema_art = (
+                    await db.execute(
+                        select(Artifact)
+                        .where(
+                            Artifact.job_id == job.job_id,
+                            Artifact.artifact_type.in_(("SCHEMA_MIGRATION_PLAN", "SchemaMigrationPlan")),
+                        )
+                        .order_by(Artifact.version.desc())
+                    )
+                ).scalars().first()
+                schema_plan = None
+                if schema_art:
+                    try:
+                        content_bytes = await self.artifact_service.storage.get_object(schema_art.storage_path)
+                        schema_plan = json.loads(content_bytes.decode("utf-8"))
+                        if isinstance(schema_plan, dict):
+                            schema_plan["schema_hash"] = schema_art.content_hash
+                            schema_plan["content_hash"] = schema_art.content_hash
+                    except Exception:
+                        schema_plan = {"schema_hash": schema_art.content_hash, "content_hash": schema_art.content_hash}
+                    if not schema_plan:
+                        schema_plan = {"schema_hash": schema_art.content_hash, "content_hash": schema_art.content_hash}
+
+                snap_record = (
+                    await db.execute(
+                        select(RepositorySnapshotModel)
+                        .where(RepositorySnapshotModel.job_id == job.job_id)
+                        .order_by(RepositorySnapshotModel.version.desc())
+                    )
+                ).scalars().first()
+                repo_inv_hash = snap_record.inventory_hash if snap_record else None
+
+                prov_hashes = {}
+                if repo_inv_hash:
+                    prov_hashes["repo_inventory_hash"] = repo_inv_hash
+                if char_art:
+                    prov_hashes["characterization_suite_hash"] = char_art.content_hash
+                if schema_art:
+                    prov_hashes["schema_data_plan_hash"] = schema_art.content_hash
+                if feas_model:
+                    prov_hashes["feasibility_report_hash"] = feas_model.content_hash
+
+                context = PlanningContext(
+                    job_id=job_id_str,
+                    legacy_model=legacy_model,
+                    target_blueprint=blueprint,
+                    feasibility_report=feas_report_obj,
+                    g1_decisions=g1_decisions,
+                    characterization_suite=char_suite,
+                    characterization_coverage=char_coverage,
+                    schema_data_plan=schema_plan,
+                    provenance_hashes=prov_hashes,
+                )
+
+            # Check feasibility gaps: blocked if unresolved gaps without G1 decision
+            if context and context.feasibility_report:
+                report = context.feasibility_report
+                gap_capabilities = [
+                    c for c in report.capabilities
+                    if str(getattr(c, "classification", "")).upper() in ("UNSUPPORTED", "SUBSTITUTE", "CUSTOM_BUILD", "UNKNOWN")
+                    or (hasattr(getattr(c, "classification", None), "value") and c.classification.value in ("UNSUPPORTED", "SUBSTITUTE", "CUSTOM_BUILD", "UNKNOWN"))
+                ]
+                if gap_capabilities:
+                    decided_caps = {d.capability_id for d in context.g1_decisions if d.capability_id}
+                    has_general_decision = any(not d.capability_id for d in context.g1_decisions)
+                    for cap in gap_capabilities:
+                        if not has_general_decision and cap.capability_id not in decided_caps:
+                            cap_id = getattr(cap, "capability_id", "unknown")
+                            raise ConflictException(f"Planner blocked: unresolved feasibility gap for capability '{cap_id}' without G1 decision.")
+
+            existing_plan = (
+                await db.execute(
+                    select(ConversionPlanModel)
+                    .where(ConversionPlanModel.job_id == job.job_id)
+                    .order_by(ConversionPlanModel.version.desc())
+                )
+            ).scalars().first()
+            next_version = 1 if not existing_plan else existing_plan.version + 1
+
+            # 1. Start Planner Run
+            run_id = uuid.uuid4()
+            db_run = PlannerRunModel(
+                run_id=run_id,
+                job_id=job.job_id,
+                blueprint_version=blueprint.version,
+                version=next_version,
+                status="RUNNING",
+            )
+            db.add(db_run)
+            await db.flush()
+
+            # 2. Identify independently plannable modules
+            module_ids = [m.module_id for m in legacy_model.modules]
+            if not module_ids:
+                module_ids = ["mod_root"]
+
+            # 3. Parallel planning tasks with context
+            tasks = [self.run_single_module_planner(mid, blueprint, legacy_model, context=context) for mid in module_ids]
+            raw_units: List[Optional[ModulePlanningUnit]] = await asyncio.gather(*tasks)
+            planning_units: List[ModulePlanningUnit] = [u for u in raw_units if u is not None]
+
+            # Section 17: Schema / Data constraint module injection
+            if context and context.schema_data_plan:
+                schema_plan = context.schema_data_plan
+                tables = schema_plan.get("tables", []) or schema_plan.get("table_mappings", [])
+                if tables and not any(u.module_id == "mod_db_migration" for u in planning_units):
+                    db_task = PlanningTask(
+                        task_id="task_db_migration_001",
+                        module_id="mod_db_migration",
+                        title="Execute Schema & Data Migrations",
+                        description=f"Apply DDL transformations, schema constraints, and verification queries for {len(tables)} tables.",
+                        estimate_hours=3.0,
+                        risk="MEDIUM",
+                        acceptance_criteria=[
+                            "Target database schema applied cleanly with all constraints and indices",
+                            "Rollback script tested and verified in disposable target environment",
+                            "Data migration validation queries return 100% parity",
+                        ],
+                        dependencies=[],
+                    )
+                    for u in planning_units:
+                        if "mod_db_migration" not in u.dependencies:
+                            u.dependencies.append("mod_db_migration")
+
+                    db_unit = ModulePlanningUnit(
+                        module_id="mod_db_migration",
+                        responsibility="Database schema migration, constraint application, and data verification",
+                        source_scope=["db/schema.sql"],
+                        target_scope=["migrations/001_initial.sql"],
+                        dependencies=[],
+                        interfaces=["migration_runner"],
+                        migration_steps=["Run DDL migration", "Validate constraints", "Run rollback test"],
+                        implementation_tasks=[db_task],
+                        required_tests=["test_schema_migration_ddl", "test_schema_migration_rollback"],
+                        acceptance_criteria=["Target database schema applied cleanly with all constraints and indices"],
+                        estimate_hours=3.0,
+                        risk="MEDIUM",
+                        required_tools=["schema_migrator", "postgres_validator"],
+                        environment_requirements=["Isolated Container Sandbox", "Target Runtime"],
+                        data_considerations="Core database migration on which all application modules depend.",
+                    )
+                    planning_units.insert(0, db_unit)
+
+            # 4. Record individual planner outputs
+            for unit in planning_units:
+                db.add(PlannerOutputModel(
+                    output_id=uuid.uuid4(),
+                    run_id=run_id,
+                    module_id=unit.module_id,
+                    unit_payload=unit.model_dump(),
+                ))
+
+            # 5. Aggregate into canonical ConversionPlan with context
+            conversion_plan = plan_aggregator.aggregate_plan(
+                job_id=job_id_str,
+                blueprint_version=blueprint.version,
+                planning_units=planning_units,
+                version=next_version,
+                context=context,
+            )
+
+            # 6. Persist ConversionPlan in DB
+            db_plan = ConversionPlanModel(
+                plan_id=uuid.UUID(conversion_plan.plan_id.replace("plan_", "").ljust(32, "0")[:32]) if len(conversion_plan.plan_id) == 37 else uuid.uuid4(),
+                job_id=job.job_id,
+                version=next_version,
+                blueprint_version=blueprint.version,
+                validation_status="VALID" if conversion_plan.validation.is_valid_dag else "INVALID",
+                is_valid_dag=conversion_plan.validation.is_valid_dag,
+                total_estimate_hours=conversion_plan.total_estimate_hours,
+                risk_summary_payload=conversion_plan.risk_summary,
+                validation_payload=conversion_plan.validation.model_dump(),
+                content_hash=conversion_plan.content_hash,
+            )
+            db.add(db_plan)
+            await db.flush()
+
+            for unit in conversion_plan.modules:
+                db.add(ConversionPlanModuleModel(
+                    module_record_id=uuid.uuid4(),
+                    plan_id=db_plan.plan_id,
+                    module_id=unit.module_id,
+                    responsibility=unit.responsibility,
+                    wave_number=1,
+                    estimate_hours=unit.estimate_hours,
+                    risk=unit.risk,
+                    acceptance_criteria=unit.acceptance_criteria,
+                    payload=unit.model_dump(),
+                ))
+
+            from app.models.module import Module
+            wave_by_module = {mid: wave.wave_number for wave in conversion_plan.waves for mid in wave.module_ids}
+            for unit in conversion_plan.modules:
+                m_uuid = uuid.uuid5(job.job_id, unit.module_id)
+                existing_m = await db.get(Module, m_uuid)
+                if not existing_m:
+                    db.add(Module(
+                        module_id=m_uuid,
+                        job_id=job.job_id,
+                        name=unit.module_id,
+                        legacy_path=unit.source_scope[0] if unit.source_scope else "",
+                        target_path=unit.target_scope[0] if unit.target_scope else "",
+                        risk_level=unit.risk if unit.risk in ("LOW", "MEDIUM", "HIGH") else "MEDIUM",
+                        status="PENDING",
+                        wave_number=wave_by_module.get(unit.module_id, 1),
+                        dependency_module_ids=[str(uuid.uuid5(job.job_id, d)) for d in unit.dependencies],
+                        budget_limit_usd=Decimal("50.0"),
+                        budget_used_usd=Decimal("0.0"),
+                    ))
+
+            for task in conversion_plan.tasks:
+                db.add(ConversionPlanTaskModel(
+                    task_record_id=uuid.uuid4(),
+                    plan_id=db_plan.plan_id,
+                    task_id=task.task_id,
+                    module_id=task.module_id,
+                    title=task.title,
+                    estimate_hours=task.estimate_hours,
+                    risk=task.risk,
+                    acceptance_criteria=task.acceptance_criteria,
+                    dependencies=task.dependencies,
+                    payload=task.model_dump(),
+                ))
+
+            for dep in conversion_plan.dependencies:
+                db.add(ConversionPlanDependencyModel(
+                    dependency_id=uuid.uuid4(),
+                    plan_id=db_plan.plan_id,
+                    source=dep.source,
+                    target=dep.target,
+                    dependency_type=dep.dependency_type,
+                    confidence=dep.confidence.value,
+                ))
+
+            db_run.status = "COMPLETED"
+            db_run.completed_at = conversion_plan.created_at
+
+            # 7. Publish canonical CONVERSION_PLAN artifact
+            plan_bytes = json.dumps(conversion_plan.model_dump(mode="json"), indent=2).encode("utf-8")
+            await self.artifact_service.create_artifact(
+                db=db,
+                job_id=job.job_id,
+                artifact_type="CONVERSION_PLAN",
+                version=next_version,
+                content_bytes=plan_bytes,
+                producing_agent="PlannerCoordinator",
+                derived_from=[blueprint.content_hash],
+                user=user,
+                correlation_id=correlation_id,
+            )
+            # Maintain backward compatibility for legacy queries expecting "ConversionPlan"
+            await self.artifact_service.create_artifact(
+                db=db,
+                job_id=job.job_id,
+                artifact_type="ConversionPlan",
+                version=next_version,
+                content_bytes=plan_bytes,
+                producing_agent="PlannerCoordinator",
+                derived_from=[blueprint.content_hash],
+                user=user,
+                correlation_id=correlation_id,
+            )
+
+            await db.commit()
+            return conversion_plan
+        except Exception as exc:
+            logger.exception("execute_planning failed | job_id=%s | %s: %s", getattr(job, "job_id", "unknown"), type(exc).__name__, exc)
+            raise
+
+
+planner_coordinator = PlannerCoordinator()
