@@ -1,7 +1,6 @@
-"""Phase 6 typed tasks and agent outputs; API callers cannot submit commands or results."""
-
+import shlex
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class QueueConversion(BaseModel):
@@ -25,6 +24,19 @@ class ChangeSet(BaseModel):
     design_notes: str = Field(min_length=1, max_length=10000)
     assumptions: list[str] = Field(default_factory=list, max_length=100)
     test_commands: list[list[str]] = Field(default_factory=list, max_length=20)
+
+    @field_validator("test_commands", mode="before")
+    @classmethod
+    def normalize_test_commands(cls, v):
+        if not isinstance(v, list):
+            return []
+        normalized = []
+        for item in v:
+            if isinstance(item, str):
+                normalized.append(shlex.split(item))
+            elif isinstance(item, list):
+                normalized.append([str(x) for x in item])
+        return normalized
 
 
 class CheckSpec(BaseModel):

@@ -21,7 +21,22 @@ export function ModuleEvidence({ attempt, busy = false, onRepair, onWaiver }: {
     <h2>Attempt {attempt.attempt_number} evidence</h2>
     <p>Status: {attempt.status}</p>
     {attempt.failure_reason && <p role="alert">{attempt.failure_reason}</p>}
+    <div style={{ marginBottom: 12 }}>
+      <strong>Provider mode: </strong>
+      {(evidence.provider === 'openai' || attempt.metadata?.model_provider === 'openai' || evidence.model_provider === 'openai') ? (
+        <span className="badge badge-success" style={{ backgroundColor: '#059669', color: '#fff', padding: '2px 8px', borderRadius: 4, fontWeight: 'bold' }}>REAL OPENAI EXECUTION</span>
+      ) : (
+        <span className="badge badge-warning" style={{ backgroundColor: '#d97706', color: '#fff', padding: '2px 8px', borderRadius: 4, fontWeight: 'bold' }}>DETERMINISTIC / FAKE PROVIDER</span>
+      )}
+    </div>
     <dl>
+      <dt>Model</dt><dd>{
+        typeof evidence.model === 'string'
+          ? evidence.model
+          : typeof attempt.metadata?.model_identifier === 'string'
+            ? attempt.metadata.model_identifier
+            : 'Not recorded'
+      }</dd>
       <dt>Branch</dt><dd>{attempt.git_branch || 'Not created'}</dd>
       <dt>Source commit</dt><dd>{evidence.source_commit || 'Not recorded'}</dd>
       <dt>Frozen baseline hash</dt><dd style={{ overflowWrap: 'anywhere' }}>{evidence.baseline_hash || 'Not recorded'}</dd>

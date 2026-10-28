@@ -687,8 +687,17 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
                 reject_json_constant,
             )
 
+            raw_str = output["content"].strip()
+            if raw_str.startswith("```json"):
+                raw_str = raw_str[7:]
+            elif raw_str.startswith("```"):
+                raw_str = raw_str[3:]
+            if raw_str.endswith("```"):
+                raw_str = raw_str[:-3]
+            raw_str = raw_str.strip()
+
             output = json.loads(
-                output["content"],
+                raw_str,
                 object_pairs_hook=strict_adapter_object,
                 parse_constant=reject_json_constant,
             )

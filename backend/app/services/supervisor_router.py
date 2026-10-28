@@ -611,7 +611,11 @@ class SupervisorRouter:
             verified_ids = {str(m.module_id) for m in modules if m.status in ("VERIFIED", "COMPLETED")}
             active_modules = [
                 m for m in modules
-                if m.status in ("LEASED", "RUNNING") and (m.lease_expires_at is None or m.lease_expires_at > now)
+                if m.status in ("LEASED", "RUNNING")
+                and (
+                    m.lease_expires_at is None
+                    or (m.lease_expires_at.replace(tzinfo=now.tzinfo) if m.lease_expires_at.tzinfo is None else m.lease_expires_at) > now
+                )
             ]
 
             # 4a. Check if any generated modules need independent verification

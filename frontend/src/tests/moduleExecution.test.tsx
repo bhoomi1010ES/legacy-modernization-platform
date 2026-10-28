@@ -62,6 +62,19 @@ describe('Phase 6 execution evidence', () => {
     expect(markup).not.toContain('<script>');
   });
 
+  it('distinguishes real OpenAI execution from deterministic/fake provider mode', () => {
+    const fakeMarkup = renderToStaticMarkup(<ModuleEvidence attempt={attempt} />);
+    expect(fakeMarkup).toContain('DETERMINISTIC / FAKE PROVIDER');
+
+    const realAttempt = {
+      ...attempt,
+      evidence: { ...attempt.evidence, provider: 'openai', model: 'gpt-4o-mini' },
+    };
+    const realMarkup = renderToStaticMarkup(<ModuleEvidence attempt={realAttempt} />);
+    expect(realMarkup).toContain('REAL OPENAI EXECUTION');
+    expect(realMarkup).toContain('gpt-4o-mini');
+  });
+
   it('warns when execution evidence does not exist and hides unauthorized controls', () => {
     const markup = renderToStaticMarkup(<ModuleEvidence attempt={{ ...attempt, evidence: {}, allowed_actions: [] }} />);
     expect(markup).toContain('No execution evidence recorded');

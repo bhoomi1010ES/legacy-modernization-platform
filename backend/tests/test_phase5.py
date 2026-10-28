@@ -1058,7 +1058,12 @@ async def test_real_legacy_environment_acceptance(isolated):
         str(owner.user_id),
     )
     assert baseline["runtime_available"], f"REAL LEGACY ACCEPTANCE FAILED: {baseline['cases'][0].get('limitation')}"
+    assert baseline["execution_mode"] == "REAL_CONTAINER"
     assert baseline["cases"][0]["outcome"] == "PASSED"
+    assert baseline["cases"][0]["execution_mode"] == "REAL_CONTAINER"
+    assert baseline["cases"][0]["reproducibility"] == "DETERMINISTIC"
+    assert baseline["cases"][0]["exit_status"] == 0
+    assert baseline["cases"][0]["duration_ms"] is not None and baseline["cases"][0]["duration_ms"] >= 0
     artifact = await service.latest(db, job.job_id)
     import hashlib
 

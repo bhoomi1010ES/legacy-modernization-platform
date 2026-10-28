@@ -1899,7 +1899,7 @@ export const CreateJob: React.FC<CreateJobProps> = ({ onSubmit, onNavigate }) =>
                     className="field"
                     min={50}
                     max={1000000}
-                    step={100}
+                    step={50}
                     value={budget}
                     onChange={(e) => setBudget(Number(e.target.value))}
                     onWheel={(e) => (e.target as HTMLElement).blur()}

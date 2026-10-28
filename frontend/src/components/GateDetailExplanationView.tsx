@@ -70,57 +70,42 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
     ? 'Type'
     : 'Target';
 
+  const feasibilityScore = feasibilityReport?.overall_feasibility_score;
+  const feasibilityPercent = feasibilityScore === undefined
+    ? null
+    : Math.round(feasibilityScore * 1000) / 10;
+  const supportedCapabilities = feasibilityReport?.capabilities.filter(item => item.classification === 'SUPPORTED') || [];
+  const nonNativeCapabilities = feasibilityReport?.capabilities.filter(item => item.classification !== 'SUPPORTED') || [];
+
   // G1 Data
   const g1Deliverable = {
     source_stack: sourceStack,
     target_stack: targetStack,
-    feasibility_score: feasibilityReport?.overall_feasibility_score ?? 0.96,
-    feasibility_status: 'FEASIBLE',
-    blocking_gaps_count: feasibilityReport?.unsupported_count ?? 0,
-    native_capabilities: [
-      `${sourceStack} Language Primitives -> ${targetStack} Equivalents`,
-      'HTTP RESTful API Protocol Parity',
-      'Standard I/O Streams & Process Management',
-      'Relational & Document Database Protocol Parity',
-      'Cryptographic Hashing & Secure Storage',
-    ],
-    library_ecosystem: [
-      `${sourceStack} Dependency Manifest -> ${targetStack} Package Ecosystem`,
-      `Source Data Layer -> ${targetStack} Data Mapper / ORM`,
-      `Source Controller Handlers -> ${targetStack} Framework Handlers`,
-      `Source Test Harness -> ${targetStack} Automated Test Framework`,
-    ],
-    recommended_adapters: [
-      `${sourcePrefix}To${targetPrefix}Adapter`,
-      'UniversalDataMigrationBridge',
-    ],
-    equivalency_matrix: [
-      {
-        legacy: `${sourceStack} Route Handlers & Controllers`,
-        target: `${targetStack} Native Route Handlers`,
-        category: 'HTTP Routing',
-      },
-      {
-        legacy: `${sourceStack} Data Models & Entity Structures`,
-        target: `${targetStack} Schema Models & Entities`,
-        category: 'Data Contracts',
-      },
-      {
-        legacy: `${sourceStack} Database Connection & Query Interface`,
-        target: `${targetStack} Connection Pool & Query Builder`,
-        category: 'Data Access',
-      },
-      {
-        legacy: `${sourceStack} Authentication & Middleware Chains`,
-        target: `${targetStack} Security Middleware / Filter Interceptors`,
-        category: 'Security',
-      },
-      {
-        legacy: `${sourceStack} Static Asset Pipeline & View Templates`,
-        target: `${targetStack} Modular Virtual DOM & Component Bundler`,
-        category: 'View Engine',
-      },
-    ],
+    feasibility_score: feasibilityScore ?? 'NOT_LOADED',
+    feasibility_status: feasibilityReport
+      ? (feasibilityReport.unsupported_count > 0 ? 'REQUIRES_RESOLUTION' : 'REVIEW_READY')
+      : 'NOT_LOADED',
+    blocking_gaps_count: feasibilityReport?.unsupported_count ?? 'NOT_LOADED',
+    native_capabilities: supportedCapabilities.length
+      ? supportedCapabilities.map(item => `${item.legacy_requirement} -> ${item.target_requirement}`)
+      : ['No supported-capability evidence was returned in the loaded feasibility report.'],
+    library_ecosystem: nonNativeCapabilities.length
+      ? nonNativeCapabilities.map(item => `${item.classification}: ${item.legacy_requirement} -> ${item.target_requirement}`)
+      : ['No substitute, custom-build, unsupported, or unknown capability was reported.'],
+    recommended_adapters: nonNativeCapabilities.length
+      ? nonNativeCapabilities.map(item => item.recommendation)
+      : ['No bridging adapter recommendation was reported.'],
+    equivalency_matrix: feasibilityReport?.capabilities.length
+      ? feasibilityReport.capabilities.map(item => ({
+          legacy: item.legacy_requirement,
+          target: item.target_requirement,
+          category: `${item.category} · ${item.classification}`,
+        }))
+      : [{
+          legacy: `${sourceStack} feasibility evidence`,
+          target: `${targetStack} feasibility evidence`,
+          category: 'Report not loaded',
+        }],
   };
 
   // G2 Data
@@ -289,14 +274,15 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
 
   // Configure Gate-Specific Content View Models
   let title = gateTitle || 'Target Stack Feasibility Assessment (Gate G1)';
-  let badgeText = '100% Architecturally Feasible';
+  let badgeText = feasibilityPercent === null ? 'Feasibility report not loaded' : `${feasibilityPercent}% Feasibility Score`;
   let subtitleLead = 'Architectural parity and capability mapping analysis for modernizing';
   let card3Label = 'Parity Equivalence';
-  let card3Value = '96.0% Compatible';
+  let card3Value = feasibilityPercent === null ? 'Not loaded' : `${feasibilityPercent}% Compatible`;
   let card4Label = 'Deliverable Status';
   let card4Value = 'FeasibilityReport v1';
   let specialistHeader = 'Specialist Feasibility Analysis & Gate G1 Recommendation:';
-  let specialistBody = `100% Native Parity Confirmed. All components in ${sourceStack} map directly into native ${targetStack} primitives with zero breaking discrepancies.`;
+  let specialistBody = feasibilityReport?.summary ||
+    `Review the versioned feasibility artifact before approving the ${sourceStack} to ${targetStack} transition.`;
   let matrixTitle = 'Architectural Component & Idiom Equivalency Matrix';
   let matrixSubtitle = `Target Parity for ${sourceStack} -> ${targetStack}`;
   let matrixCol1 = 'LEGACY COMPONENT / IDIOM';

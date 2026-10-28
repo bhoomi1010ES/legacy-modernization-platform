@@ -18,8 +18,9 @@ async def lifespan(_: FastAPI):
     from app.core.database import AsyncSessionLocal
     from app.services.supervisor_service import supervisor_service
 
-    async with AsyncSessionLocal() as db:
-        await supervisor_service.recover_active_jobs(db)
+    if settings.ENVIRONMENT != "testing":
+        async with AsyncSessionLocal() as db:
+            await supervisor_service.recover_active_jobs(db)
     yield
 
 

@@ -10,6 +10,14 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 ROOT_DIR = BACKEND_DIR.parent
 
 try:
+    from dotenv import load_dotenv
+    load_dotenv(BACKEND_DIR / ".env")
+    load_dotenv(ROOT_DIR / ".env")
+    load_dotenv(".env")
+except ImportError:
+    pass
+
+try:
     from pydantic_settings import BaseSettings, SettingsConfigDict
 
     class Settings(BaseSettings):
@@ -33,6 +41,7 @@ try:
         PHASE6_MODEL_IDENTIFIER: str = ""
         PHASE6_MAX_OUTPUT_TOKENS: int = Field(default=8192, ge=128, le=32768)
         PHASE6_MAX_TASK_COST_USD: float = Field(default=1.0, gt=0, le=100)
+        PHASE7_SANDBOX_IMAGE: str = ""
         PHASE7_CHECK_COMMANDS_JSON: str = "[]"
         PHASE7_SBOM_TOOL: str = ""
         PHASE7_PR_PROVIDER: str = ""
@@ -168,6 +177,7 @@ except ImportError:
         PHASE6_MODEL_IDENTIFIER: str = os.getenv("PHASE6_MODEL_IDENTIFIER", "")
         PHASE6_MAX_OUTPUT_TOKENS: int = 8192
         PHASE6_MAX_TASK_COST_USD: float = 1.0
+        PHASE7_SANDBOX_IMAGE: str = os.getenv("PHASE7_SANDBOX_IMAGE", "")
         PHASE7_CHECK_COMMANDS_JSON: str = os.getenv("PHASE7_CHECK_COMMANDS_JSON", "[]")
         PHASE7_SBOM_TOOL: str = os.getenv("PHASE7_SBOM_TOOL", "")
         PHASE7_PR_PROVIDER: str = os.getenv("PHASE7_PR_PROVIDER", "")

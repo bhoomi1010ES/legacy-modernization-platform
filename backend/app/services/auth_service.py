@@ -64,6 +64,7 @@ class AuthService:
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         correlation_id: Optional[str] = None,
+        allow_privileged: bool = False,
     ) -> Tuple[User, str, List[str]]:
         clean_email = email.strip().lower()
         clean_name = full_name.strip()
@@ -76,8 +77,15 @@ class AuthService:
             raise ConflictException(f"An account with email '{clean_email}' already exists.")
 
         # Sanitize and assign role
-        valid_roles = {"SUPER_ADMIN", "ADMIN", "REVIEWER", "DEVELOPER", "VIEWER"}
-        assigned_role = role.upper() if role and role.upper() in valid_roles else "DEVELOPER"
+        privileged_roles = {"SUPER_ADMIN", "ADMIN", "PROJECT_MANAGER"}
+        requested_role = (role or "DEVELOPER").strip().upper()
+        if requested_role in privileged_roles and not allow_privileged:
+            raise ForbiddenException(
+                f"Self-assignment of privileged role '{requested_role}' is forbidden on public registration."
+            )
+
+        valid_roles = {"SUPER_ADMIN", "ADMIN", "PROJECT_MANAGER", "REVIEWER", "DEVELOPER", "VIEWER"}
+        assigned_role = requested_role if requested_role in valid_roles else "DEVELOPER"
 
         # Create user
         pw_hash = hash_password(password)

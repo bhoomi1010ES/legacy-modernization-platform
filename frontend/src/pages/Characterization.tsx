@@ -15,6 +15,25 @@ const captureExample = {
 
 export function BaselineEvidence({ report }: { report: CharacterizationReport }) {
   return <section style={panel} aria-label="Baseline coverage and limitations">
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+      <span
+        style={{
+          padding: '4px 8px',
+          borderRadius: 4,
+          fontWeight: 'bold',
+          fontSize: 12,
+          background: report.execution_mode === 'REAL_CONTAINER' ? '#1b4d3e' : report.execution_mode === 'IN_MEMORY_DOUBLE' ? '#5a3d00' : '#4d1b1b',
+          color: '#ffffff',
+        }}
+      >
+        {report.execution_mode === 'REAL_CONTAINER' ? 'REAL EXECUTION (DOCKER)' : report.execution_mode === 'IN_MEMORY_DOUBLE' ? 'SIMULATED / IN-MEMORY EXECUTION' : 'EXECUTION UNAVAILABLE'}
+      </span>
+      {report.g2_readiness && (
+        <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+          G2 Status: {report.g2_readiness.ready_for_g2 ? 'Ready for G2 review' : `${report.g2_readiness.blocking_reasons.length} blocking issues`}
+        </span>
+      )}
+    </div>
     <h2>Baseline coverage: {report.coverage.percent}%</h2>
     {!report.runtime_available && <p role="alert">Legacy test environment unavailable. Discovery alone does not prove behavior equivalence.</p>}
     {!report.cases.some(item => item.evidence_status === 'OBSERVED' || item.outcome === 'PASSED') && <p role="alert">Required baseline evidence is unobserved. G2 approval is blocked.</p>}
@@ -26,6 +45,33 @@ export function BaselineEvidence({ report }: { report: CharacterizationReport })
       <h3>{kind[0].toUpperCase() + kind.slice(1)}</h3>
       <ul>{report.coverage[kind].map(item => <li key={item.name}>{item.name}: {item.status || (item.covered ? 'Covered' : 'Untested')}{item.observed ? ' · OBSERVED' : ''}</li>)}</ul>
     </div>)}
+    {report.schema_findings && report.schema_findings.length > 0 && (
+      <div>
+        <h3>Schema &amp; SQL Findings ({report.schema_findings.length})</h3>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Construct</th>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.schema_findings.map((f, i) => (
+                <tr key={i}>
+                  <td>{f.construct}</td>
+                  <td>{f.name}</td>
+                  <td><span style={{ fontWeight: 'bold' }}>{f.status}</span></td>
+                  <td>{f.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
     <h3>Untested paths and limitations</h3>
     {report.discovery_evidence && <><h3>Discovered tests (execution tracked separately)</h3><pre style={preview}>{json(report.discovery_evidence)}</pre></>}
     <ul>{[...report.coverage.untested_paths, ...report.coverage.limitations].map((item, i) => <li key={i}>{item}</li>)}</ul>
@@ -137,13 +183,29 @@ export function Characterization({ jobs }: { jobs: Job[] }) {
         <label>Filter tests <input value={filter} onChange={event => setFilter(event.target.value)} placeholder="Module, interface or behavior" /></label>
         <label> Outcome <select value={outcome} onChange={event => setOutcome(event.target.value)}><option value="ALL">All outcomes</option>{[...new Set(report.cases.map(item => item.outcome))].map(value => <option key={value}>{value}</option>)}</select></label>
         <p>{cases.length} of {report.cases.length} cases</p>
-        <div className="table-wrap"><table><thead><tr><th>Case</th><th>Module / interface</th><th>Behavior</th><th>Outcome</th></tr></thead><tbody>
-          {cases.map(item => <tr key={item.test_case_id}><td><button className="button" onClick={() => setSelectedCase(item.test_case_id)}>{item.name}</button></td><td>{item.module} / {item.interface}</td><td>{item.behavior}</td><td>{item.outcome}</td></tr>)}
+        <div className="table-wrap"><table><thead><tr><th>Case</th><th>Module / interface</th><th>Behavior</th><th>Outcome</th><th>Reproducibility</th><th>Execution</th></tr></thead><tbody>
+          {cases.map(item => <tr key={item.test_case_id}><td><button className="button" onClick={() => setSelectedCase(item.test_case_id)}>{item.name}</button></td><td>{item.module} / {item.interface}</td><td>{item.behavior}</td><td>{item.outcome}</td><td>{item.reproducibility || '—'}</td><td>{item.execution_mode === 'REAL_CONTAINER' ? 'REAL' : item.execution_mode === 'IN_MEMORY_DOUBLE' ? 'SIMULATED' : 'UNAVAIL'}</td></tr>)}
         </tbody></table></div>
         {!cases.length && <p>No matching test cases. Untested behavior remains a gap.</p>}
-        {currentCase && <div><h3>{currentCase.name}</h3><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-          <div><h4>Expected</h4><pre style={preview}>{json(currentCase.expected)}</pre></div><div><h4>Actual</h4><pre style={preview}>{json(currentCase.actual)}</pre></div>
-        </div><h4>Fixtures and side effects</h4><pre style={preview}>{json({ fixtures: currentCase.fixtures, side_effects: currentCase.side_effects })}</pre><h4>Case normalization</h4><pre style={preview}>{json(currentCase.normalization)}</pre>{currentCase.known_bug && <p>Known bug: {currentCase.known_bug}</p>}</div>}
+        {currentCase && <div>
+          <h3>{currentCase.name}</h3>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 8, fontSize: 13 }}>
+            <span><strong>Mode:</strong> {currentCase.execution_mode || 'UNAVAILABLE'}</span>
+            <span><strong>Reproducibility:</strong> {currentCase.reproducibility || 'UNAVAILABLE'}</span>
+            {currentCase.duration_ms !== undefined && currentCase.duration_ms !== null && <span><strong>Duration:</strong> {currentCase.duration_ms}ms</span>}
+            {currentCase.exit_status !== undefined && currentCase.exit_status !== null && <span><strong>Exit code:</strong> {currentCase.exit_status}</span>}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+            <div><h4>Expected</h4><pre style={preview}>{json(currentCase.expected)}</pre></div>
+            <div><h4>Actual</h4><pre style={preview}>{json(currentCase.actual)}</pre></div>
+          </div>
+          <h4>Fixtures and side effects</h4><pre style={preview}>{json({ fixtures: currentCase.fixtures, side_effects: currentCase.side_effects })}</pre>
+          <h4>Case normalization</h4><pre style={preview}>{json(currentCase.normalization)}</pre>
+          {currentCase.provenance && <><h4>Provenance</h4><pre style={preview}>{json(currentCase.provenance)}</pre></>}
+          {currentCase.stdout_sample && <><h4>Stdout sample</h4><pre style={preview}>{currentCase.stdout_sample}</pre></>}
+          {currentCase.stderr_sample && <><h4>Stderr sample</h4><pre style={preview}>{currentCase.stderr_sample}</pre></>}
+          {currentCase.known_bug && <p>Known bug: {currentCase.known_bug}</p>}
+        </div>}
       </section>
       <section style={panel}><h2>G2 baseline approval</h2><p>Suite v{report.version} · {report.status}</p><p style={{ overflowWrap: 'anywhere' }}>Content hash: <code>{report.content_hash}</code></p>
         <button className="button" disabled={busy || report.status === 'FROZEN' || report.status === 'APPROVED' || gate?.status === 'PENDING'} onClick={() => act(async () => {

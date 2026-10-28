@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { GateDetail, DecisionOutcome, GateVerificationGuide, Job } from '../types/domain';
+import type { ConversionPlan, FeasibilityReport } from '../types/phase4';
 import { GateDetailExplanationView } from './GateDetailExplanationView';
 import {
   ShieldCheck,
@@ -19,6 +20,8 @@ import {
 interface GateReviewModalProps {
   gate: GateDetail;
   job?: Job | null;
+  feasibilityReport?: FeasibilityReport | null;
+  conversionPlan?: ConversionPlan | null;
   onClose: () => void;
   onSubmit: (
     decision: DecisionOutcome,
@@ -208,7 +211,14 @@ const FALLBACK_VERIFICATION_GUIDES: Record<string, GateVerificationGuide> = {
   },
 };
 
-export const GateReviewModal: React.FC<GateReviewModalProps> = ({ gate, job, onClose, onSubmit }) => {
+export const GateReviewModal: React.FC<GateReviewModalProps> = ({
+  gate,
+  job,
+  feasibilityReport,
+  conversionPlan,
+  onClose,
+  onSubmit,
+}) => {
   const [rationale, setRationale] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -347,6 +357,8 @@ export const GateReviewModal: React.FC<GateReviewModalProps> = ({ gate, job, onC
             gateTitle={gate.title}
             gate={gate}
             job={job}
+            feasibilityReport={feasibilityReport}
+            conversionPlan={conversionPlan}
           />
         </div>
 
@@ -500,7 +512,10 @@ export const GateReviewModal: React.FC<GateReviewModalProps> = ({ gate, job, onC
             <AlertTriangle size={18} />
             <div className="grow">
               <strong>Feasibility & Capability Sign-Off</strong>
-              <p>Verify that all detected legacy patterns have viable equivalents in TypeScript / Node.js 22 / NestJS.</p>
+              <p>
+                Verify that all detected legacy patterns have viable equivalents in{' '}
+                {job?.target_stack || 'the selected target stack'}.
+              </p>
               <label className="form-field" style={{ marginTop: 10 }}>
                 <span>Default capability-gap resolution</span>
                 <select className="field" value={gapResolution} onChange={(event) => setGapResolution(event.target.value)}>

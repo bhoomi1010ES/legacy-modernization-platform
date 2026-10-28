@@ -79,32 +79,61 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateD
         artifactResult,
         agentResult,
         gateResult,
-        repoResult,
-        analysisResult,
-        feasResult,
-        bpResult,
-        planResult,
       ] = await Promise.allSettled([
         api.getWorkflow(jobId),
         api.getWorkflowEvents(jobId),
         api.getArtifacts(jobId),
         api.getAgents(jobId),
         api.getAllGates(jobId),
-        api.getRepository(jobId),
-        api.getAnalysis(jobId),
-        api.getFeasibility(jobId),
-        api.getBlueprint(jobId),
-        api.getConversionPlan(jobId),
       ]);
 
+      const fetchedArtifacts = artifactResult.status === 'fulfilled' ? artifactResult.value : [];
       setWorkflow(workflowResult.status === 'fulfilled' ? workflowResult.value : null);
       setWorkflowEvents(eventsResult.status === 'fulfilled' ? eventsResult.value : []);
-      setArtifacts(artifactResult.status === 'fulfilled' ? artifactResult.value : []);
+      setArtifacts(fetchedArtifacts);
       setAgents(agentResult.status === 'fulfilled' ? agentResult.value : []);
       const fetchedGates = gateResult.status === 'fulfilled' ? gateResult.value : [];
       setGates(fetchedGates);
       const jobGate = fetchedGates.find((g) => g.job_id === jobId && g.status === 'PENDING');
       setActiveGate(jobGate || null);
+
+      // Determine deliverable availability from artifacts and job lifecycle status
+      const artifactTypes = new Set(fetchedArtifacts.map((a) => a.artifact_type.toUpperCase()));
+
+      const hasRepo =
+        artifactTypes.has('REPOSITORYSNAPSHOT') ||
+        artifactTypes.has('REPOSITORY_SNAPSHOT') ||
+        artifactTypes.has('REPOSITORYINVENTORY') ||
+        artifactTypes.has('REPOSITORY_INVENTORY') ||
+        j.status !== 'CREATED';
+
+      const hasAnalysis =
+        artifactTypes.has('LEGACYMODEL') ||
+        artifactTypes.has('LEGACY_MODEL') ||
+        ['AWAITING_GATE_G1', 'CHARACTERIZING', 'AWAITING_GATE_G2', 'PLANNING', 'AWAITING_GATE_G3', 'CONVERTING', 'VERIFYING', 'INTEGRATING', 'AWAITING_GATE_G4', 'COMPLETED'].includes(j.status);
+
+      const hasFeasibility =
+        artifactTypes.has('FEASIBILITYREPORT') ||
+        artifactTypes.has('FEASIBILITY_REPORT') ||
+        ['AWAITING_GATE_G1', 'CHARACTERIZING', 'AWAITING_GATE_G2', 'PLANNING', 'AWAITING_GATE_G3', 'CONVERTING', 'VERIFYING', 'INTEGRATING', 'AWAITING_GATE_G4', 'COMPLETED'].includes(j.status);
+
+      const hasBlueprint =
+        artifactTypes.has('TARGETBLUEPRINT') ||
+        artifactTypes.has('TARGET_BLUEPRINT') ||
+        ['AWAITING_GATE_G1', 'CHARACTERIZING', 'AWAITING_GATE_G2', 'PLANNING', 'AWAITING_GATE_G3', 'CONVERTING', 'VERIFYING', 'INTEGRATING', 'AWAITING_GATE_G4', 'COMPLETED'].includes(j.status);
+
+      const hasPlan =
+        artifactTypes.has('CONVERSIONPLAN') ||
+        artifactTypes.has('CONVERSION_PLAN') ||
+        ['PLANNING', 'AWAITING_GATE_G3', 'CONVERTING', 'VERIFYING', 'INTEGRATING', 'AWAITING_GATE_G4', 'COMPLETED'].includes(j.status);
+
+      const [repoResult, analysisResult, feasResult, bpResult, planResult] = await Promise.allSettled([
+        hasRepo ? api.getRepository(jobId) : Promise.reject(new Error('NOT_AVAILABLE')),
+        hasAnalysis ? api.getAnalysis(jobId) : Promise.reject(new Error('NOT_AVAILABLE')),
+        hasFeasibility ? api.getFeasibility(jobId) : Promise.reject(new Error('NOT_AVAILABLE')),
+        hasBlueprint ? api.getBlueprint(jobId) : Promise.reject(new Error('NOT_AVAILABLE')),
+        hasPlan ? api.getConversionPlan(jobId) : Promise.reject(new Error('NOT_AVAILABLE')),
+      ]);
 
       if (repoResult.status === 'fulfilled') setRepositoryData(repoResult.value);
       if (analysisResult.status === 'fulfilled') setLegacyModel(analysisResult.value.legacy_model);
@@ -459,6 +488,8 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateD
         <GateReviewModal
           gate={activeGate}
           job={job}
+          feasibilityReport={feasibilityReport}
+          conversionPlan={conversionPlan}
           onClose={() => setActiveGate(null)}
           onSubmit={async (decision, rationale, waivers, options) => {
             await onGateDecision(activeGate.gate_id, decision, rationale, waivers, options);

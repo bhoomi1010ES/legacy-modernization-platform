@@ -109,9 +109,12 @@ class SchemaDataService:
 
         # 2. Inspect workspace for SQL schema/DDL files
         backend_dir = Path(__file__).resolve().parent.parent.parent
-        workspace_path = backend_dir / "repo_workspaces" / f"job_{job_id_str}"
-        if not workspace_path.exists():
-            workspace_path = backend_dir / "repo_workspaces" / f"job_{job_id_str}_git"
+        workspace_candidates = (
+            backend_dir.parent / "repo_workspaces" / f"job_{job_id_str}",
+            backend_dir / "repo_workspaces" / f"job_{job_id_str}",
+            backend_dir / "repo_workspaces" / f"job_{job_id_str}_git",
+        )
+        workspace_path = next((path for path in workspace_candidates if path.exists()), workspace_candidates[0])
         if not workspace_path.exists() and job.source_repository and Path(job.source_repository).exists():
             workspace_path = Path(job.source_repository)
 

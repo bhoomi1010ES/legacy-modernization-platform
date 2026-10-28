@@ -234,6 +234,34 @@ if host == "github.com" and protocol == "https":
 
         return config_args, _cleanup
 
+    @staticmethod
+    def _safe_rmtree(target_path: Path) -> None:
+        """Safely removes directory tree handling Windows read-only git pack files."""
+        if not target_path or not target_path.exists():
+            return
+        import stat
+
+        def _handle_ro(func, path, exc_info):
+            try:
+                os.chmod(path, stat.S_IWRITE)
+                func(path)
+            except Exception:
+                pass
+
+        try:
+            shutil.rmtree(target_path, onerror=_handle_ro)
+        except Exception:
+            if os.name == "nt":
+                try:
+                    subprocess.run(["cmd", "/c", "rd", "/s", "/q", str(target_path)], capture_output=True)
+                except Exception:
+                    pass
+        if target_path.exists():
+            try:
+                shutil.rmtree(target_path, ignore_errors=True)
+            except Exception:
+                pass
+
     def _execute_git(
         self,
         args: List[str],
@@ -249,6 +277,11 @@ if host == "github.com" and protocol == "https":
             "-c", "core.symlinks=false",            # Prevent symlink traversal exploits
             "-c", "http.followRedirects=false",     # Block HTTP redirects to mitigate SSRF bypass
         ]
+        # Git for Windows may default to SChannel, which can fail for public HTTPS
+        # remotes when the service account has no Windows credential context.  The
+        # bundled OpenSSL backend does not require interactive OS credentials.
+        if os.name == "nt":
+            safe_args.extend(["-c", "http.sslBackend=openssl"])
         if extra_config_args:
             safe_args.extend(extra_config_args)
         safe_args.extend(args)
@@ -325,7 +358,7 @@ if host == "github.com" and protocol == "https":
 
         # Clean workspace if exists and not an explicitly injected empty directory
         if workspace.exists() and workspace_dir_override is None:
-            shutil.rmtree(workspace)
+            self._safe_rmtree(workspace)
         workspace.mkdir(parents=True, exist_ok=True)
 
         cred_args: List[str] = []
@@ -403,7 +436,7 @@ if host == "github.com" and protocol == "https":
                 except GitOperationException:
                     # If branch doesn't exist on remote or --branch failed, clean up for default clone retry
                     if workspace.exists():
-                        shutil.rmtree(workspace)
+                        self._safe_rmtree(workspace)
                     workspace.mkdir(parents=True, exist_ok=True)
 
             # Attempt 2: Clone repository default branch

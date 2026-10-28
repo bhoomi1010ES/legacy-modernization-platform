@@ -170,6 +170,8 @@ async def execute(files: dict[str, str], cases: list[dict], baseline_hash: str, 
             checks = [SystemCheck.model_validate(c).model_dump() for c in system_checks]
             if not {"build", "unit", "integration", "static", "security"}.issubset({c["category"] for c in checks}) or not all(approved_command(c["command"]) for c in checks):
                 raise ValueError("Complete administrator-approved system checks are required")
+            if getattr(settings, "PHASE7_SANDBOX_IMAGE", ""):
+                image = settings.PHASE7_SANDBOX_IMAGE
         image = await local_image(image)
         payload = {
             "files": files,

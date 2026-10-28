@@ -64,4 +64,45 @@ describe('Phase 5 characterization review', () => {
       method: 'POST', body: '{"tables":[]}',
     }));
   });
+
+  it('clearly distinguishes real Docker execution from simulated execution in the UI', () => {
+    const realMarkup = renderToStaticMarkup(<BaselineEvidence report={{ ...report, execution_mode: 'REAL_CONTAINER' }} />);
+    expect(realMarkup).toContain('REAL EXECUTION (DOCKER)');
+
+    const simMarkup = renderToStaticMarkup(<BaselineEvidence report={{ ...report, execution_mode: 'IN_MEMORY_DOUBLE' }} />);
+    expect(simMarkup).toContain('SIMULATED / IN-MEMORY EXECUTION');
+
+    const unavailMarkup = renderToStaticMarkup(<BaselineEvidence report={{ ...report, execution_mode: 'UNAVAILABLE' }} />);
+    expect(unavailMarkup).toContain('EXECUTION UNAVAILABLE');
+  });
+
+  it('renders structured schema findings for complex and proprietary SQL constructs', () => {
+    const markup = renderToStaticMarkup(
+      <BaselineEvidence
+        report={{
+          ...report,
+          schema_findings: [
+            {
+              construct: 'trigger',
+              name: 'sync_audit_trigger',
+              status: 'REVIEW_REQUIRED',
+              reason: 'Dialect-specific trigger requires manual validation',
+            },
+            {
+              construct: 'table',
+              name: 'accounts',
+              status: 'SUPPORTED',
+              reason: 'Standard table parsed',
+            },
+          ],
+        }}
+      />
+    );
+    expect(markup).toContain('Schema &amp; SQL Findings (2)');
+    expect(markup).toContain('sync_audit_trigger');
+    expect(markup).toContain('REVIEW_REQUIRED');
+    expect(markup).toContain('Dialect-specific trigger requires manual validation');
+    expect(markup).toContain('accounts');
+    expect(markup).toContain('SUPPORTED');
+  });
 });

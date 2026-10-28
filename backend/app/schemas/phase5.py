@@ -14,9 +14,14 @@ class StrictInput(BaseModel):
 
 class NormalizationRule(StrictInput):
     path: str = Field(pattern=r"^(?:/(?:[A-Za-z0-9_-]|~[01])+)+$")
-    kind: Literal["timestamp", "random_id", "unordered"]
+    kind: Literal["timestamp", "random_id", "uuid", "unordered", "path", "regex"]
     justification: str = Field(min_length=10, max_length=1000)
     contract_allows: bool = False
+    pattern: str | None = None
+    replacement: str | None = None
+    scope: str | None = None
+    approved_by: str | None = None
+    approved_at: str | None = None
 
     @field_validator("justification")
     @classmethod
@@ -164,6 +169,15 @@ class CaseEvidence(StrictInput):
     limitation: str | None
     evidence_status: Literal["OBSERVED", "UNOBSERVED"] = "UNOBSERVED"
     observed_candidate: bool = False
+    execution_mode: Literal["REAL_CONTAINER", "IN_MEMORY_DOUBLE", "UNAVAILABLE"] = "UNAVAILABLE"
+    reproducibility: Literal["DETERMINISTIC", "NON_DETERMINISTIC", "FAILED", "UNAVAILABLE"] = "UNAVAILABLE"
+    duration_ms: float | None = None
+    exit_status: int | None = None
+    stdout_sample: str | None = None
+    stderr_sample: str | None = None
+    captured_at: str | None = None
+    provenance: dict[str, Any] | None = None
+    execution_metadata: dict[str, Any] | None = None
 
 
 class CoverageEntry(StrictInput):
@@ -184,7 +198,7 @@ class CoverageReport(StrictInput):
 
 
 class SuiteArtifact(StrictInput):
-    schema_version: Literal["5.1"]
+    schema_version: Literal["5.1", "5.2"] = "5.1"
     cases: list[CaseEvidence]
     runtime_available: bool
     coverage: CoverageReport
@@ -197,3 +211,5 @@ class SuiteArtifact(StrictInput):
     schema_hash: str
     g2_readiness: dict[str, Any] | None = None
     candidate_scenarios: list[dict[str, Any]] = Field(default_factory=list)
+    schema_findings: list[dict[str, Any]] = Field(default_factory=list)
+    execution_mode: str = "UNAVAILABLE"

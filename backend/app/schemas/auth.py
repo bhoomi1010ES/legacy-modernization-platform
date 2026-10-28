@@ -13,7 +13,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr = Field(..., description="User's work email address.")
     full_name: str = Field(..., min_length=2, max_length=255, description="Full name or display name.")
     password: str = Field(..., min_length=8, max_length=128, description="User password (minimum 8 characters).")
-    role: Optional[str] = Field("DEVELOPER", description="Requested workspace role (e.g. DEVELOPER, REVIEWER, ADMIN).")
+    role: Optional[str] = Field("DEVELOPER", description="Requested workspace role (e.g. DEVELOPER, VIEWER). Privileged roles require admin assignment.")
 
 
 class UserResponse(BaseModel):

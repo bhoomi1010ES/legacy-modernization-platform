@@ -1,11 +1,20 @@
 """Durable supervisor transitions, recovery, quotas, and transactional side effects."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Optional
+import asyncio
 import uuid
 from uuid import UUID
+
+def _normalize_dt(dt: Optional[datetime]) -> Optional[datetime]:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -123,6 +132,11 @@ class SupervisorService:
     def __init__(self, checkpointer: Optional[PostgresWorkflowCheckpointer] = None):
         self.checkpointer = checkpointer or PostgresWorkflowCheckpointer()
         self._running_tasks: dict[str, Any] = {}
+        self._recovery_task: Optional[asyncio.Task] = None
+        # One drive can hold a workflow session while its lease heartbeat briefly
+        # opens another. Keep restart recovery below the default five-connection
+        # SQLAlchemy pool instead of scheduling every stale job simultaneously.
+        self._drive_semaphore = asyncio.Semaphore(2)
 
     @staticmethod
     def state_for(
@@ -652,11 +666,12 @@ class SupervisorService:
     ) -> Optional[int]:
         job = await self._locked_job(db, job_id)
         now = utc_now()
+        lease_expires = _normalize_dt(job.orchestration_lease_expires_at)
         if (
             job.orchestration_owner
             and job.orchestration_owner != owner
-            and job.orchestration_lease_expires_at
-            and job.orchestration_lease_expires_at > now
+            and lease_expires
+            and lease_expires > now
         ):
             await db.rollback()
             return None
@@ -1009,11 +1024,12 @@ class SupervisorService:
         try:
             from app.models.base import utc_now
             now = utc_now()
+            lease_expires = _normalize_dt(module.lease_expires_at)
             if (
                 attempt.lease_generation != module.lease_generation
                 or not module.lease_owner
-                or not module.lease_expires_at
-                or module.lease_expires_at <= now
+                or not lease_expires
+                or lease_expires <= now
             ):
                 raise ConflictException(
                     "Stale worker result rejected by the supervisor lease fence"
@@ -1150,6 +1166,15 @@ class SupervisorService:
         else:
             await db.rollback()
 
+        # Re-fetch unexpired job and user instance after rollback/command commit
+        job = await self._locked_job(db, job_id)
+        if actor_id:
+            try:
+                from app.models.user import User
+                user = await db.scalar(select(User).where(User.user_id == UUID(actor_id)))
+            except Exception:
+                pass
+
         from app.services.phase4_orchestrator import phase4_orchestrator
         snapshot, inventory = await phase4_orchestrator.run_pipeline_stage1_intake(
             db, job, user,
@@ -1204,11 +1229,12 @@ class SupervisorService:
             classification = "SAFE_TO_RECONCILE"
             if attempt:
                 module = await db.get(Module, attempt.module_id)
+                lease_expires = _normalize_dt(module.lease_expires_at) if module else None
                 lease_current = bool(
                     module
                     and module.lease_owner
-                    and module.lease_expires_at
-                    and module.lease_expires_at > now
+                    and lease_expires
+                    and lease_expires > now
                     and attempt.lease_generation == module.lease_generation
                 )
                 if not lease_current:
@@ -1313,7 +1339,9 @@ class SupervisorService:
                 "CONVERTING", "VERIFYING", "INTEGRATING",
             )
             active_ids = list((await db.execute(
-                select(Job.job_id).where(Job.status.in_(executing_statuses))
+                select(Job.job_id)
+                .where(Job.status.in_(executing_statuses))
+                .order_by(Job.created_at.desc())
             )).scalars().all())
 
         recovered = 0
@@ -1328,9 +1356,24 @@ class SupervisorService:
                 continue
             recovered += 1
 
-        if auto_schedule:
-            for job_id in to_schedule:
-                self.schedule_drive(job_id, correlation_id="service-restart")
+        if auto_schedule and to_schedule:
+            async def drain_recovery_queue() -> None:
+                for recovered_job_id in to_schedule:
+                    try:
+                        task = self.schedule_drive(
+                            recovered_job_id, correlation_id="service-restart"
+                        )
+                        await task
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        # Reconciliation and its durable outbox record already
+                        # succeeded. Continue draining other recoverable jobs.
+                        continue
+
+            self._recovery_task = asyncio.create_task(
+                drain_recovery_queue(), name="supervisor-recovery-drain"
+            )
 
         return recovered
 
@@ -1442,10 +1485,11 @@ class SupervisorService:
         """Background entrypoint used by APIs and restart recovery."""
         from app.core.database import AsyncSessionLocal
 
-        async with AsyncSessionLocal() as db:
-            await self.run_orchestration_loop(
-                db, job_id, correlation_id=correlation_id, max_steps=max_steps
-            )
+        async with self._drive_semaphore:
+            async with AsyncSessionLocal() as db:
+                await self.run_orchestration_loop(
+                    db, job_id, correlation_id=correlation_id, max_steps=max_steps
+                )
 
     def schedule_drive(self, job_id: UUID, *, correlation_id: Optional[str] = None):
         """Schedule only the authoritative supervisor loop in this process."""
@@ -1463,6 +1507,11 @@ class SupervisorService:
         def _cleanup(t: asyncio.Task) -> None:
             if self._running_tasks.get(key) is t:
                 self._running_tasks.pop(key, None)
+            if not t.cancelled():
+                # Retrieve the exception so a failed recovered job does not emit
+                # an unobserved-task warning; durable workflow evidence remains
+                # available for the UI and subsequent recovery.
+                t.exception()
 
         task.add_done_callback(_cleanup)
         return task

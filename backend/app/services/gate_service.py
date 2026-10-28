@@ -1,5 +1,6 @@
 """Version-bound G1-G4 gate creation, decisions, and invalidation."""
 
+from datetime import timezone
 from typing import Optional
 import logging
 from uuid import UUID
@@ -203,6 +204,10 @@ class GateService:
         await db.refresh(decision)
         await db.refresh(gate)
         await db.refresh(job)
+        if decision.decided_at and decision.decided_at.tzinfo is None:
+            decision.decided_at = decision.decided_at.replace(tzinfo=timezone.utc)
+        if gate.decided_at and gate.decided_at.tzinfo is None:
+            gate.decided_at = gate.decided_at.replace(tzinfo=timezone.utc)
 
         # Resume only the authoritative supervisor graph after commit.
         if payload.decision == DecisionOutcome.APPROVED and gate_type in (GateType.G1, GateType.G2, GateType.G3):

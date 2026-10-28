@@ -223,11 +223,13 @@ class OpenAIProvider:
         import os
         from app.core.config import settings
 
-        self.api_key = (
-            api_key
-            or getattr(settings, "OPENAI_API_KEY", "")
-            or os.getenv("OPENAI_API_KEY", "")
-        )
+        if api_key is not None:
+            self.api_key = api_key
+        else:
+            self.api_key = (
+                getattr(settings, "OPENAI_API_KEY", "")
+                or os.getenv("OPENAI_API_KEY", "")
+            )
         self.base_url = "https://api.openai.com/v1"
 
     async def complete(self, *, model: str, request: Dict[str, Any]) -> ModelResponse:
@@ -246,45 +248,63 @@ class OpenAIProvider:
             "temperature": request.get("temperature", 0.2),
             "max_tokens": request.get("max_tokens", 8192),
         }
+        if "response_format" in request:
+            payload["response_format"] = request["response_format"]
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{self.base_url}/chat/completions",
-                json=payload,
-                headers=headers,
-            )
-            if resp.status_code >= 500:
-                raise TransientModelError(
-                    f"OpenAI upstream server error {resp.status_code}"
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(
+                    f"{self.base_url}/chat/completions",
+                    json=payload,
+                    headers=headers,
                 )
-            if resp.status_code == 429:
-                raise ModelRateLimitError("OpenAI rate limit exceeded")
-            if resp.status_code != 200:
-                raise ModelGatewayError(f"OpenAI error {resp.status_code}: {resp.text}")
+        except httpx.TimeoutException as exc:
+            raise TransientModelError(f"OpenAI request timed out: {exc}") from exc
+        except httpx.RequestError as exc:
+            raise TransientModelError(f"OpenAI connection error: {exc}") from exc
 
-            data = resp.json()
-            choice = data["choices"][0]
-            content = choice["message"].get("content", "")
-            usage_data = data.get("usage", {})
-
-            in_tok = usage_data.get("prompt_tokens", 0)
-            out_tok = usage_data.get("completion_tokens", 0)
-            cost = _calculate_model_cost(model, in_tok, out_tok)
-
-            return ModelResponse(
-                action="final",
-                output={"content": content, "raw": choice["message"]},
-                usage=ModelUsage(
-                    input_tokens=in_tok,
-                    output_tokens=out_tok,
-                    cost_usd=cost,
-                ),
+        if resp.status_code == 401:
+            raise ModelGatewayError(f"OpenAI authentication error (invalid API key): {resp.text}")
+        if resp.status_code == 429:
+            raise ModelRateLimitError("OpenAI rate limit exceeded")
+        if resp.status_code >= 500:
+            raise TransientModelError(
+                f"OpenAI upstream server error {resp.status_code}"
             )
+        if resp.status_code != 200:
+            raise ModelGatewayError(f"OpenAI error {resp.status_code}: {resp.text}")
+
+        data = resp.json()
+        choice = data["choices"][0]
+        content = choice["message"].get("content", "")
+        usage_data = data.get("usage", {})
+
+        in_tok = usage_data.get("prompt_tokens", 0)
+        out_tok = usage_data.get("completion_tokens", 0)
+        cost, cost_source = provider_cost(model, in_tok, out_tok, usage_data)
+
+        return ModelResponse(
+            action="final",
+            provider_request_id=data.get("id"),
+            provider_metadata={
+                "model": data.get("model", model),
+                "created": data.get("created"),
+                "finish_reason": choice.get("finish_reason"),
+                "usage": usage_data,
+                "cost_source": cost_source,
+            },
+            output={"content": content, "raw": choice["message"]},
+            usage=ModelUsage(
+                input_tokens=in_tok,
+                output_tokens=out_tok,
+                cost_usd=cost,
+            ),
+        )
 
 
 class ModelGateway:
@@ -399,9 +419,12 @@ def build_default_gateway() -> ModelGateway:
             "gpt-4o",
             "gpt-4o-mini",
             "gpt-4-turbo",
+            "o1",
             "o1-preview",
             "o1-mini",
             "o3-mini",
+            "gpt-4",
+            "gpt-3.5-turbo",
         }
 
     return ModelGateway(

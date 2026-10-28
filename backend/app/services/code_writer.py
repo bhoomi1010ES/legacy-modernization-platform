@@ -43,27 +43,30 @@ class CodeWriterService:
                 raise ValueError(
                     "Module context exceeds the bounded model input; refine the approved module scope"
                 )
+            req = {
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": PROMPT.read_text(encoding="utf-8"),
+                    },
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {"task": context, "source_files": sources},
+                            sort_keys=True,
+                        ),
+                    },
+                ],
+                "max_tokens": settings.PHASE6_MAX_OUTPUT_TOKENS,
+                "temperature": 0,
+            }
+            if settings.PHASE6_MODEL_PROVIDER == "openai":
+                req["response_format"] = {"type": "json_object"}
             result = await gateway.complete(
                 provider=settings.PHASE6_MODEL_PROVIDER,
                 model=settings.PHASE6_MODEL_IDENTIFIER,
                 max_retries=0,
-                request={
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": PROMPT.read_text(encoding="utf-8"),
-                        },
-                        {
-                            "role": "user",
-                            "content": json.dumps(
-                                {"task": context, "source_files": sources},
-                                sort_keys=True,
-                            ),
-                        },
-                    ],
-                    "max_tokens": settings.PHASE6_MAX_OUTPUT_TOKENS,
-                    "temperature": 0,
-                },
+                request=req,
             )
             response = result.response
             output = response.output

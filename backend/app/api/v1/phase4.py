@@ -109,6 +109,8 @@ async def get_repository_details(
             "directories": inv.directories_payload if inv else [],
             "created_at": snap.created_at.isoformat(),
         }
+    except NotFoundException:
+        raise
     except Exception as exc:
         logger.exception("get_repository_details API failed | job_id=%s | %s: %s", job_id, type(exc).__name__, exc)
         raise
@@ -205,6 +207,8 @@ async def get_analysis(
             analysis_version=legacy.version,
             content_hash=legacy.content_hash,
         )
+    except NotFoundException:
+        raise
     except Exception as exc:
         logger.exception("get_analysis API failed | job_id=%s | %s: %s", job_id, type(exc).__name__, exc)
         raise
@@ -339,6 +343,8 @@ async def get_feasibility(
             tool_readiness=[],
             decisions_history=decisions_history,
         )
+    except NotFoundException:
+        raise
     except Exception as exc:
         logger.exception("get_feasibility API failed | job_id=%s | %s: %s", job_id, type(exc).__name__, exc)
         raise
@@ -435,6 +441,8 @@ async def get_blueprint(
             status=BlueprintStatus(bp_record.status),
             content_hash=bp_record.content_hash,
         )
+    except NotFoundException:
+        raise
     except Exception as exc:
         logger.exception("get_blueprint API failed | job_id=%s | %s: %s", job_id, type(exc).__name__, exc)
         raise
@@ -510,6 +518,8 @@ async def get_conversion_plan(
             waves=waves,
             content_hash=plan_record.content_hash,
         )
+    except NotFoundException:
+        raise
     except Exception as exc:
         logger.exception("get_conversion_plan API failed | job_id=%s | %s: %s", job_id, type(exc).__name__, exc)
         raise

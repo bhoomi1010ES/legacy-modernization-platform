@@ -197,6 +197,7 @@ async def capture(
             workspace_dir = None
             base_dir = Path(__file__).resolve().parent.parent.parent
             for p in (
+                base_dir.parent / "repo_workspaces" / f"job_{job.job_id}",
                 base_dir / "repo_workspaces" / f"job_{job.job_id}",
                 base_dir / "repo_workspaces" / f"job_{job.job_id}_git",
             ):
@@ -255,6 +256,8 @@ async def capture(
             )
             outcome = "UNAVAILABLE"
             reason = observation.get("reason")
+            reproducibility = "UNAVAILABLE"
+            second_obs = None
             if observation["available"]:
                 outcome = (
                     "PASSED"
@@ -264,12 +267,14 @@ async def capture(
                 )
                 # Second independent execution proves golden capture is replayable, including side effects.
                 second = await replay(scenario)
+                second_obs = second
                 if not second["available"]:
                     available, outcome, reason = (
                         False,
                         "UNAVAILABLE",
                         second.get("reason"),
                     )
+                    reproducibility = "UNAVAILABLE"
                 elif canonical(normalize(actual, scenario.normalization)) != canonical(
                     normalize(second["output"], scenario.normalization)
                 ) or canonical(observation.get("side_effects")) != canonical(
@@ -277,9 +282,30 @@ async def capture(
                 ):
                     outcome, reason = (
                         "NON_REPRODUCIBLE",
-                        "Replay output or side effects are nondeterministic",
+                        "Replay output or side effects are nondeterministic between independent runs",
                     )
+                    reproducibility = "NON_DETERMINISTIC"
+                else:
+                    reproducibility = "DETERMINISTIC" if outcome == "PASSED" else "FAILED"
             case_id = uuid.uuid4()
+            exec_mode = observation.get(
+                "execution_mode",
+                "REAL_CONTAINER" if observation.get("available") else "UNAVAILABLE",
+            )
+            provenance = {
+                "source": getattr(scenario, "source", "scenario"),
+                "name": scenario.name,
+                "module": scenario.module,
+                "interface": scenario.interface,
+            }
+            execution_metadata = {
+                "container_name": observation.get("container_name"),
+                "reproducibility": reproducibility,
+                "first_run_duration_ms": observation.get("duration_ms"),
+                "second_run_duration_ms": (
+                    second_obs.get("duration_ms") if second_obs else None
+                ),
+            }
             case = get_secret_redactor().redact_object(
                 {
                     "test_case_id": str(case_id),
@@ -299,14 +325,29 @@ async def capture(
                         "OBSERVED" if observation["available"] else "UNOBSERVED"
                     ),
                     "observed_candidate": "expected" not in scenario.model_fields_set,
+                    "execution_mode": exec_mode,
+                    "reproducibility": reproducibility,
+                    "duration_ms": observation.get("duration_ms"),
+                    "exit_status": observation.get(
+                        "exit_status", 0 if observation.get("available") else None
+                    ),
+                    "stdout_sample": observation.get("stdout_sample"),
+                    "stderr_sample": observation.get("stderr_sample"),
+                    "captured_at": utc_now().isoformat(),
+                    "provenance": provenance,
+                    "execution_metadata": execution_metadata,
                 }
             )
             cases.append(case)
-        discovered_tables, schema_notes = (
+        disc_result = (
             discover_schema(str(job.job_id), schema_files) if schema_files else ([], [])
         )
+        discovered_tables, schema_notes = disc_result
+        schema_findings = getattr(disc_result, "findings", [])
         plan = migration_plan(
-            request.tables or discovered_tables, request.target_tables
+            request.tables or discovered_tables,
+            request.target_tables,
+            findings=schema_findings,
         )
         plan["limitations"] += schema_notes
         plan["inventory_evidence"] = get_secret_redactor().redact_object(
@@ -386,10 +427,20 @@ async def capture(
             "ready_for_g2": len(blocking_reasons) == 0,
         }
 
+        # Determine overall execution mode
+        if any(c.get("execution_mode") == "REAL_CONTAINER" for c in cases):
+            overall_exec_mode = "REAL_CONTAINER"
+        elif any(c.get("execution_mode") == "IN_MEMORY_DOUBLE" for c in cases):
+            overall_exec_mode = "IN_MEMORY_DOUBLE"
+        else:
+            overall_exec_mode = "UNAVAILABLE"
+
         payload = {
             "schema_version": "5.1",
             "cases": cases,
             "runtime_available": available,
+            "execution_mode": overall_exec_mode,
+            "schema_findings": schema_findings,
             "coverage": cov,
             "known_bugs": [c["known_bug"] for c in cases if c["known_bug"]],
             "normalization": [r for c in cases for r in c["normalization"]],
