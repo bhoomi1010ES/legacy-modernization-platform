@@ -3,13 +3,20 @@
 import asyncio
 import logging
 import json
+import re
 import uuid
 from decimal import Decimal
 from pathlib import PurePosixPath
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.core.config import settings
-from app.core.errors import ConflictException, NotFoundException
+from app.core.errors import (
+    ConflictException,
+    NotFoundException,
+    WorkspaceException,
+    IncompleteModelOutputError,
+    MalformedModelOutputError,
+)
 from app.models.agent import AgentRun
 from app.models.artifact import Artifact
 from app.models.audit import AuditEvent
@@ -26,6 +33,7 @@ from app.models.test_case import TestResult
 from app.schemas.phase6 import ChangeSet
 from app.services.artifact_service import ArtifactService
 from app.services import phase6_workspace as workspace
+from app.services.repository_workspace_service import repository_workspace_service
 from app.services.phase5_engine import canonical, digest
 from app.services.phase5_service import read_payload
 from app.services.secret_redactor import get_secret_redactor
@@ -213,8 +221,8 @@ async def queue(db, job, module, key, actor, *, previous=None, rationale=None):
         last = await newest(db, module.module_id)
         if last and last.status in ACTIVE:
             raise ConflictException("Module already has an active attempt")
-        maximum = min(5, 1 + job.max_repair_attempts)
-        if last and last.attempt_number >= maximum:
+        maximum = min(50, 1 + (job.max_repair_attempts or 40))
+        if last and (last.attempt_number >= maximum or last.status == "ESCALATED"):
             raise ConflictException(
                 "Repair attempt limit exhausted; human escalation required"
             )
@@ -342,6 +350,7 @@ async def queue(db, job, module, key, actor, *, previous=None, rationale=None):
         )
         if previous:
             module.status = "PENDING"
+            await db.flush()
         claimed = await dependency_scheduler.claim_ready_modules(
             db,
             job.job_id,
@@ -405,7 +414,8 @@ async def queue(db, job, module, key, actor, *, previous=None, rationale=None):
             run_id=uuid.uuid4(),
             job_id=job.job_id,
             agent_name="CodeWriter",
-            task_id=f"p6-{uuid.uuid4().hex}",
+            # Attempts are retries of one durable module conversion task.
+            task_id=f"p6-{module.module_id}",
             correlation_id=f"p6-{uuid.uuid4().hex[:16]}",
             model_provider=settings.PHASE6_MODEL_PROVIDER or "unconfigured",
             model_identifier=settings.PHASE6_MODEL_IDENTIFIER or "unconfigured",
@@ -594,7 +604,18 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
 
         from app.services.dependency_scheduler import dependency_scheduler
         heartbeat_task = asyncio.create_task(heartbeat())
-        repo = workspace.repository_for(str(job.job_id))
+        repo = await repository_workspace_service.ensure_workspace(
+            db,
+            job,
+            expected_commit=context.get("source_commit"),
+            correlation_id=run.correlation_id,
+        )
+        await repository_workspace_service.validate_workspace(
+            job.job_id,
+            expected_commit=context.get("source_commit"),
+            expected_source=job.source_repository,
+            raise_on_error=True,
+        )
         worktree, branch = await workspace.prepare(
             repo,
             str(job.job_id),
@@ -618,14 +639,39 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
             PurePosixPath(p)
             for p in context["legacy_paths"] + context["allowed_targets"]
         ]
-        source_slice = {
-            p: v
-            for p, v in sources.items()
+        other_legacy_scopes = [
+            PurePosixPath(m)
+            for m in (
+                await db.execute(
+                    select(Module.legacy_path).where(
+                        Module.job_id == job.job_id,
+                        Module.module_id != module.module_id,
+                    )
+                )
+            ).scalars().all()
+            if m
+        ]
+        source_slice = {}
+        for p, v in sources.items():
+            posix_p = PurePosixPath(p)
+            if posix_p.name in (
+                "package-lock.json",
+                "yarn.lock",
+                "pnpm-lock.yaml",
+                "poetry.lock",
+            ):
+                continue
+            if not any(
+                posix_p == scope or scope in posix_p.parents for scope in scopes
+            ):
+                continue
             if any(
-                PurePosixPath(p) == scope or scope in PurePosixPath(p).parents
-                for scope in scopes
-            )
-        }
+                other in posix_p.parents
+                and not any(other in scope.parents for scope in scopes)
+                for other in other_legacy_scopes
+            ):
+                continue
+            source_slice[p] = v
         if not source_slice:
             raise ValueError("Approved module legacy paths have no source evidence")
         from app.services.budget_manager import budget_manager
@@ -681,6 +727,8 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
             raise ValueError(
                 "CodeWriter cannot execute tools or supply verification evidence"
             )
+        if trace.get("provider_metadata", {}).get("finish_reason") == "length":
+            raise IncompleteModelOutputError("Model response was truncated due to output token ceiling limit.")
         if isinstance(output, dict) and "content" in output:
             from app.services.phase5_engine import (
                 strict_adapter_object,
@@ -696,12 +744,46 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
                 raw_str = raw_str[:-3]
             raw_str = raw_str.strip()
 
-            output = json.loads(
-                raw_str,
-                object_pairs_hook=strict_adapter_object,
-                parse_constant=reject_json_constant,
-            )
-        changes = ChangeSet.model_validate(output)
+            try:
+                output = json.loads(
+                    raw_str,
+                    object_pairs_hook=strict_adapter_object,
+                    parse_constant=reject_json_constant,
+                )
+            except json.JSONDecodeError as jde:
+                raise MalformedModelOutputError(f"Malformed or truncated model JSON output: {jde}") from jde
+            except ValueError as ve:
+                if "Duplicate adapter JSON key" in str(ve):
+                    logger.warning("Duplicate key in model JSON output; falling back to standard json.loads")
+                    try:
+                        output = json.loads(raw_str)
+                    except json.JSONDecodeError as jde:
+                        raise MalformedModelOutputError(f"Malformed or truncated model JSON output: {jde}") from jde
+                else:
+                    raise MalformedModelOutputError(f"Failed parsing model JSON output: {ve}") from ve
+        try:
+            changes = ChangeSet.model_validate(output)
+        except Exception as ve:
+            raise MalformedModelOutputError(f"Model output schema validation failed: {ve}") from ve
+        if context.get("allowed_targets"):
+            target_prefix = str(PurePosixPath(context["allowed_targets"][0])).rstrip("/")
+            normalized_files = {}
+            for path_key, content in changes.files.items():
+                clean_key = path_key.replace("\\", "/").strip().lstrip("/")
+                if not any(
+                    clean_key == str(PurePosixPath(t))
+                    or clean_key.startswith(str(PurePosixPath(t)).rstrip("/") + "/")
+                    for t in context["allowed_targets"]
+                ):
+                    clean_key = f"{target_prefix}/{clean_key}"
+                clean_content = (content or '').replace('\x00', '')
+                clean_content = re.sub(
+                    r'from\s+app\.modules\.[a-zA-Z0-9_\-]+\.([a-zA-Z0-9_]+)\s+import',
+                    r'from .\1 import',
+                    clean_content,
+                )
+                normalized_files[clean_key] = clean_content
+            changes.files = normalized_files
         applied = await workspace.apply_changes(
             worktree, changes.files, context["allowed_targets"]
         )
@@ -860,7 +942,7 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
             if prior.get(
                 "failure_signature"
             ) == failure_signature or attempt.attempt_number >= min(
-                5, 1 + job.max_repair_attempts
+                50, 1 + (job.max_repair_attempts or 40)
             ):
                 status, reason = (
                     "ESCALATED",
@@ -893,11 +975,70 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
                 module = await db.get(Module, attempt.module_id)
                 run = await db.get(AgentRun, attempt.agent_run_id)
                 job = await db.get(Job, module.job_id)
-                reason = (
-                    "Conversion blocked: "
-                    + (str(exc.message) if hasattr(exc, "message") else str(exc))[:500]
-                )
+                workspace_failure = exc if isinstance(exc, WorkspaceException) else None
+                if workspace_failure is None:
+                    validation = await repository_workspace_service.validate_workspace(
+                        job.job_id,
+                        expected_commit=(run.task_payload or {}).get("source_commit"),
+                        expected_source=job.source_repository,
+                    )
+                    if not validation.is_ready:
+                        try:
+                            repository_workspace_service._raise_validation(
+                                validation.error_code or "WORKSPACE_INVALID",
+                                validation.error_message or "Repository workspace became unavailable.",
+                            )
+                        except WorkspaceException as detected:
+                            workspace_failure = detected
+                err_msg = str(getattr(exc, "message", None) or str(exc) or type(exc).__name__)
+                reason = f"Conversion blocked: {err_msg}"[:500]
                 reason = get_secret_redactor().redact_text(reason)
+                if workspace_failure is not None:
+                    from app.models.base import utc_now
+
+                    code = workspace_failure.code
+                    attempt.status = "BLOCKED"
+                    attempt.failure_reason = f"{code}: {workspace_failure.message}"
+                    attempt.completed_at = utc_now()
+                    run.status = "FAILED"
+                    run.failure_classification = code
+                    run.error_message = attempt.failure_reason
+                    run.completed_at = utc_now()
+                    run.trace_payload = {
+                        **(run.trace_payload or {}),
+                        "events": [*(run.trace_payload or {}).get("events", []), "WORKSPACE_LOST"],
+                    }
+                    module.status = "PENDING"
+                    module.lease_owner = None
+                    module.lease_expires_at = None
+                    module.lease_heartbeat_at = None
+                    module.lease_generation += 1
+                    db.add(AuditEvent(
+                        job_id=job.job_id,
+                        event_type="WORKSPACE_LOST",
+                        actor_type="SYSTEM",
+                        actor_id="Supervisor",
+                        correlation_id=run.correlation_id,
+                        target_resource=str(attempt.attempt_id),
+                        payload={
+                            "task_id": run.task_id,
+                            "attempt_id": str(attempt.attempt_id),
+                            "agent": "CodeWriter",
+                            "error_code": code,
+                            "workspace_path": str(
+                                repository_workspace_service.get_workspace_path(job.job_id)
+                            ),
+                        },
+                    ))
+                    await db.commit()
+                    return
+                if isinstance(exc, IncompleteModelOutputError):
+                    run.failure_classification = "INCOMPLETE_MODEL_OUTPUT"
+                elif isinstance(exc, MalformedModelOutputError):
+                    run.failure_classification = "MALFORMED_MODEL_OUTPUT"
+                elif run.failure_classification is None:
+                    run.failure_classification = "EXECUTION_ERROR"
+
                 from app.services.supervisor_service import supervisor_service
 
                 await supervisor_service.record_module_disposition(

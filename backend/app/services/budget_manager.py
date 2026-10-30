@@ -33,7 +33,7 @@ class BudgetManager:
 
     def __init__(self):
         self.default_token_limit: int = 5_000_000
-        self.default_time_limit_seconds: int = 86_400  # 24 hours
+        self.default_time_limit_seconds: int = 604_800  # 7 days
         self.default_agent_cost_limit: float = 10_000.0
         self.default_task_cost_limit: float = 2_500.0
 

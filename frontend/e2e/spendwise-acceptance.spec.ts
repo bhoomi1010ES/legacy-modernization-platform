@@ -54,7 +54,7 @@ test('Spendwise modernization is driven through the platform UI', async ({ page 
       await page.goto(`/#/jobs/${jobId}`);
       await expect(page.getByRole('heading', { name: 'Spendwise Modernization' })).toBeVisible();
       return await page.locator('body').innerText();
-    }, { timeout: 5 * 60 * 1000, intervals: [2_000, 5_000, 10_000] }).toMatch(/AWAITING_GATE_G1|CHARACTERIZING|AWAITING_GATE_G2|PLANNING|AWAITING_GATE_G3|CONVERTING|VERIFYING|INTEGRATING|AWAITING_GATE_G4/);
+    }, { timeout: 5 * 60 * 1000, intervals: [2_000, 5_000, 10_000] }).toMatch(/Awaiting G1|AWAITING_GATE_G1|Characterizing|CHARACTERIZING|Awaiting G2|AWAITING_GATE_G2|Planning|PLANNING|Awaiting G3|AWAITING_GATE_G3|Converting|CONVERTING|Verifying|VERIFYING|Integrating|INTEGRATING|Awaiting G4|AWAITING_GATE_G4/i);
 
     await expect(page.getByText('FAILED', { exact: true })).toHaveCount(0);
 

@@ -1,7 +1,10 @@
 """FastAPI application entrypoint for the Modernization Platform API."""
 
+import asyncio
+import logging
+from contextlib import asynccontextmanager, suppress
 from uuid import uuid4
-from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,16 +15,40 @@ from app.core.config import settings
 from app.core.errors import ErrorDetail, ErrorEnvelope, ErrorPayload, PlatformException
 
 
+logger = logging.getLogger(__name__)
+
+
 @asynccontextmanager
-async def lifespan(_: FastAPI):
-    """Reconcile durable state and expired worker leases after restart."""
+async def lifespan(app: FastAPI):
+    """Start durable recovery without making API readiness depend on Git I/O."""
     from app.core.database import AsyncSessionLocal
     from app.services.supervisor_service import supervisor_service
 
+    recovery_task: asyncio.Task[None] | None = None
     if settings.ENVIRONMENT != "testing":
-        async with AsyncSessionLocal() as db:
-            await supervisor_service.recover_active_jobs(db)
-    yield
+        async def recover_after_restart() -> None:
+            try:
+                async with AsyncSessionLocal() as db:
+                    await supervisor_service.recover_active_jobs(db)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # PostgreSQL remains authoritative and the explicit recovery
+                # endpoint can safely retry. A single inaccessible repository
+                # must not prevent health/readiness endpoints from starting.
+                logger.exception("Supervisor startup reconciliation failed")
+
+        recovery_task = asyncio.create_task(
+            recover_after_restart(), name="supervisor-startup-recovery"
+        )
+        app.state.startup_recovery_task = recovery_task
+    try:
+        yield
+    finally:
+        if recovery_task and not recovery_task.done():
+            recovery_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await recovery_task
 
 
 def create_app() -> FastAPI:

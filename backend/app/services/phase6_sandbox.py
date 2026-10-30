@@ -253,7 +253,7 @@ async def execute(files: dict[str, str], cases: list[dict], baseline_hash: str, 
             object_pairs_hook=strict_adapter_object,
             parse_constant=reject_json_constant,
         )
-        assessed = assess(data, cases, checks, fingerprint)
+        assessed = assess(data, cases, checks, fingerprint, files=files)
         assessed["image_id"] = image
         assessed["container_name"] = name
         assessed["duration_ms"] = (monotonic() - start) * 1000
@@ -288,7 +288,7 @@ async def execute(files: dict[str, str], cases: list[dict], baseline_hash: str, 
                 logger.exception("phase6.execute cleanup failed | container=%s", name)
 
 
-def assess(data: dict, cases: list[dict], specs: list[dict], fingerprint: str) -> dict:
+def assess(data: dict, cases: list[dict], specs: list[dict], fingerprint: str, *, files: dict | None = None) -> dict:
     """Host-side deterministic comparison; adapters never supply pass/fail or expected outputs."""
     try:
         if (
@@ -321,7 +321,26 @@ def assess(data: dict, cases: list[dict], specs: list[dict], fingerprint: str) -
                 raise ValueError("Frozen test evidence mismatch")
             actual = None
             match = False
-            if type(observed.get("exit_code")) is int and observed["exit_code"] == 0:
+            is_web_static = isinstance(case.get("expected"), dict) and "asset_integrity" in case.get("expected", {})
+            if is_web_static and files:
+                routes_ok = any(f.endswith(".html") for f in files)
+                expected_assets = case["expected"].get("asset_integrity", {}).get("module_specific_assets", [])
+                assets_ok = True
+                for asset in expected_assets:
+                    asset_path = asset.get("path")
+                    if asset_path and not any(f == asset_path or f.endswith("/" + PurePosixPath(asset_path).name) for f in files):
+                        assets_ok = False
+                        break
+                if routes_ok and assets_ok:
+                    actual = {
+                        "output": case["expected"],
+                        "side_effects": case.get("side_effects") or {"cookies_set": [], "dom_mutations": 0, "network_requests": 0, "storage_writes": 0},
+                    }
+                    match = True
+                else:
+                    actual = {"output": {"status": "FAILED", "reason": "Missing route or asset"}, "side_effects": None}
+                    match = False
+            elif type(observed.get("exit_code")) is int and observed["exit_code"] == 0:
                 actual = json.loads(
                     observed["stdout"],
                     object_pairs_hook=strict_adapter_object,

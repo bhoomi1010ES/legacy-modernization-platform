@@ -1,0 +1,4 @@
+FROM phase6-acceptance:local-v1
+COPY adapter.py /adapter.py
+COPY scenarios.json /scenarios.json
+

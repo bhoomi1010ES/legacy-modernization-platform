@@ -19,6 +19,7 @@ import {
   Code2,
   Box,
   Loader2,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface ProjectExplorerProps {
@@ -383,6 +384,34 @@ export const ProjectExplorer: React.FC<ProjectExplorerProps> = ({
             <span style={{ fontFamily: 'monospace' }}>main@{shortSha}</span>
           </span>
         </div>
+
+        {/* Converted Modern Modules Status Badge */}
+        {(selectedJob?.status === 'CONVERTING' || selectedJob?.status === 'VERIFYING' || selectedJob?.status === 'INTEGRATING' || selectedJob?.status === 'AWAITING_GATE_G4' || selectedJob?.status === 'COMPLETED') && (
+          <div style={{ marginTop: '8px', marginBottom: '8px' }}>
+            <a
+              href="#/modules"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '6px 10px',
+                backgroundColor: 'rgba(22, 163, 74, 0.08)',
+                border: '1px solid rgba(22, 163, 74, 0.3)',
+                borderRadius: '6px',
+                textDecoration: 'none',
+                color: '#16a34a',
+                fontSize: '11px',
+                fontWeight: 650,
+              }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <CheckCircle2 size={13} />
+                <span>Converted Code & Diffs</span>
+              </span>
+              <span style={{ fontSize: '10px', opacity: 0.8 }}>View Modules &rarr;</span>
+            </a>
+          </div>
+        )}
 
         {/* Tech stack tags */}
         {(detectedLanguages.length > 0 || detectedFrameworks.length > 0) && (

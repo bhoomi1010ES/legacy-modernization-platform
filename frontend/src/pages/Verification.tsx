@@ -1,26 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import type { VerificationReportResponse } from '../types/api';
+import type { Job } from '../types/domain';
 import { api } from '../services/api';
 import { MetricCard } from '../components/MetricCard';
 import { Activity, ShieldCheck, CheckCircle2, AlertTriangle, ArrowRight, FileCheck } from 'lucide-react';
 
 interface VerificationProps {
+  jobs?: Job[];
   onNavigate: (path: string) => void;
 }
 
-export const Verification: React.FC<VerificationProps> = ({ onNavigate }) => {
+export const Verification: React.FC<VerificationProps> = ({ jobs = [], onNavigate }) => {
+  const getInitialJobId = () => {
+    try {
+      const saved = localStorage.getItem('rebase_active_job_id');
+      if (saved && jobs.some(j => j.job_id === saved)) return saved;
+    } catch {}
+    return jobs[0]?.job_id || '';
+  };
+  const [selectedJobId, setSelectedJobId] = useState(getInitialJobId);
   const [report, setReport] = useState<VerificationReportResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+
+  const activeJob = jobs.find(j => j.job_id === selectedJobId) || jobs[0] || null;
 
   useEffect(() => {
-    loadReport();
-  }, []);
+    if (selectedJobId) {
+      loadReport(selectedJobId);
+    }
+  }, [selectedJobId]);
 
-  const loadReport = async () => {
+  const loadReport = async (jobId: string) => {
     try {
       setLoading(true);
-      const data = await api.getVerificationReport('JOB-0248');
+      const data = await api.getVerificationReport(jobId);
       setReport(data);
+    } catch {
+      setReport(null);
     } finally {
       setLoading(false);
     }
@@ -36,7 +52,7 @@ export const Verification: React.FC<VerificationProps> = ({ onNavigate }) => {
         <div>
           <h1>Dual-Harness Behavioral Verification</h1>
           <p className="subtitle">
-            Parallel replay of frozen characterization vectors across legacy Java and converted TypeScript services.
+            {`Parallel replay of frozen characterization vectors across legacy ${activeJob?.source_stack || 'source'} and modern ${activeJob?.target_stack || 'target'} implementations.`}
           </p>
         </div>
         <div className="heading-actions">
@@ -83,7 +99,7 @@ export const Verification: React.FC<VerificationProps> = ({ onNavigate }) => {
         <div style={{ marginBottom: '12px' }}>
           <h2 style={{ fontSize: '15px', fontWeight: 650 }}>Classified Differences & Waivers</h2>
           <p style={{ fontSize: '12px', color: 'var(--muted-foreground)' }}>
-            Each behavioral discrepancy between Java and TypeScript is evaluated and categorized by the Verifier agent.
+            Each behavioral discrepancy between legacy source and target architecture is evaluated and categorized by the Verifier agent.
           </p>
         </div>
 

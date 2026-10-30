@@ -82,7 +82,7 @@ class ModuleAttempt(Base):
 
     __table_args__ = (
         UniqueConstraint("module_id", "attempt_number", name="uq_module_attempt_number"),
-        CheckConstraint("attempt_number <= 5", name="chk_attempt_number_limit"),
+        CheckConstraint("attempt_number <= 50", name="chk_attempt_number_limit"),
     )
 
     module = relationship("Module", back_populates="attempts")

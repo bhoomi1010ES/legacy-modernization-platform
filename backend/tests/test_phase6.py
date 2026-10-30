@@ -33,6 +33,7 @@ from app.services import (
 )
 from app.services.verifier_agent import verifier_service, VerificationVerdict
 from app.services.reviewer_agent import review
+from app.services.repository_workspace_service import RepositoryWorkspaceService
 from app.services.model_gateway import FakeModelProvider, build_fake_gateway
 from app.services.supervisor_service import supervisor_service as supervisor
 from app.services.gate_service import GateService
@@ -133,6 +134,7 @@ async def ready(
     await ws.git(repo, "add", ".")
     await ws.git(repo, "commit", "-m", "Trusted Phase 6 fixture")
     commit = await ws.git(repo, "rev-parse", "HEAD")
+    job.source_repository = str(repo)
     db.add(
         RepositorySnapshotModel(
             job_id=job.job_id,
@@ -143,8 +145,19 @@ async def ready(
         )
     )
     await db.commit()
+    workspace_service = RepositoryWorkspaceService(
+        workspace_root=tmp_path / "authoritative_workspaces"
+    )
+    monkeypatch.setattr(
+        "app.services.repository_workspace_service.repository_workspace_service",
+        workspace_service,
+    )
+    monkeypatch.setattr(service, "repository_workspace_service", workspace_service)
+    monkeypatch.setattr(ws, "repository_workspace_service", workspace_service)
+    repo, _ = await workspace_service.stage_repository(
+        db, job, pinned_commit=commit
+    )
     monkeypatch.setattr(ws, "ROOT", tmp_path / "worktrees")
-    monkeypatch.setattr(ws, "repository_for", lambda job_id: repo)
     monkeypatch.setattr(settings, "PHASE6_MODEL_PROVIDER", "fake")
     monkeypatch.setattr(settings, "PHASE6_MODEL_IDENTIFIER", "fake-model-v1")
     return db, job, owner, storage, module, repo

@@ -442,7 +442,10 @@ export const api = {
       }
     }
     if (!targetJobId) {
-      targetJobId = 'JOB-0248';
+      targetJobId = localStorage.getItem('rebase_active_job_id') || '';
+    }
+    if (!targetJobId) {
+      throw new Error('No target job specified for gate decision');
     }
 
     return request<GateDecisionResponse>(

@@ -144,6 +144,11 @@ class ControlledGitAdapter:
             "TEMP": os.environ.get("TEMP", ""),
             "GIT_TERMINAL_PROMPT": "0",  # Disable interactive credential prompts
             "GIT_ASKPASS": "echo",
+            # Repository staging must never inherit a developer/workstation
+            # credential helper or mutable Git configuration. An explicitly
+            # supplied request-scoped token is installed below when required.
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
         }
         return safe_env
 
@@ -272,6 +277,8 @@ if host == "github.com" and protocol == "https":
         """Executes git subprocess safely with argument list, no shell, and hooks disabled."""
         safe_args = [
             "git",
+            "-c", "safe.directory=*",               # Allow local workspaces regardless of owner
+            "-c", "credential.helper=",             # Never reuse host credentials
             "-c", "core.hooksPath=/dev/null",       # Disable git hooks to prevent code execution
             "-c", "protocol.ext.allow=never",       # Disable external protocol helpers
             "-c", "core.symlinks=false",            # Prevent symlink traversal exploits

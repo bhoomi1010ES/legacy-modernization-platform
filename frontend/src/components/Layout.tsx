@@ -18,13 +18,14 @@ import {
   ChevronRight,
   ShieldCheck,
 } from 'lucide-react';
-import type { User } from '../types/domain';
+import type { User, Job } from '../types/domain';
 
 interface LayoutProps {
   currentPath: string;
   onNavigate: (path: string) => void;
   user: User | null;
   pendingGatesCount: number;
+  activeJob?: Job | null;
   onLogout?: () => void;
   children: React.ReactNode;
 }
@@ -34,6 +35,7 @@ export const Layout: React.FC<LayoutProps> = ({
   onNavigate,
   user,
   pendingGatesCount,
+  activeJob,
   onLogout,
   children,
 }) => {
@@ -90,9 +92,17 @@ export const Layout: React.FC<LayoutProps> = ({
           <div className="workspace-icon">
             <ShieldCheck size={14} />
           </div>
-          <div>
-            <div style={{ fontSize: '11px', fontWeight: 650 }}>Acme Corp Enterprise</div>
-            <div style={{ fontSize: '9px', color: 'var(--muted-foreground)' }}>Java → TypeScript Slice</div>
+          <div style={{ overflow: 'hidden' }}>
+            <div style={{ fontSize: '11px', fontWeight: 650, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '170px' }}>
+              {activeJob?.name || (user?.full_name ? `${user.full_name}'s Workspace` : 'Modernization Platform')}
+            </div>
+            <div style={{ fontSize: '9px', color: 'var(--muted-foreground)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '170px' }}>
+              {activeJob?.source_stack && activeJob?.target_stack
+                ? `${activeJob.source_stack} → ${activeJob.target_stack}`
+                : activeJob?.job_id
+                ? `Job #${activeJob.job_id.slice(0, 8)} · ${activeJob.status}`
+                : 'Enterprise Multi-Agent Workspace'}
+            </div>
           </div>
         </div>
 
@@ -209,11 +219,11 @@ export const Layout: React.FC<LayoutProps> = ({
 
           <div className="profile">
             <div className="avatar">
-              {user ? user.full_name.substring(0, 2).toUpperCase() : 'AM'}
+              {user ? user.full_name.substring(0, 2).toUpperCase() : 'AU'}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 650, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {user ? user.full_name : 'Alex Morgan'}
+                {user ? user.full_name : 'Authorized User'}
               </div>
               <small>{user ? user.role : 'ADMIN'}</small>
             </div>

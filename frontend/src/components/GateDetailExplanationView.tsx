@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { Job } from '../types/domain';
 import type { GateDetail } from '../types/domain';
 import type { FeasibilityReport, ConversionPlan } from '../types/phase4';
+import type { CharacterizationReport } from '../types/phase5';
 import {
   CheckCircle2,
   FileText,
@@ -22,6 +23,7 @@ export interface GateDetailExplanationViewProps {
   gate?: GateDetail | null;
   feasibilityReport?: FeasibilityReport | null;
   conversionPlan?: ConversionPlan | null;
+  characterizationReport?: CharacterizationReport | null;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -33,6 +35,7 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
   gate,
   feasibilityReport,
   conversionPlan,
+  characterizationReport,
   className = '',
   style = {},
 }) => {
@@ -46,7 +49,7 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
   
   const targetStack =
     job?.target_stack ||
-    'i want to change my frontend from html/css/js to react js';
+    'Target Architecture';
 
   const artifactHash =
     gate?.artifact_hash ||
@@ -108,67 +111,67 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
         }],
   };
 
-  // G2 Data
+  // G2 Real Data
+  const charCases = characterizationReport?.cases || [];
+  const passedCases = charCases.filter(c => c.outcome === 'PASSED');
+  const failedCases = charCases.filter(c => c.outcome === 'FAILED');
+  const unavailableCases = charCases.filter(c => c.outcome === 'UNAVAILABLE');
+  const vectorCount = charCases.length;
+  const isAllPassed = vectorCount > 0 && passedCases.length === vectorCount;
+  const isSchemaReviewed = characterizationReport?.schema_status !== 'REVIEW_REQUIRED';
+  const isSchemaValidated = characterizationReport?.schema_status === 'NOT_APPLICABLE' || characterizationReport?.schema_validation_status === 'PASS';
+
   const g2Deliverable = {
-    suite_id: 'char_suite_v1_frozen',
-    job_id: job?.job_id || gate?.job_id || 'spendwise_modernization',
+    suite_id: characterizationReport?.suite_id || 'char_suite_v1',
+    job_id: job?.job_id || gate?.job_id || 'modernization_job',
     source_stack: sourceStack,
     target_stack: targetStack,
-    vector_count: 42,
-    route_coverage: 1.0,
-    sha256_lock: `sha256:${artifactHash.replace(/[^a-f0-9]/gi, '').slice(0, 32) || '4a9918231c55490a0f4439cba912e'}`,
-    status: 'FROZEN_BASELINE',
+    vector_count: vectorCount,
+    passed_count: passedCases.length,
+    failed_count: failedCases.length,
+    unavailable_count: unavailableCases.length,
+    route_coverage: characterizationReport?.coverage?.percent ? characterizationReport.coverage.percent / 100 : 0.0,
+    sha256_lock: `sha256:${characterizationReport?.content_hash || artifactHash.replace(/[^a-f0-9]/gi, '').slice(0, 32)}`,
+    status: isAllPassed ? 'FROZEN_BASELINE' : (vectorCount === 0 ? 'NO_CASES_RECORDED' : 'UNVERIFIED_BASELINE'),
+    schema_status: characterizationReport?.schema_status || 'NOT_EVALUATED',
+    schema_validation_status: characterizationReport?.schema_validation_status || 'NOT_RUN',
+    blocking_reasons: characterizationReport?.g2_readiness?.blocking_reasons || [],
     behavioral_invariants: [
-      'Cryptographic Snapshot Baseline (SHA-256 Lock)',
-      'Idempotent Request Contract Enforcement',
-      'Error Code & Boundary Parity (4xx/5xx Exact Mapping)',
-      'Transaction Rollback & State Isolation Verification',
-      'Zero Production Credentials / Redacted PII Fixtures',
+      `Cryptographic Baseline Lock: ${characterizationReport?.content_hash ? characterizationReport.content_hash.slice(0, 16) + '...' : 'Pending capture'}`,
+      `Schema Review Requirement: ${characterizationReport?.schema_status === 'REVIEW_REQUIRED' ? 'MANUAL REVIEW REQUIRED (Blocking)' : (characterizationReport?.schema_status || 'Supported')}`,
+      `Sample Data Validation: ${characterizationReport?.schema_status === 'NOT_APPLICABLE' ? 'NOT APPLICABLE (Schema-Free Project)' : characterizationReport?.schema_validation_status === 'PASS' ? 'VALIDATED (PASS)' : `${characterizationReport?.schema_validation_status || 'NOT RUN'} (PASS Required)`}`,
+      `Execution Runtime: ${characterizationReport?.execution_mode || 'Docker Sandbox (Isolated)'}`,
     ],
     captured_side_effects: [
-      'Database Mutation Log: Insert, Update & Delete Invariants',
-      'Message Bus & Event Stream Payloads Frozen',
-      'External HTTP Call Interceptions & Replay Mocks',
-      'Disk I/O & File Artifact Generation Signatures',
+      `Scenario Results: ${passedCases.length} Passed, ${failedCases.length} Failed, ${unavailableCases.length} Unavailable`,
+      `Interface Coverage: ${characterizationReport?.coverage?.percent ?? 0}% covered`,
+      'Database Invariants: Tables, Columns & Mutation Diffs',
+      'Sanitized Inputs: PII Redacted Fixtures',
     ],
     recommended_fixtures: [
       'GoldenFixtureReplayHarness',
-      'RootlessSandboxRecorder',
+      'SpendwiseSandboxRecorder',
       'StateDiffAssertions',
     ],
-    invariant_matrix: [
-      {
-        legacy: 'POST /api/v1/auth/login',
-        target: '200 OK + JWT Bearer Token Issued',
-        category: 'Secure Session Cookie + Audit Log Event',
-      },
-      {
-        legacy: 'GET /api/v1/resources',
-        target: '200 OK + Paginated JSON Collection',
-        category: 'Read-Only Replica Query (Zero Mutation)',
-      },
-      {
-        legacy: 'POST /api/v1/transactions',
-        target: '201 Created + Idempotency-Key',
-        category: 'Atomic DB Transaction + Event Emission',
-      },
-      {
-        legacy: 'PUT /api/v1/users/profile',
-        target: '200 OK + Updated Timestamp',
-        category: 'Cache Invalidation + DB Row Version Increment',
-      },
-      {
-        legacy: 'DELETE /api/v1/records/:id',
-        target: '204 No Content (Soft Delete)',
-        category: 'Archival Tombstone Marked in Storage',
-      },
-    ],
+    invariant_matrix: charCases.length > 0
+      ? charCases.map(c => ({
+          legacy: `${c.interface || c.module || 'Endpoint'} · ${c.name}`,
+          target: `${c.outcome}${c.duration_ms !== undefined ? ` (${c.duration_ms}ms)` : ''}`,
+          category: `Mode: ${c.execution_mode || 'SANDBOX'} · ${c.behavior || 'Recorded state transition'}`,
+        }))
+      : [
+          {
+            legacy: 'No characterization scenarios recorded yet',
+            target: 'UNAVAILABLE',
+            category: 'Run characterization to record baseline replay vectors',
+          },
+        ],
   };
 
   // G3 Data
   const g3Deliverable = {
     plan_id: conversionPlan?.plan_id || 'conv_plan_v1_modular',
-    job_id: job?.job_id || gate?.job_id || 'spendwise_modernization',
+    job_id: job?.job_id || gate?.job_id || 'modernization_job',
     source_stack: sourceStack,
     target_stack: targetStack,
     total_modules: conversionPlan?.modules?.length ?? 14,
@@ -222,7 +225,7 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
   // G4 Data
   const g4Deliverable = {
     report_id: 'equiv_report_v1_signed',
-    job_id: job?.job_id || gate?.job_id || 'spendwise_modernization',
+    job_id: job?.job_id || gate?.job_id || 'modernization_job',
     source_stack: sourceStack,
     target_stack: targetStack,
     parity_rate: 1.0,
@@ -300,14 +303,26 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
 
   if (gateType === 'G2') {
     title = gateTitle || 'Behavioral Characterization & Invariant Lock (Gate G2)';
-    badgeText = '100% Golden Invariant Lock';
+    badgeText = isAllPassed && isSchemaReviewed && isSchemaValidated
+      ? '100% Golden Invariant Lock'
+      : (vectorCount === 0 ? 'Awaiting Characterization' : 'Baseline Blocked / Unverified');
     subtitleLead = 'Behavioral replay harness and black-box state invariant analysis for freezing';
     card3Label = 'Invariant Replay Lock';
-    card3Value = '100% Frozen (42 Vectors)';
-    card4Label = 'Deliverable Status';
-    card4Value = 'CharacterizationSuite v1';
+    card3Value = vectorCount > 0
+      ? `${passedCases.length}/${vectorCount} Passed (${unavailableCases.length} Unavailable)`
+      : '0 Vectors Recorded';
+    card4Label = 'Schema & Sample Data';
+    card4Value = `${g2Deliverable.schema_status} · ${g2Deliverable.schema_validation_status}`;
     specialistHeader = 'Specialist Behavioral Harness Analysis & Gate G2 Recommendation:';
-    specialistBody = `Zero-tolerance behavioral lock established. All 42 golden HTTP test vectors and state transition snapshots recorded inside air-gapped rootless container sandbox. Ground truth locked for target verification.`;
+    specialistBody = isAllPassed && isSchemaReviewed && isSchemaValidated
+      ? `Zero-tolerance behavioral lock established. All ${vectorCount} golden test vectors passed in sandbox. Schema plan reviewed and sample data validated.`
+      : `Gate G2 approval is currently blocked. ${[
+          !isSchemaReviewed ? 'Schema plan status is REVIEW_REQUIRED (unresolved overrides)' : null,
+          !isSchemaValidated && characterizationReport?.schema_status !== 'NOT_APPLICABLE' ? `Sample data validation status is ${g2Deliverable.schema_validation_status} (must be PASS)` : null,
+          unavailableCases.length > 0 ? `${unavailableCases.length} scenario(s) returned UNAVAILABLE` : null,
+          failedCases.length > 0 ? `${failedCases.length} scenario(s) FAILED` : null,
+          vectorCount === 0 ? 'No test cases have been executed yet' : null,
+        ].filter(Boolean).join('; ')}.`;
     matrixTitle = 'Captured Invariant & State Transition Matrix';
     matrixSubtitle = `Recorded Golden Invariants for ${sourceStack} Execution`;
     matrixCol1 = 'ENDPOINT / OPERATION';
@@ -355,7 +370,7 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
     card4Label = 'Deliverable Status';
     card4Value = 'EquivalenceReport v1';
     specialistHeader = 'Specialist Dual-Harness Verification & Gate G4 Recommendation:';
-    specialistBody = `Dual-harness replay completed across all 42 golden characterization test fixtures. Zero unintended regressions or schema drifts detected. 4 approved intentional differences verified and cataloged for release sign-off.`;
+    specialistBody = `Dual-harness replay completed across all golden characterization test fixtures. Zero unintended regressions or schema drifts detected. Approved intentional differences verified and cataloged for release sign-off.`;
     matrixTitle = 'Differential Replay & Equivalence Proof Matrix';
     matrixSubtitle = `Dual-Harness Parity Audit: ${sourceStack} vs ${targetStack}`;
     matrixCol1 = 'VERIFICATION SUITE';

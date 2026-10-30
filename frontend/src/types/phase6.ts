@@ -55,6 +55,8 @@ export interface ExecutionModule {
   status: string;
   dependency_blockers: string[];
   attempts: ModuleAttempt[];
+  target_path?: string;
+  legacy_path?: string;
 }
 
 export interface ModuleExecutionBoard {

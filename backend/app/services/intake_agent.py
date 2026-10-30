@@ -206,7 +206,10 @@ class IntakeAgent:
         """Safely executes intake pipeline, builds inventory, snapshots metadata, and persists artifacts."""
         try:
             job_id_str = str(job.job_id)
-            is_local = (job.source_repository or "").startswith("local://")
+            source_value = (job.source_repository or "").removeprefix("local://")
+            is_local = (job.source_repository or "").startswith("local://") or (
+                bool(source_value) and Path(source_value).is_absolute()
+            )
 
             # Check for existing latest snapshot for idempotency
             existing_snap = (
@@ -217,32 +220,22 @@ class IntakeAgent:
                 )
             ).scalars().first()
 
-            # Acquire workspace
-            from app.services.job_service import JobService
-            job_service = JobService(git_adapter=self.git_adapter)
-
+            # Authoritative staging is shared with Analyzer and CodeWriter. Intake
+            # never hands downstream agents an arbitrary caller-provided path.
+            from app.services.repository_workspace_service import repository_workspace_service
             pinned_commit = None
             if isinstance(job.stack_metadata, dict):
                 pinned_commit = job.stack_metadata.get("pinned_commit")
-
-            if workspace_override is not None:
-                workspace = workspace_override.resolve()
-                if not workspace.is_dir():
-                    raise NotFoundException("IntakeWorkspace", str(workspace))
-                resolved_ref = "LOCAL"
-            else:
-                workspace, resolved_ref = job_service.acquire_intake_workspace(
-                    job_id=job_id_str,
-                    repo_url=job.source_repository,
-                    revision=job.source_revision,
-                    pinned_commit=pinned_commit,
-                    git_token=git_token,
-                    source_type="local" if is_local else "git",
-                    preview_snapshot_id=preview_snapshot_id,
-                    snapshot_fingerprint=snapshot_fingerprint,
-                    user_id=str(user.user_id) if user else "system",
-                    is_admin=True,
-                )
+            workspace, resolved_ref = await repository_workspace_service.stage_repository(
+                db,
+                job,
+                pinned_commit=pinned_commit,
+                git_token=git_token,
+                preview_snapshot_id=preview_snapshot_id,
+                snapshot_fingerprint=snapshot_fingerprint,
+                workspace_override=workspace_override,
+                correlation_id=correlation_id,
+            )
 
             # Build deterministic inventory
             inventory, file_items, inventory_hash = self.build_deterministic_inventory(workspace, job_id_str)
@@ -332,7 +325,7 @@ class IntakeAgent:
                 repository_id=job_id_str,
                 source_type="local" if is_local else "git",
                 source_ref=job.source_repository,
-                commit_sha=resolved_ref if not is_local else None,
+                commit_sha=resolved_ref,
                 content_hash=overall_content_hash,
                 archive_size_bytes=inventory.total_bytes,
                 file_count=inventory.total_files,

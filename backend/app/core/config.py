@@ -39,7 +39,7 @@ try:
         PHASE6_SANDBOX_TIMEOUT: int = Field(default=180, ge=1, le=600)
         PHASE6_MODEL_PROVIDER: str = ""
         PHASE6_MODEL_IDENTIFIER: str = ""
-        PHASE6_MAX_OUTPUT_TOKENS: int = Field(default=8192, ge=128, le=32768)
+        PHASE6_MAX_OUTPUT_TOKENS: int = Field(default=16384, ge=128, le=32768)
         PHASE6_MAX_TASK_COST_USD: float = Field(default=1.0, gt=0, le=100)
         PHASE7_SANDBOX_IMAGE: str = ""
         PHASE7_CHECK_COMMANDS_JSON: str = "[]"
@@ -175,7 +175,7 @@ except ImportError:
         PHASE6_SANDBOX_TIMEOUT: int = 180
         PHASE6_MODEL_PROVIDER: str = os.getenv("PHASE6_MODEL_PROVIDER", "")
         PHASE6_MODEL_IDENTIFIER: str = os.getenv("PHASE6_MODEL_IDENTIFIER", "")
-        PHASE6_MAX_OUTPUT_TOKENS: int = 8192
+        PHASE6_MAX_OUTPUT_TOKENS: int = int(os.getenv("PHASE6_MAX_OUTPUT_TOKENS", "16384"))
         PHASE6_MAX_TASK_COST_USD: float = 1.0
         PHASE7_SANDBOX_IMAGE: str = os.getenv("PHASE7_SANDBOX_IMAGE", "")
         PHASE7_CHECK_COMMANDS_JSON: str = os.getenv("PHASE7_CHECK_COMMANDS_JSON", "[]")

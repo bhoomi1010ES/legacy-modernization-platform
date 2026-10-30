@@ -108,16 +108,8 @@ class SchemaDataService:
         ).scalars().first()
 
         # 2. Inspect workspace for SQL schema/DDL files
-        backend_dir = Path(__file__).resolve().parent.parent.parent
-        workspace_candidates = (
-            backend_dir.parent / "repo_workspaces" / f"job_{job_id_str}",
-            backend_dir / "repo_workspaces" / f"job_{job_id_str}",
-            backend_dir / "repo_workspaces" / f"job_{job_id_str}_git",
-        )
-        workspace_path = next((path for path in workspace_candidates if path.exists()), workspace_candidates[0])
-        if not workspace_path.exists() and job.source_repository and Path(job.source_repository).exists():
-            workspace_path = Path(job.source_repository)
-
+        from app.services.repository_workspace_service import repository_workspace_service
+        workspace_path = repository_workspace_service.get_workspace_path(job_id_str)
         detected_tables: List[Dict[str, Any]] = []
         sql_files: List[str] = []
 

@@ -148,7 +148,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
               Autonomous legacy migration with mathematical behavioral equivalence.
             </h2>
             <p style={{ fontSize: '13px', color: 'var(--muted-foreground)', lineHeight: 1.7 }}>
-              Transform enterprise Java 8–17 Spring Boot services into modern TypeScript / Node.js 22 / NestJS architectures using sandboxed specialist multi-agent coordination.
+              Transform enterprise legacy codebases into modern, cloud-native architectures using sandboxed specialist multi-agent coordination.
             </p>
           </div>
         </div>

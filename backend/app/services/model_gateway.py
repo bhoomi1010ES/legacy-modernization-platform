@@ -171,7 +171,7 @@ class OpenRouterProvider:
             "Content-Type": "application/json",
         }
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=180.0) as client:
             resp = await client.post(
                 f"{self.base_url}/chat/completions",
                 json=payload,
@@ -257,7 +257,7 @@ class OpenAIProvider:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=180.0) as client:
                 resp = await client.post(
                     f"{self.base_url}/chat/completions",
                     json=payload,
@@ -315,7 +315,7 @@ class ModelGateway:
         providers: Dict[str, ModelProvider],
         allowlist: Dict[str, set[str]],
         *,
-        timeout_seconds: float = 30.0,
+        timeout_seconds: float = 120.0,
         max_retries: int = 2,
         requests_per_minute: int = 60,
         redactor: Optional[SecretRedactor] = None,
@@ -430,7 +430,7 @@ def build_default_gateway() -> ModelGateway:
     return ModelGateway(
         providers=providers,
         allowlist=allowlist,
-        timeout_seconds=60.0,
+        timeout_seconds=180.0,
         max_retries=2,
         requests_per_minute=60,
     )

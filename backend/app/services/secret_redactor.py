@@ -73,6 +73,22 @@ class SecretRedactor:
             logger.exception("SecretRedactor.redact_text failed: %s", exc)
             return "[REDACTED_ERROR]"
 
+    def has_secret_material(self, text: str) -> bool:
+        """Checks for actual environment secret values or real credential tokens."""
+        try:
+            if not text or not isinstance(text, str):
+                return False
+            for secret in self._custom_values:
+                if secret and secret in text:
+                    return True
+            for pattern, _ in SECRET_PATTERNS[:7]:
+                if pattern.search(text):
+                    return True
+            return False
+        except Exception as exc:
+            logger.exception("SecretRedactor.has_secret_material failed: %s", exc)
+            return True
+
     def redact_object(self, obj: Any) -> Any:
         """Recursively sanitizes dicts, lists, strings, and primitives."""
         try:

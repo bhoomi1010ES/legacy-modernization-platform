@@ -26,6 +26,19 @@ export const WorkflowProgress: React.FC<{ workflow: WorkflowState; events?: Work
 
     {workflow.blocking_reason && <div className="workflow-blocker"><AlertTriangle size={18} /><div><strong>Workflow is waiting</strong><span>{workflow.blocking_reason}</span></div></div>}
 
+    {workflow.workspace && <div className={`workspace-lifecycle workspace-${workflow.workspace.status.toLowerCase()}`}>
+      <div><Database size={16} /><strong>Repository workspace</strong><span>{workflow.workspace.status.replace('_', ' ')}</span></div>
+      <ol>
+        <li className={workflow.workspace.received ? 'done' : ''}>Received</li>
+        <li className={workflow.workspace.staged ? 'done' : ''}>Staged</li>
+        <li className={workflow.workspace.validated ? 'done' : ''}>Workspace validated</li>
+        <li className={workflow.workspace.ready ? 'done' : ''}>Ready</li>
+      </ol>
+      {workflow.workspace.status === 'RECOVERING' && <p><RotateCcw size={13} /> Recovering repository workspace</p>}
+      {workflow.workspace.status === 'RECOVERY_FAILED' && <p><AlertTriangle size={13} /> Workspace recovery needs attention</p>}
+      {workflow.workspace.message && <small>{workflow.workspace.message}</small>}
+    </div>}
+
     <div className="workflow-budget"><div><Gauge size={15} /><span>Per-job budget</span><strong>{workflow.budget_used.toFixed(2)} / {workflow.budget_limit.toFixed(2)}</strong>{workflow.budget_warning && <em>80% threshold reached</em>}</div><div className="workflow-budget-track"><span style={{ width: `${ratio}%` }} /></div></div>
 
     <div className="workflow-timeline">

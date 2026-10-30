@@ -67,7 +67,7 @@ def review(
                     )
             if path.endswith(".py"):
                 try:
-                    tree = ast.parse(source)
+                    tree = ast.parse(source.replace('\x00', ''))
                     for node in ast.walk(tree):
                         if (
                             isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))

@@ -88,3 +88,58 @@ class ConflictException(PlatformException):
 class ValidationException(PlatformException):
     def __init__(self, message: str, details: Optional[list] = None):
         super().__init__(code="VALIDATION_ERROR", message=message, status_code=422, details=details)
+
+
+# ---------------------------------------------------------------------------
+# Workspace Lifecycle & Repository Staging Exceptions
+# ---------------------------------------------------------------------------
+class WorkspaceException(ConflictException):
+    """Base exception for all repository workspace lifecycle failures."""
+    def __init__(self, code: str, message: str, details: Optional[list] = None):
+        super().__init__(message=message, details=details)
+        self.code = code
+
+
+class WorkspaceNotFoundException(WorkspaceException):
+    def __init__(self, message: str = "Staged Git repository workspace not found."):
+        super().__init__(code="WORKSPACE_NOT_FOUND", message=message)
+
+
+class WorkspaceInvalidException(WorkspaceException):
+    def __init__(self, message: str = "Repository workspace is inaccessible or invalid."):
+        super().__init__(code="WORKSPACE_INVALID", message=message)
+
+
+class WorkspaceCorruptedException(WorkspaceException):
+    def __init__(self, message: str = "Repository workspace is corrupted or missing required files."):
+        super().__init__(code="WORKSPACE_CORRUPTED", message=message)
+
+
+class WorkspaceWrongRepositoryException(WorkspaceException):
+    def __init__(self, message: str = "Repository workspace belongs to another job or unexpected source."):
+        super().__init__(code="WORKSPACE_WRONG_REPOSITORY", message=message)
+
+
+class WorkspaceGitInvalidException(WorkspaceException):
+    def __init__(self, message: str = "Repository workspace Git state is invalid or missing HEAD."):
+        super().__init__(code="WORKSPACE_GIT_INVALID", message=message)
+
+
+class WorkspaceRecoveryFailedException(WorkspaceException):
+    def __init__(self, message: str = "Failed to recover repository workspace from authoritative source."):
+        super().__init__(code="WORKSPACE_RECOVERY_FAILED", message=message)
+
+
+class IncompleteModelOutputError(ValidationException):
+    """Raised when model provider output was truncated (e.g. hit max_tokens / finish_reason: length)."""
+    def __init__(self, message: str = "Model generation truncated: output exceeded token limit."):
+        super().__init__(message=message)
+        self.code = "INCOMPLETE_MODEL_OUTPUT"
+
+
+class MalformedModelOutputError(ValidationException):
+    """Raised when model provider output cannot be parsed into the expected JSON structure."""
+    def __init__(self, message: str = "Model generation returned malformed or invalid JSON."):
+        super().__init__(message=message)
+        self.code = "MALFORMED_MODEL_OUTPUT"
+

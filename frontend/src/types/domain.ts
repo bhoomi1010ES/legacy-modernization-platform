@@ -44,6 +44,8 @@ export interface Job {
   pull_request_url?: string;
   current_gate?: string;
   blocking_reason?: string;
+  workflow_phase?: string;
+  active_node?: string;
   created_at: string;
   updated_at: string;
 }
@@ -131,6 +133,17 @@ export interface WorkflowState {
   budget_warning: boolean;
   allowed_actions: Array<'cancel' | 'pause' | 'resume'>;
   phases: WorkflowPhase[];
+    workspace?: {
+      status: 'RECEIVED' | 'UNAVAILABLE' | 'RECOVERING' | 'RECOVERY_FAILED' | 'READY';
+      received: boolean;
+      staged: boolean;
+      validated: boolean;
+      ready: boolean;
+      workspace_name?: string;
+      commit_sha?: string;
+      error_code?: string;
+      message?: string;
+    };
     active_task_ids?: string[];
     completed_task_ids?: string[];
     blocked_task_ids?: string[];

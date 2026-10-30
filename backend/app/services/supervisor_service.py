@@ -3,8 +3,9 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 import asyncio
+import re
 import uuid
 from uuid import UUID
 
@@ -935,11 +936,34 @@ class SupervisorService:
                 record = await db.get(TestCase, UUID(case["test_case_id"]))
                 if record is None or not record.is_frozen or record.job_id != job.job_id:
                     raise ConflictException("Phase 6 requires frozen characterization definitions")
-            plan = await db.scalar(select(Artifact).where(Artifact.job_id == job.job_id, Artifact.artifact_type.in_(["CONVERSION_PLAN", "ConversionPlan"])).order_by(Artifact.created_at.desc(), Artifact.version.desc()).limit(1))
+            # Prefer the exact artifact recorded in G3 approval, fallback to latest
+            approved_art_ids = [UUID(k) for k in gates["G3"].artifact_hashes.keys() if re.fullmatch(r"[0-9a-fA-F-]{36}", k)]
+            plan = None
+            if approved_art_ids:
+                plan = await db.scalar(
+                    select(Artifact)
+                    .where(
+                        Artifact.job_id == job.job_id,
+                        Artifact.artifact_id.in_(approved_art_ids),
+                        Artifact.artifact_type.in_(["CONVERSION_PLAN", "ConversionPlan"]),
+                    )
+                    .order_by(Artifact.version.desc())
+                    .limit(1)
+                )
+            if plan is None:
+                plan = await db.scalar(
+                    select(Artifact)
+                    .where(
+                        Artifact.job_id == job.job_id,
+                        Artifact.artifact_type.in_(["CONVERSION_PLAN", "ConversionPlan"]),
+                    )
+                    .order_by(Artifact.created_at.desc(), Artifact.version.desc())
+                    .limit(1)
+                )
             if plan is None:
                 raise ConflictException("An approved immutable conversion plan is required")
             approved_plan = await read_payload(plan)
-            if gates["G3"].artifact_hashes.get(str(plan.artifact_id)) != plan.content_hash:
+            if gates["G3"].artifact_hashes.get(str(plan.artifact_id)) != plan.content_hash and plan.content_hash not in gates["G3"].artifact_hashes.values():
                 raise ConflictException("G3 does not approve the current conversion plan")
             return {"baseline_hash": suite.content_hash, "baseline_id": str(suite.artifact_id), "cases": payload["cases"], "plan_hash": plan.content_hash, "approved_modules": approved_plan.get("modules", []), "gate_ids": {k: str(v.gate_id) for k, v in gates.items()}}
         except Exception:
@@ -970,9 +994,11 @@ class SupervisorService:
     async def queue_integration(self, db, job, key, actor):
         try:
             from app.services.phase7_service import queue_integration
+            from app.services.repository_workspace_service import repository_workspace_service
             if job.status not in ("CONVERTING", "VERIFYING", "INTEGRATING"):
                 raise ConflictException("Integration requires the canonical verified/integrating state")
             await self.require_integration_eligibility(db, job)
+            await repository_workspace_service.ensure_workspace(db, job)
             if job.status == "CONVERTING":
                 await self.transition(db, job.job_id, JobStatus.VERIFYING, actor_id=actor, reason="All module verification evidence checked before integration")
             if job.status != "INTEGRATING":
@@ -1012,11 +1038,35 @@ class SupervisorService:
             raise
 
     async def queue_module_conversion(self, db, job, module, key, actor, **kwargs):
+        import logging
+
+        from app.services.phase6_service import queue
+        from app.services.repository_workspace_service import repository_workspace_service
+
+        logical_task_id = f"p6-{module.module_id}"
         try:
-            from app.services.phase6_service import queue
+            # This is the dispatch boundary used by API and graph callers. A
+            # lease/attempt is not created until the exact job snapshot is ready.
+            workspace_path = await repository_workspace_service.ensure_workspace(db, job)
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "agent.dispatch.blocked_workspace | job_id=%s task_id=%s attempt_id=%s "
+                "agent=CodeWriter workspace_path=%s source=%s worker_id=%s code=%s",
+                job.job_id, logical_task_id, None,
+                repository_workspace_service.get_workspace_path(job.job_id),
+                repository_workspace_service._source_identity(job.source_repository), actor,
+                getattr(exc, "code", type(exc).__name__),
+            )
+            raise
+        logging.getLogger(__name__).info(
+            "agent.dispatch.workspace_ready | job_id=%s task_id=%s attempt_id=%s "
+            "agent=CodeWriter workspace_path=%s source=%s worker_id=%s",
+            job.job_id, logical_task_id, None, workspace_path,
+            repository_workspace_service._source_identity(job.source_repository), actor,
+        )
+        try:
             return await queue(db, job, module, key, actor, **kwargs)
         except Exception:
-            import logging
             logging.getLogger(__name__).exception("Supervisor.queue_module_conversion failed")
             raise
 
@@ -1057,6 +1107,8 @@ class SupervisorService:
     async def run_module_conversion(self, db, job, module, *, user=None, repair_instruction=None):
         try:
             from app.services.phase6_service import execute_attempt, newest, detail
+            from app.services.repository_workspace_service import repository_workspace_service
+            await repository_workspace_service.ensure_workspace(db, job)
             previous = await newest(db, module.module_id) if repair_instruction else None
             attempt = await self.queue_module_conversion(db, job, module, str(__import__("uuid").uuid4()), str(user.user_id) if user else "Supervisor", previous=previous, rationale=repair_instruction)
             await execute_attempt(db, attempt.attempt_id)
@@ -1072,7 +1124,9 @@ class SupervisorService:
             import asyncio
             from sqlalchemy.ext.asyncio import async_sessionmaker
             from app.services.phase6_service import execute_attempt, newest, detail
+            from app.services.repository_workspace_service import repository_workspace_service
             await self.require_conversion_eligibility(db, job)
+            await repository_workspace_service.ensure_workspace(db, job, correlation_id=correlation_id)
             factory = async_sessionmaker(db.bind, expire_on_commit=False)
             async def worker(attempt_id):
                 try:
@@ -1213,6 +1267,36 @@ class SupervisorService:
 
         stale_modules = await dependency_scheduler.reconcile_stale_leases(db, job_id)
         job = await self._locked_job(db, job_id)
+        if job.status in {
+            "ANALYZING", "CHARACTERIZING", "PLANNING", "CONVERTING",
+            "VERIFYING", "INTEGRATING",
+        }:
+            from app.services.repository_workspace_service import repository_workspace_service
+
+            try:
+                await repository_workspace_service.ensure_workspace(
+                    db, job, correlation_id=correlation_id or "service-restart"
+                )
+                job = await self._locked_job(db, job_id)
+            except Exception as workspace_error:
+                job.blocking_reason = (
+                    "Repository workspace recovery failed during reconciliation: "
+                    f"{getattr(workspace_error, 'message', str(workspace_error))}"
+                )
+                db.add(AuditEvent(
+                    job_id=job.job_id,
+                    event_type="WORKSPACE_RECOVERY_FAILED",
+                    actor_type="SYSTEM",
+                    actor_id="Supervisor",
+                    correlation_id=correlation_id,
+                    target_resource=str(job.job_id),
+                    payload={
+                        "error_code": getattr(
+                            workspace_error, "code", type(workspace_error).__name__
+                        ),
+                        "during": "lease_reconciliation",
+                    },
+                ))
         now = utc_now()
         stale_before = now - timedelta(minutes=10)
         reconciled_runs: list[dict[str, str]] = []
@@ -1483,17 +1567,46 @@ class SupervisorService:
         self, job_id: UUID, *, correlation_id: Optional[str] = None, max_steps: int = 50
     ) -> None:
         """Background entrypoint used by APIs and restart recovery."""
+        import logging
         from app.core.database import AsyncSessionLocal
+        from app.models.job import Job
+        from app.models.audit import AuditEvent
+
+        logger = logging.getLogger(__name__)
 
         async with self._drive_semaphore:
-            async with AsyncSessionLocal() as db:
-                await self.run_orchestration_loop(
-                    db, job_id, correlation_id=correlation_id, max_steps=max_steps
-                )
+            try:
+                async with AsyncSessionLocal() as db:
+                    await self.run_orchestration_loop(
+                        db, job_id, correlation_id=correlation_id, max_steps=max_steps
+                    )
+            except Exception as exc:
+                logger.exception("Supervisor orchestration crashed for job %s: %s", job_id, exc)
+                try:
+                    async with AsyncSessionLocal() as err_db:
+                        j = await err_db.get(Job, job_id)
+                        if j:
+                            j.blocking_reason = f"Supervisor run crashed: {exc}"
+                            err_db.add(
+                                AuditEvent(
+                                    job_id=job_id,
+                                    event_type="SUPERVISOR_CRASH",
+                                    actor_type="SYSTEM",
+                                    actor_id="Supervisor",
+                                    correlation_id=correlation_id,
+                                    target_resource=str(job_id),
+                                    payload={"error": str(exc), "type": type(exc).__name__},
+                                )
+                            )
+                            await err_db.commit()
+                except Exception:
+                    logger.exception("Failed to persist supervisor crash details for job %s", job_id)
+                raise
 
     def schedule_drive(self, job_id: UUID, *, correlation_id: Optional[str] = None):
         """Schedule only the authoritative supervisor loop in this process."""
         import asyncio
+        import logging
         key = str(job_id)
         existing = self._running_tasks.get(key)
         if existing and not existing.done():
@@ -1508,14 +1621,118 @@ class SupervisorService:
             if self._running_tasks.get(key) is t:
                 self._running_tasks.pop(key, None)
             if not t.cancelled():
-                # Retrieve the exception so a failed recovered job does not emit
-                # an unobserved-task warning; durable workflow evidence remains
-                # available for the UI and subsequent recovery.
-                t.exception()
+                exc = t.exception()
+                if exc:
+                    logging.getLogger(__name__).error(
+                        "Supervisor background task %s terminated with exception: %s", key, exc
+                    )
 
         task.add_done_callback(_cleanup)
         return task
 
+
+    async def recover_failed_phase6_job(
+        self,
+        db: AsyncSession,
+        job_id: UUID,
+        rationale: str,
+        target_module_id: Optional[UUID] = None,
+        *,
+        actor_id: str = "SupervisorRecovery",
+    ) -> Dict[str, Any]:
+        """Authoritative recovery of a failed Phase 6 job after diagnosing and fixing defects.
+        
+        Strictly enforces:
+        1. G1, G2, G3 human approvals exist and are valid.
+        2. No live worker holds orchestration or module leases.
+        3. Workspace repository integrity is valid.
+        4. Budget limit is not exceeded.
+        5. Preserves attempt history and retry counts.
+        6. Persists an audited RECOVERY checkpoint and audit log.
+        """
+        job = await db.get(Job, job_id)
+        if not job:
+            raise NotFoundException("Job", str(job_id))
+
+        gates = (await db.execute(
+            select(WorkflowGate).where(
+                WorkflowGate.job_id == job_id,
+                WorkflowGate.status == "APPROVED"
+            )
+        )).scalars().all()
+        approved_types = {g.gate_type for g in gates}
+        if not {"G1", "G2", "G3"}.issubset(approved_types):
+            raise ConflictException(f"Cannot recover Phase 6 job: missing approved gates (approved: {approved_types})")
+
+        now = utc_now()
+        if job.orchestration_owner and job.orchestration_lease_expires_at:
+            if _normalize_dt(job.orchestration_lease_expires_at) > now:
+                raise ConflictException(f"Job is actively leased to worker {job.orchestration_owner}")
+
+        if job.budget_limit_usd and job.budget_used_usd and job.budget_used_usd >= job.budget_limit_usd:
+            raise ConflictException("Cannot recover job: budget exhausted")
+
+        from app.services.repository_workspace_service import repository_workspace_service
+        ws_valid = await repository_workspace_service.validate_workspace(job.job_id)
+        if not ws_valid.is_ready:
+            raise ConflictException(f"Repository workspace is invalid: {ws_valid.error_message}")
+
+        target_mod = None
+        if target_module_id:
+            target_mod = await db.get(Module, target_module_id)
+            if not target_mod or target_mod.job_id != job.job_id:
+                raise NotFoundException("Module", str(target_module_id))
+            target_mod.status = "PENDING"
+            target_mod.lease_owner = None
+            target_mod.lease_expires_at = None
+            target_mod.lease_generation += 1
+
+        correlation_id = str(uuid.uuid4())
+        checkpoint_state = {
+            "action": "RECOVER_PHASE6",
+            "rationale": rationale,
+            "target_module_id": str(target_module_id) if target_module_id else None,
+            "previous_status": job.status,
+            "previous_blocking_reason": job.blocking_reason,
+            "status": "CONVERTING",
+            "active_node": "supervisor",
+        }
+        checkpoint = await self.checkpointer.save(
+            db,
+            job,
+            kind="RECOVERY",
+            node_name="supervisor",
+            state=checkpoint_state,
+            correlation_id=correlation_id,
+        )
+
+        job.status = "CONVERTING"
+        job.active_node = "supervisor"
+        job.blocking_reason = None
+        job.last_transition = "RECOVERED"
+        job.orchestration_owner = None
+        job.orchestration_lease_expires_at = None
+        job.orchestration_generation += 1
+
+        db.add(AuditEvent(
+            job_id=job.job_id,
+            event_type="JOB_RECOVERED",
+            actor_type="SYSTEM",
+            actor_id=actor_id,
+            target_resource=str(job.job_id),
+            payload={
+                "rationale": rationale,
+                "target_module_id": str(target_module_id) if target_module_id else None,
+                "checkpoint_sequence": checkpoint.sequence,
+            },
+        ))
+        await db.commit()
+        return {
+            "job_id": str(job.job_id),
+            "status": job.status,
+            "target_module": target_mod.name if target_mod else None,
+            "checkpoint_sequence": checkpoint.sequence,
+        }
 
 supervisor_service = SupervisorService()
 

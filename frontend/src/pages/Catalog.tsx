@@ -85,7 +85,7 @@ export const Catalog: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
             <div>
               <div style={{ fontSize: '11px', fontWeight: 650, color: 'var(--muted-foreground)', marginBottom: '8px' }}>
-                Legacy Java Spring Boot:
+                Legacy Pattern Reference:
               </div>
               <div className="code-panel" style={{ height: '300px' }}>
                 {selectedPattern.legacy}
@@ -94,7 +94,7 @@ export const Catalog: React.FC = () => {
 
             <div>
               <div style={{ fontSize: '11px', fontWeight: 650, color: 'var(--primary)', marginBottom: '8px' }}>
-                Target TypeScript NestJS Equivalent:
+                Target Modern Architecture Equivalent:
               </div>
               <div className="code-panel" style={{ height: '300px', backgroundColor: 'var(--accent)' }}>
                 {selectedPattern.target}

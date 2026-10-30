@@ -44,7 +44,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <div>
           <h1>Modernization Command Center</h1>
           <p className="subtitle">
-            Autonomous Java → TypeScript vertical slice execution with non-bypassable quality gates.
+            Autonomous multi-agent modernization execution with non-bypassable quality gates.
           </p>
         </div>
         <div className="heading-actions">
@@ -63,7 +63,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <div>
           <h2>Autonomous Migration Pipeline Ready</h2>
           <p>
-            V1 Target Stack locked to <strong>TypeScript 5.x / Node.js 22 / NestJS</strong> with PostgreSQL and Jest characterization harnesses. 11 specialist agents active in sandboxed execution.
+            Autonomous multi-agent migration with golden characterization harnesses, isolated container sandboxes, and immutable cryptographic audit trails.
           </p>
           <a
             href="#/jobs/new"
@@ -79,7 +79,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <div className="pipeline-art">
           <svg viewBox="0 0 280 90" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="10" y="35" width="40" height="20" rx="4" fill="currentColor" fillOpacity="0.15" stroke="currentColor" strokeWidth="1.5" />
-            <text x="30" y="49" fill="currentColor" fontSize="8" fontWeight="bold" textAnchor="middle">JAVA</text>
+            <text x="30" y="49" fill="currentColor" fontSize="7" fontWeight="bold" textAnchor="middle">LEGACY</text>
             
             <line x1="50" y1="45" x2="80" y2="45" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 3" />
             <circle cx="95" cy="45" r="14" fill="currentColor" fillOpacity="0.2" stroke="currentColor" strokeWidth="1.5" />
@@ -189,7 +189,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <td colSpan={6} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--muted-foreground)' }}>
                     <div style={{ marginBottom: '8px', fontSize: '14px', fontWeight: 600 }}>No Modernization Jobs Found</div>
                     <div style={{ fontSize: '12px', marginBottom: '14px' }}>
-                      Start your first Java service modernization project to begin autonomous multi-agent migration.
+                      Start your first codebase modernization project to begin autonomous multi-agent migration.
                     </div>
                     <button
                       className="button button-primary button-sm"
@@ -260,6 +260,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {selectedGate && (
         <GateReviewModal
           gate={selectedGate}
+          job={jobs.find((j) => j.job_id === selectedGate.job_id)}
           onClose={() => setSelectedGate(null)}
           onSubmit={async (decision, rationale, waivers, options) => {
             await onGateDecision(selectedGate.gate_id, decision, rationale, waivers, options);

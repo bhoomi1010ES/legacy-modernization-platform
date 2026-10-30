@@ -1,0 +1,566 @@
+{
+  "test_user_cannot_view_approvals_returns_403": {
+    "expected": "FORBIDDEN",
+    "side_effects": null
+  },
+  "test_manager_can_list_pending_approvals": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_approve_expense_success": {
+    "expected": "APPROVED",
+    "side_effects": null
+  },
+  "test_reject_with_reason_success": {
+    "expected": "Exceeds policy limit.",
+    "side_effects": null
+  },
+  "test_approvals_unauthenticated_returns_401": {
+    "expected": 401,
+    "side_effects": null
+  },
+  "test_register_is_disabled": {
+    "expected": "FORBIDDEN",
+    "side_effects": null
+  },
+  "test_register_short_password_returns_422": {
+    "expected": 422,
+    "side_effects": null
+  },
+  "test_register_invalid_email_returns_422": {
+    "expected": 422,
+    "side_effects": null
+  },
+  "test_login_success_returns_tokens": {
+    "expected": "bearer",
+    "side_effects": null
+  },
+  "test_login_invalid_password_returns_401": {
+    "expected": "INVALID_CREDENTIALS",
+    "side_effects": null
+  },
+  "test_login_unknown_user_returns_401": {
+    "expected": "INVALID_CREDENTIALS",
+    "side_effects": null
+  },
+  "test_refresh_valid_token": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_refresh_invalid_token_returns_401": {
+    "expected": "INVALID_TOKEN",
+    "side_effects": null
+  },
+  "test_logout_success": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_get_me_with_valid_token": {
+    "expected": "jake_me",
+    "side_effects": null
+  },
+  "test_get_me_no_token_returns_401": {
+    "expected": 401,
+    "side_effects": null
+  },
+  "test_validate_invalid_invitation_token_returns_404": {
+    "expected": "INVITATION_NOT_FOUND",
+    "side_effects": null
+  },
+  "test_complete_registration_invalid_token_returns_404": {
+    "expected": 404,
+    "side_effects": null
+  },
+  "test_create_budget_success": {
+    "expected": "0.00",
+    "side_effects": null
+  },
+  "test_budget_exceeded_returns_400": {
+    "expected": "BUDGET_EXCEEDED",
+    "side_effects": null
+  },
+  "test_budget_does_not_block_when_no_budget_exists": {
+    "expected": 201,
+    "side_effects": null
+  },
+  "test_update_budget_recalculates_remaining": {
+    "expected": "4000.00",
+    "side_effects": null
+  },
+  "test_admin_can_create_budget_for_any_user": {
+    "expected": "2500.00",
+    "side_effects": null
+  },
+  "test_user_can_request_budget_increase": {
+    "expected": "2000.00",
+    "side_effects": null
+  },
+  "test_budgets_unauthenticated_returns_401": {
+    "expected": 401,
+    "side_effects": null
+  },
+  "test_create_category_success": {
+    "expected": "Groceries",
+    "side_effects": null
+  },
+  "test_list_categories_returns_active_only": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_get_category_by_id_success": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_get_category_not_found_returns_404": {
+    "expected": "NOT_FOUND",
+    "side_effects": null
+  },
+  "test_update_category_success": {
+    "expected": "NewName",
+    "side_effects": null
+  },
+  "test_delete_category_soft_deletes": {
+    "expected": 404,
+    "side_effects": null
+  },
+  "test_categories_unauthenticated_returns_401": {
+    "expected": 401,
+    "side_effects": null
+  },
+  "test_create_expense_success": {
+    "expected": "500.00",
+    "side_effects": null
+  },
+  "test_create_expense_invalid_amount_returns_422": {
+    "expected": 422,
+    "side_effects": null
+  },
+  "test_create_expense_no_token_returns_401": {
+    "expected": 401,
+    "side_effects": null
+  },
+  "test_create_expense_amount_exceeds_5000_pending_approval": {
+    "expected": "PENDING_APPROVAL",
+    "side_effects": null
+  },
+  "test_create_expense_amount_exactly_5000_is_completed": {
+    "expected": "COMPLETED",
+    "side_effects": null
+  },
+  "test_list_expenses_user_sees_only_own": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_get_expense_not_found_returns_404": {
+    "expected": "NOT_FOUND",
+    "side_effects": null
+  },
+  "test_delete_expense_owner_success": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_expenses_unauthenticated_returns_401": {
+    "expected": 401,
+    "side_effects": null
+  },
+  "test_admin_can_create_invitation": {
+    "expected": "newmember@test.com",
+    "side_effects": null
+  },
+  "test_non_admin_cannot_create_invitation": {
+    "expected": "FORBIDDEN",
+    "side_effects": null
+  },
+  "test_unauthenticated_cannot_create_invitation": {
+    "expected": 401,
+    "side_effects": null
+  },
+  "test_validate_valid_invitation": {
+    "expected": "valid_invitee",
+    "side_effects": null
+  },
+  "test_validate_nonexistent_invitation_returns_404": {
+    "expected": "INVITATION_NOT_FOUND",
+    "side_effects": null
+  },
+  "test_validate_expired_invitation_returns_400": {
+    "expected": "INVITATION_EXPIRED",
+    "side_effects": null
+  },
+  "test_complete_registration_success": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_complete_registration_used_token_returns_400": {
+    "expected": "INVITATION_ALREADY_USED",
+    "side_effects": null
+  },
+  "test_complete_registration_taken_username_returns_conflict": {
+    "expected": "USER_ALREADY_EXISTS",
+    "side_effects": null
+  },
+  "test_get_profile": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_update_profile_username": {
+    "expected": "updated_test_user",
+    "side_effects": null
+  },
+  "test_update_profile_full_name": {
+    "expected": "Test User Full",
+    "side_effects": null
+  },
+  "test_profile_unauthenticated_returns_401": {
+    "expected": 401,
+    "side_effects": null
+  },
+  "test_login_history_visible_to_owner": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_login_history_unauthenticated_returns_401": {
+    "expected": 401,
+    "side_effects": null
+  },
+  "test_create_recurring_schedule": {
+    "expected": "MONTHLY",
+    "side_effects": null
+  },
+  "test_create_duplicate_recurring_returns_409": {
+    "expected": "DUPLICATE_RECURRING",
+    "side_effects": null
+  },
+  "test_create_recurring_invalid_dates_returns_422": {
+    "expected": 422,
+    "side_effects": null
+  },
+  "test_create_recurring_nonexistent_expense_returns_404": {
+    "expected": "NOT_FOUND",
+    "side_effects": null
+  },
+  "test_get_recurring_by_id": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_list_recurring_schedules": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_enable_disable_recurring": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_delete_recurring_schedule": {
+    "expected": 404,
+    "side_effects": null
+  },
+  "test_process_recurring_requires_admin": {
+    "expected": 403,
+    "side_effects": null
+  },
+  "test_recurring_unauthenticated_returns_401": {
+    "expected": 401,
+    "side_effects": null
+  },
+  "test_reports_user_role_returns_403": {
+    "expected": "FORBIDDEN",
+    "side_effects": null
+  },
+  "test_reports_unauthenticated_returns_401": {
+    "expected": 401,
+    "side_effects": null
+  },
+  "test_get_reports_manager_success": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_reports_no_data_returns_zeros": {
+    "expected": [],
+    "side_effects": null
+  },
+  "test_export_csv_user_returns_403": {
+    "expected": 403,
+    "side_effects": null
+  },
+  "test_export_csv_returns_streaming_response": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_token_response_round_trip": {
+    "expected": "bearer",
+    "side_effects": null
+  },
+  "test_approval_action_rejected_round_trip": {
+    "expected": "Over budget policy.",
+    "side_effects": null
+  },
+  "test_approval_action_rejected_without_reason_raises": {
+    "expected": null,
+    "side_effects": null
+  },
+  "test_error_response_schema_invariant": {
+    "expected": "NOT_FOUND",
+    "side_effects": null
+  },
+  "test_paginated_response_round_trip": {
+    "expected": 3,
+    "side_effects": null
+  },
+  "test_admin_list_users": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_admin_get_user_by_id": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_admin_update_user": {
+    "expected": 200,
+    "side_effects": null
+  },
+  "test_user_cannot_access_users_returns_403": {
+    "expected": "FORBIDDEN",
+    "side_effects": null
+  },
+  "test_manager_cannot_access_users_returns_403": {
+    "expected": 403,
+    "side_effects": null
+  },
+  "test_unauthenticated_users_returns_401": {
+    "expected": 401,
+    "side_effects": null
+  },
+  "test_engine": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_GET__health": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_GET__example": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_GET__expenses": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_GET__approvals": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_POST__budgets": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_POST__invitations": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_GET__invitations": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_PUT___approval_id": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_GET__invitation__token": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_POST__complete_registration": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_POST__login": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_POST__refresh": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_POST__logout": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_GET__me": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_POST__requests": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_POST__requests__request_id__review": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_GET___budget_id": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_PUT___budget_id": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_GET___category_id": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_PUT___category_id": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_DELETE___category_id": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_GET___expense_id": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_PUT___expense_id": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_DELETE___expense_id": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_GET___rec_id": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_PUT___rec_id": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_DELETE___rec_id": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_PATCH___rec_id__enable": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_PATCH___rec_id__disable": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_POST__process": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_GET__export": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_GET__profile": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_PUT__profile": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_GET__login_history": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_GET___user_id": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_PUT___user_id": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_DELETE___user_id": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_run_migrations_offline": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_do_run_migrations": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_run_migrations_online": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_configure_logging": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_hash_password": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_verify_password": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_create_access_token": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_create_refresh_token": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_decode_token": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_Budget_is_low_budget": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_Budget_warning_message": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_generate_csv_stream": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_compute_next_run_date": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_get_offset": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_paginate": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_ApprovalActionRequest_validate_rejection_reason": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_ExpenseCreate_validate_recurring_frequency": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_RecurringExpenseCreate_validate_dates": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_upgrade": {
+    "expected": null,
+    "side_effects": null
+  },
+  "char_downgrade": {
+    "expected": null,
+    "side_effects": null
+  }
+}

@@ -187,23 +187,16 @@ async def capture(
                     discovered.append(path)
                 if path.lower().endswith(".sql") or "migration" in path.lower():
                     schema_files.append(path)
+        from app.services.repository_workspace_service import repository_workspace_service
+        candidate_ws = repository_workspace_service.get_workspace_path(job.job_id)
+        workspace_dir = candidate_ws if candidate_ws.exists() else None
+
         scenarios_to_run = list(request.scenarios)
         candidate_scenarios = []
         if not scenarios_to_run:
             from pathlib import Path
             from app.services.scenario_discovery_service import scenario_discovery_service
             from app.schemas.phase4 import LegacyModel, RepositoryInventory
-
-            workspace_dir = None
-            base_dir = Path(__file__).resolve().parent.parent.parent
-            for p in (
-                base_dir.parent / "repo_workspaces" / f"job_{job.job_id}",
-                base_dir / "repo_workspaces" / f"job_{job.job_id}",
-                base_dir / "repo_workspaces" / f"job_{job.job_id}_git",
-            ):
-                if p.exists():
-                    workspace_dir = p
-                    break
 
             typed_legacy = None
             if legacy:
@@ -246,7 +239,10 @@ async def capture(
         cases = []
         available = bool(scenarios_to_run)
         for scenario in scenarios_to_run:
-            observation = await replay(scenario)
+            try:
+                observation = await replay(scenario, workspace_path=workspace_dir, job=job)
+            except TypeError:
+                observation = await replay(scenario)
             available = available and observation["available"]
             actual = observation.get("output")
             expected = (
@@ -266,7 +262,10 @@ async def capture(
                     else "FAILED"
                 )
                 # Second independent execution proves golden capture is replayable, including side effects.
-                second = await replay(scenario)
+                try:
+                    second = await replay(scenario, workspace_path=workspace_dir, job=job)
+                except TypeError:
+                    second = await replay(scenario)
                 second_obs = second
                 if not second["available"]:
                     available, outcome, reason = (
@@ -585,8 +584,10 @@ async def report(
         return {
             **payload,
             "schema_status": plan.get("status", "REVIEW_REQUIRED"),
-            "schema_validation_status": await validation_status(
-                db, job_id, schema.content_hash
+            "schema_validation_status": (
+                "NOT_APPLICABLE"
+                if plan.get("status") == "NOT_APPLICABLE"
+                else await validation_status(db, job_id, schema.content_hash)
             ),
             "suite_id": str(artifact.artifact_id),
             "content_hash": artifact.content_hash,

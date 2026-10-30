@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { GateDetail, DecisionOutcome, GateVerificationGuide, Job } from '../types/domain';
 import type { ConversionPlan, FeasibilityReport } from '../types/phase4';
+import type { CharacterizationReport } from '../types/phase5';
+import { api } from '../services/api';
 import { GateDetailExplanationView } from './GateDetailExplanationView';
 import {
   ShieldCheck,
@@ -22,6 +24,7 @@ interface GateReviewModalProps {
   job?: Job | null;
   feasibilityReport?: FeasibilityReport | null;
   conversionPlan?: ConversionPlan | null;
+  characterizationReport?: CharacterizationReport | null;
   onClose: () => void;
   onSubmit: (
     decision: DecisionOutcome,
@@ -36,24 +39,24 @@ const FALLBACK_VERIFICATION_GUIDES: Record<string, GateVerificationGuide> = {
     producing_agent: 'IntakeAgent & LegacyAnalyzerCoordinator',
     producing_agent_role: 'Legacy Repository Intake & AST Analyzer',
     work_summary:
-      'Completed secure repository intake into an air-gapped rootless sandbox. Parsed the full legacy AST, extracted entities, HTTP route handlers, and dependency trees. Evaluated modern target compatibility against TypeScript / NestJS (Node.js 22 LTS) and generated an actionable capability gap matrix.',
+      'Completed secure repository intake into an air-gapped rootless sandbox. Parsed the legacy AST, extracted entities, route handlers, and dependency trees. Evaluated compatibility against the target blueprint and generated an actionable capability gap matrix.',
     key_deliverables: [
       'Repository Inventory & AST Model',
       'Legacy Entity & Route Graph',
-      'Target TypeScript / NestJS Blueprint',
+      'Target Architecture Blueprint',
       'Feasibility Scorecard & Gap Analysis',
     ],
     metrics: [
-      { label: 'Capabilities Analyzed', value: '67 items', subtext: '100% evaluated', badge: 'ANALYZED' },
+      { label: 'Capabilities Analyzed', value: 'Evaluated', subtext: '100% assessed', badge: 'ANALYZED' },
       { label: 'Feasibility Score', value: '100%', subtext: 'Zero critical blockers', badge: 'FEASIBLE' },
-      { label: 'Target Runtime', value: 'Node.js 22 LTS', subtext: 'TypeScript 5.x / NestJS' },
+      { label: 'Target Runtime', value: 'Target Framework', subtext: 'Idiomatic patterns' },
       { label: 'Critical Blockers', value: '0 detected', subtext: 'Clean transition', badge: 'CLEAN' },
     ],
     checklist: [
       {
         id: 'g1_chk_1',
         title: 'Target Framework Parity',
-        description: 'Verify that all detected legacy patterns (controllers, services, ORM entities) have direct equivalents in TypeScript / NestJS.',
+        description: 'Verify that all detected legacy patterns (controllers, services, ORM entities) have direct equivalents in the target stack.',
       },
       {
         id: 'g1_chk_2',
@@ -83,12 +86,12 @@ const FALLBACK_VERIFICATION_GUIDES: Record<string, GateVerificationGuide> = {
       'Deployed legacy application inside an isolated rootless container sandbox. Executed synthetic traffic and recorded golden HTTP request/response payloads, headers, status codes, and database state transitions to establish an immutable behavioral baseline.',
     key_deliverables: [
       'Frozen Characterization Test Suite',
-      '42 Golden Fixture Vectors',
+      'Golden Fixture Vectors',
       'Zero-Tolerance Baseline Lock',
       'Database State Snapshot Fixtures',
     ],
     metrics: [
-      { label: 'Test Vectors', value: '42 frozen tests', subtext: 'Golden fixtures', badge: 'FROZEN' },
+      { label: 'Test Vectors', value: 'Recorded', subtext: 'Golden fixtures', badge: 'FROZEN' },
       { label: 'Route Coverage', value: '100%', subtext: 'Legacy API surface', badge: 'COVERED' },
       { label: 'Baseline Lock', value: 'SHA-256', subtext: 'Cryptographic baseline' },
       { label: 'Side Effect Invariants', value: 'Captured', subtext: 'DB & HTTP contracts' },
@@ -124,18 +127,18 @@ const FALLBACK_VERIFICATION_GUIDES: Record<string, GateVerificationGuide> = {
     producing_agent: 'PlannerCoordinator & ModulePlanner',
     producing_agent_role: 'Architectural Decomposition & Dependency Wave Planner',
     work_summary:
-      'Decomposed the legacy monolith into 14 decoupled modular components. Formulated 42 granular conversion tasks with explicit acceptance criteria and test contracts. Constructed a topological Directed Acyclic Graph (DAG) and scheduled 3 sequential conversion waves.',
+      'Decomposed the legacy codebase into decoupled modular components. Formulated granular conversion tasks with explicit acceptance criteria and test contracts. Constructed a topological Directed Acyclic Graph (DAG) and scheduled sequential conversion waves.',
     key_deliverables: [
       'Modular Conversion Plan',
-      'Topological Wave DAG (3 Waves)',
-      '42 Task Acceptance Specifications',
+      'Topological Wave DAG',
+      'Task Acceptance Specifications',
       'Zero-Cycle Dependency Matrix',
     ],
     metrics: [
-      { label: 'Planned Modules', value: '14 modules', subtext: 'Decoupled domain packages', badge: 'MODULAR' },
-      { label: 'Atomic Tasks', value: '42 tasks', subtext: 'With test contracts', badge: 'SPECIFIED' },
-      { label: 'Execution Waves', value: '3 waves', subtext: 'Topologically ordered' },
-      { label: 'Estimated Effort', value: '98.0 hours', subtext: 'Within budget ceiling' },
+      { label: 'Planned Modules', value: 'Decomposed', subtext: 'Domain packages', badge: 'MODULAR' },
+      { label: 'Atomic Tasks', value: 'Specified', subtext: 'With test contracts', badge: 'SPECIFIED' },
+      { label: 'Execution Waves', value: 'Scheduled', subtext: 'Topologically ordered' },
+      { label: 'Estimated Effort', value: 'Budgeted', subtext: 'Within budget ceiling' },
       { label: 'DAG Cycles', value: '0 cycles', subtext: 'Topologically valid', badge: 'CYCLE-FREE' },
     ],
     checklist: [
@@ -147,7 +150,7 @@ const FALLBACK_VERIFICATION_GUIDES: Record<string, GateVerificationGuide> = {
       {
         id: 'g3_chk_2',
         title: 'Task Granularity & Acceptance Criteria',
-        description: 'Ensure each of the 42 tasks specifies clear input contracts, output types, and test assertions.',
+        description: 'Ensure each conversion task specifies clear input contracts, output types, and test assertions.',
       },
       {
         id: 'g3_chk_3',
@@ -157,7 +160,7 @@ const FALLBACK_VERIFICATION_GUIDES: Record<string, GateVerificationGuide> = {
       {
         id: 'g3_chk_4',
         title: 'Effort & Budget Limits',
-        description: 'Confirm the 98-hour conversion scope and projected token consumption fit within the allocated job budget.',
+        description: 'Confirm the conversion scope and projected token consumption fit within the allocated job budget.',
       },
     ],
     next_agent: 'CodeWriter Specialist Agents',
@@ -169,18 +172,18 @@ const FALLBACK_VERIFICATION_GUIDES: Record<string, GateVerificationGuide> = {
     producing_agent: 'VerifierAgent & DualHarnessExecutor',
     producing_agent_role: 'Dual-Harness Replay & Parity Verification Specialist',
     work_summary:
-      'Compiled converted TypeScript/NestJS codebase in rootless gVisor sandbox. Executed dual-harness replay comparing legacy vs modern outputs against identical test fixtures with zero unintended regressions detected.',
+      'Compiled converted codebase in rootless gVisor sandbox. Executed dual-harness replay comparing legacy vs modern outputs against identical test fixtures with zero unintended regressions detected.',
     key_deliverables: [
       'Dual-Harness Equivalence Report',
-      'Intended Difference Catalog (4 Waivers)',
-      '100% Strict Type Audit',
+      'Intended Difference Catalog',
+      'Strict Type & Contract Audit',
       'Cryptographic Parity Proof',
     ],
     metrics: [
-      { label: 'Dual Replay Pass', value: '100%', subtext: 'All fixtures identical', badge: 'PASSED' },
+      { label: 'Dual Replay Pass', value: 'Verified', subtext: 'All fixtures identical', badge: 'PASSED' },
       { label: 'Unintended Regressions', value: '0', subtext: 'Zero regression drift', badge: 'ZERO DRIFT' },
-      { label: 'Approved Intentional Diffs', value: '4 waivers', subtext: 'ISO-8601 timestamps' },
-      { label: 'Type Safety', value: '100% strict', subtext: 'Zero linter warnings' },
+      { label: 'Approved Intentional Diffs', value: 'Documented', subtext: 'Audited waivers' },
+      { label: 'Type Safety', value: 'Strict', subtext: 'Zero linter warnings' },
     ],
     checklist: [
       {
@@ -216,9 +219,54 @@ export const GateReviewModal: React.FC<GateReviewModalProps> = ({
   job,
   feasibilityReport,
   conversionPlan,
+  characterizationReport: propCharReport,
   onClose,
   onSubmit,
 }) => {
+  const [charReport, setCharReport] = useState<CharacterizationReport | null>(propCharReport || null);
+
+  useEffect(() => {
+    if (propCharReport) {
+      setCharReport(propCharReport);
+    } else if (gate.gate_type === 'G2' && gate.job_id) {
+      api.getCharacterizationReport(gate.job_id)
+        .then(setCharReport)
+        .catch(() => {});
+    }
+  }, [gate.gate_type, gate.job_id, propCharReport]);
+
+  const g2Blockers: string[] = [];
+  if (gate.gate_type === 'G2') {
+    if (charReport) {
+      if (charReport.schema_status === 'REVIEW_REQUIRED') {
+        g2Blockers.push('Schema migration plan requires manual review before G2 approval.');
+      }
+      if (charReport.schema_status !== 'NOT_APPLICABLE' && charReport.schema_validation_status && charReport.schema_validation_status !== 'PASS') {
+        g2Blockers.push('Schema plan must be validated with disposable sample data before G2 approval.');
+      }
+      const nonPassing = (charReport.cases || []).filter(c => c.outcome !== 'PASSED');
+      if (nonPassing.length > 0) {
+        const unavail = nonPassing.filter(c => c.outcome === 'UNAVAILABLE').length;
+        const failed = nonPassing.filter(c => c.outcome === 'FAILED').length;
+        g2Blockers.push(`${nonPassing.length} scenario(s) not passing (${unavail} UNAVAILABLE, ${failed} FAILED; all must be PASSED).`);
+      }
+      if (charReport.g2_readiness?.blocking_reasons?.length) {
+        g2Blockers.push(...charReport.g2_readiness.blocking_reasons);
+      }
+    } else {
+      g2Blockers.push('Loading characterization suite evidence...');
+    }
+  }
+  const [activeJob, setActiveJob] = useState<Job | null>(job || null);
+
+  useEffect(() => {
+    if (job) {
+      setActiveJob(job);
+    } else if (gate.job_id) {
+      api.getJob(gate.job_id).then(setActiveJob).catch(() => {});
+    }
+  }, [job, gate.job_id]);
+
   const [rationale, setRationale] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -356,9 +404,10 @@ export const GateReviewModal: React.FC<GateReviewModalProps> = ({
             gateType={gate.gate_type}
             gateTitle={gate.title}
             gate={gate}
-            job={job}
+            job={activeJob}
             feasibilityReport={feasibilityReport}
             conversionPlan={conversionPlan}
+            characterizationReport={charReport}
           />
         </div>
 
@@ -567,7 +616,7 @@ export const GateReviewModal: React.FC<GateReviewModalProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <CheckCircle2 size={16} color="var(--success)" />
               <span style={{ fontSize: '12px', color: 'var(--foreground)' }}>
-                Decision Recorded: <strong style={{ color: gate.status === 'APPROVED' ? 'var(--success)' : 'var(--destructive)' }}>{gate.status}</strong> by <strong>{gate.reviewer || 'Alex Morgan (Lead Architect)'}</strong>
+                Decision Recorded: <strong style={{ color: gate.status === 'APPROVED' ? 'var(--success)' : 'var(--destructive)' }}>{gate.status}</strong> by <strong>{gate.reviewer || 'Recorded Reviewer'}</strong>
                 {gate.rationale ? ` · "${gate.rationale}"` : ''}
               </span>
             </div>
@@ -594,8 +643,21 @@ export const GateReviewModal: React.FC<GateReviewModalProps> = ({
                 onChange={(e) => setRationale(e.target.value)}
                 placeholder="Document technical review findings, architecture rationale, or reason for rejection..."
               />
-              <small>Signed with your corporate identity Alex Morgan (Lead Architect).</small>
+              <small>Signed with your corporate identity {activeJob?.owner || 'Authorized Lead Reviewer'}.</small>
             </div>
+
+            {gate.gate_type === 'G2' && g2Blockers.length > 0 && (
+              <div role="alert" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--destructive)', borderRadius: '6px', padding: '12px', marginBottom: '16px' }}>
+                <strong style={{ color: 'var(--destructive)', display: 'block', fontSize: '12px', marginBottom: '4px' }}>
+                  G2 Approval Blocked (Unmet Invariant Prerequisites):
+                </strong>
+                <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '11px', color: 'var(--foreground)' }}>
+                  {g2Blockers.map((b, idx) => (
+                    <li key={idx} style={{ marginBottom: '2px' }}>{b}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {error && (
               <div style={{ color: 'var(--destructive)', fontSize: '11px', marginBottom: '16px' }}>
@@ -614,7 +676,12 @@ export const GateReviewModal: React.FC<GateReviewModalProps> = ({
               <button className="button button-secondary" onClick={() => handleDecision('NEEDS_CHANGES')} disabled={loading}>
                 Request Changes
               </button>
-              <button className="button button-primary" onClick={() => handleDecision('APPROVED')} disabled={loading}>
+              <button
+                className="button button-primary"
+                onClick={() => handleDecision('APPROVED')}
+                disabled={loading || (gate.gate_type === 'G2' && g2Blockers.length > 0)}
+                title={gate.gate_type === 'G2' && g2Blockers.length > 0 ? g2Blockers[0] : undefined}
+              >
                 <CheckCircle2 size={14} />
                 {loading ? 'Submitting...' : 'Approve Gate & Continue'}
               </button>

@@ -25,7 +25,7 @@ interface AgentExecutionProps {
   selectedFileItem?: FileInventoryItem | null;
   fileStatuses?: Record<string, FileAnalysisStatus>;
   activeAnalyzingFile?: string | null;
-  onOpenGateReview?: (gateType: 'G1' | 'G2' | 'G3') => void;
+  onOpenGateReview?: (gateType: 'G1' | 'G2' | 'G3' | 'G4') => void;
   onRetryAgent?: (agentId: string) => void;
   onRunIntake?: () => void;
   intakeRunning?: boolean;
@@ -66,6 +66,8 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
   const isAwaitingG2 = job?.status === 'AWAITING_GATE_G2';
   const isAwaitingG3 = job?.status === 'AWAITING_GATE_G3';
   const isConverting = job?.status === 'CONVERTING' || job?.status === 'VERIFYING';
+  const isIntegrating = job?.status === 'INTEGRATING';
+  const isAwaitingG4 = job?.status === 'AWAITING_GATE_G4';
   const isCompleted = job?.status === 'COMPLETED';
   const isFailed = job?.status === 'FAILED';
 
@@ -172,16 +174,34 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
       ? 'COMPLETED'
       : 'PENDING';
 
-    // Stage 8: Planner Coordinator
+    // Stage 8: Characterizer Agent (Phase 5)
+    const characterizerStatus = isCharacterizing
+      ? 'RUNNING'
+      : (isAwaitingG2 || isPlanning || isAwaitingG3 || isConverting || isCompleted)
+      ? 'COMPLETED'
+      : isFailed
+      ? 'FAILED'
+      : g1Status === 'COMPLETED'
+      ? 'RUNNING'
+      : 'PENDING';
+
+    // Stage 9: G2 Human Review
+    const g2Status = isAwaitingG2
+      ? 'ACTION_REQUIRED'
+      : (isPlanning || isAwaitingG3 || isConverting || isCompleted)
+      ? 'COMPLETED'
+      : 'PENDING';
+
+    // Stage 10: Planner Coordinator (Phase 4)
     const plannerStatus = isFailed
       ? 'FAILED'
-      : isPlanning || isCharacterizing
+      : isPlanning
       ? 'RUNNING'
       : (isConverting || isAwaitingG3 || isCompleted)
       ? 'COMPLETED'
       : 'PENDING';
 
-    // Stage 9: Parallel Planners
+    // Stage 11: Parallel Planners
     const parallelPlannersStatus =
       plannerStatus === 'COMPLETED'
         ? 'COMPLETED'
@@ -191,7 +211,7 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
         ? 'FAILED'
         : 'PENDING';
 
-    // Stage 10: Plan Aggregator
+    // Stage 12: Plan Aggregator
     const aggregatorStatus =
       parallelPlannersStatus === 'COMPLETED'
         ? 'COMPLETED'
@@ -201,7 +221,7 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
         ? 'FAILED'
         : 'PENDING';
 
-    // Stage 11: DAG Validation
+    // Stage 13: DAG Validation
     const dagValidationStatus =
       aggregatorStatus === 'COMPLETED'
         ? 'COMPLETED'
@@ -211,13 +231,38 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
         ? 'FAILED'
         : 'PENDING';
 
-    // Stage 12: G3 Ready
+    // Stage 14: G3 Ready
     const g3Status = isAwaitingG3
       ? 'ACTION_REQUIRED'
-      : isConverting || isCompleted
+      : isConverting || isIntegrating || isAwaitingG4 || isCompleted
       ? 'COMPLETED'
       : isFailed
       ? 'FAILED'
+      : 'PENDING';
+
+    // Stage 15: CodeWriter Specialist (Phase 6)
+    const codeWriterStatus = isConverting
+      ? 'RUNNING'
+      : (isIntegrating || isAwaitingG4 || isCompleted)
+      ? 'COMPLETED'
+      : isFailed && (job?.workflow_phase === 'PHASE_6' || job?.workflow_phase === 'CONVERTING')
+      ? 'FAILED'
+      : 'PENDING';
+
+    // Stage 16: Integrator & Parity Verification (Phase 7)
+    const integratorStatus = isIntegrating
+      ? 'RUNNING'
+      : (isAwaitingG4 || isCompleted)
+      ? 'COMPLETED'
+      : isFailed && (job?.workflow_phase === 'PHASE_7' || job?.workflow_phase === 'INTEGRATING')
+      ? 'FAILED'
+      : 'PENDING';
+
+    // Stage 17: G4 Release Sign-Off
+    const g4Status = isAwaitingG4
+      ? 'ACTION_REQUIRED'
+      : isCompleted
+      ? 'COMPLETED'
       : 'PENDING';
 
     return [
@@ -227,7 +272,7 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
         phaseNumber: 1,
         status: intakeStatus,
         shortDescription: 'Validates source repository, acquires snapshot, and generates SHA-256 inventory.',
-        elapsedTime: '1.2s',
+        
         resultSummary: [
           `Repository verified against ${job?.source_repository || 'remote origin'}`,
           `Branch/commit: ${shortSha}`,
@@ -247,11 +292,11 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
           : undefined,
         currentFile: activeAnalyzingFile || selectedFile || undefined,
         fileLines: 'L30–60',
-        elapsedTime: '4.8s',
+        
         workers: specializedWorkers,
         resultSummary: [
           'All specialized worker passes finished with verified confidence',
-          '37 legacy modules cataloged with AST-backed boundary isolation',
+          `${job?.modules ? `${job.modules} legacy modules` : 'All project components'} cataloged with AST-backed boundary isolation`,
           'Dependency graph constructed with 0 unresolvable circular cycles',
         ],
       },
@@ -310,15 +355,33 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
         onActionRequired: () => onOpenGateReview && onOpenGateReview('G1'),
       },
       {
+        id: 'characterizer-agent',
+        name: 'Characterizer Agent',
+        phaseNumber: 8,
+        status: characterizerStatus,
+        shortDescription: 'Executes behavioral replay against legacy endpoints to generate frozen characterization test suite.',
+        currentActivity: isCharacterizing
+          ? 'CharacterizerAgent: Recording golden behavioral test vectors and state transitions in container sandbox'
+          : undefined,
+      },
+      {
+        id: 'gate-g2',
+        name: 'G2 Human Review',
+        phaseNumber: 9,
+        status: g2Status,
+        isGate: true,
+        gateType: 'G2',
+        shortDescription: 'Human approval required: Verify frozen characterization baseline and disposable schema plan.',
+        onActionRequired: () => onOpenGateReview && onOpenGateReview('G2'),
+      },
+      {
         id: 'planner-coordinator',
         name: 'Planner Coordinator',
-        phaseNumber: 8,
+        phaseNumber: 10,
         status: plannerStatus,
         shortDescription: 'Orchestrates conversion task decomposition across parallel planners.',
         currentActivity: isFailed
           ? (job?.blocking_reason || 'Agent encountered an unrecoverable failure')
-          : isCharacterizing
-          ? 'CharacterizerAgent: Recording golden HTTP test vectors and state transitions in container sandbox'
           : plannerStatus === 'RUNNING'
           ? 'Decomposing conversion tasks into parallel planner batches'
           : undefined,
@@ -326,33 +389,67 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
       {
         id: 'parallel-planners',
         name: 'Parallel Planners',
-        phaseNumber: 9,
+        phaseNumber: 11,
         status: parallelPlannersStatus,
         shortDescription: 'Specialized planners generating module conversion tasks and test harnesses.',
       },
       {
         id: 'plan-aggregator',
         name: 'Plan Aggregator',
-        phaseNumber: 10,
+        phaseNumber: 12,
         status: aggregatorStatus,
         shortDescription: 'Aggregates individual module conversion plans into unified migration roadmap.',
       },
       {
         id: 'dag-validation',
         name: 'DAG Validation',
-        phaseNumber: 11,
+        phaseNumber: 13,
         status: dagValidationStatus,
         shortDescription: 'Validates acyclic dependency graph and wave execution order.',
       },
       {
         id: 'gate-g3',
         name: 'G3 Ready',
-        phaseNumber: 12,
+        phaseNumber: 14,
         status: g3Status,
         isGate: true,
         gateType: 'G3',
         shortDescription: 'Conversion Plan & DAG Ready: Human review of execution waves and cost projections.',
         onActionRequired: () => onOpenGateReview && onOpenGateReview('G3'),
+      },
+      {
+        id: 'codewriter-specialist',
+        name: 'CodeWriter & Modular Execution',
+        phaseNumber: 15,
+        status: codeWriterStatus,
+        shortDescription: 'Autonomous parallel workers generating target framework modules with sandbox verifications.',
+        resultSummary: [
+          'All modular packages converted and independently verified in isolated worktrees',
+          'Asset loaders, components, and style layers generated with zero regression errors',
+          'Code reviewer AST and forbidden pattern static validation passed',
+        ],
+      },
+      {
+        id: 'integrator-specialist',
+        name: 'Integrator & Full-System Parity',
+        phaseNumber: 16,
+        status: integratorStatus,
+        shortDescription: 'Merges verified module branches into an integrated candidate with cryptographic SBOM and parity checks.',
+        resultSummary: [
+          'Verified module branches merged cleanly with zero git conflicts',
+          'Cryptographic Software Bill of Materials (SBOM) cataloged via Syft',
+          'Full-system verification suite executed and validated across all characterization vectors',
+        ],
+      },
+      {
+        id: 'gate-g4',
+        name: 'G4 Release Sign-Off',
+        phaseNumber: 17,
+        status: g4Status,
+        isGate: true,
+        gateType: 'G4',
+        shortDescription: 'Final Release Sign-Off: Human review of integrated candidate, SBOM, and deployment authorization.',
+        onActionRequired: () => onOpenGateReview && onOpenGateReview('G4'),
       },
     ];
   }, [
@@ -360,6 +457,8 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
     isAwaitingG1,
     isAwaitingG3,
     isConverting,
+    isIntegrating,
+    isAwaitingG4,
     isCompleted,
     isFailed,
     activeAnalyzingFile,
@@ -381,7 +480,7 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
     );
   }, [pipelineStages]);
 
-  const progressPercent = Math.round((completedPhasesCount / 12) * 100);
+  const progressPercent = Math.round((completedPhasesCount / Math.max(pipelineStages.length, 1)) * 100);
 
   return (
     <div
@@ -413,7 +512,7 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
               <h2 style={{ fontSize: '18px', fontWeight: 750, letterSpacing: '-0.3px', margin: 0 }}>
                 Agent Execution
               </h2>
-              {isAwaitingG1 || isAwaitingG3 ? (
+              {isAwaitingG1 || isAwaitingG2 || isAwaitingG3 || isAwaitingG4 ? (
                 <span className="badge orange" style={{ fontSize: '10px', fontWeight: 700 }}>
                   ● Awaiting Gate Decision
                 </span>
@@ -434,7 +533,7 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--muted-foreground)', marginTop: '4px' }}>
               <span style={{ fontWeight: 600, color: 'var(--foreground)' }}>
-                Job #{job?.job_id ? job.job_id.substring(0, 8) : 'JOB-0248'}
+                Job #{job?.job_id ? job.job_id.substring(0, 8) : 'ACTIVE'}
               </span>
               <span>·</span>
               <span style={{ fontWeight: 600 }}>{job?.name || repoName}</span>
@@ -462,7 +561,7 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
                 Phase Progress
               </div>
               <div style={{ fontSize: '14px', fontWeight: 750, color: 'var(--primary, #0284c7)' }}>
-                Phase 4 · {completedPhasesCount} / 12
+                {job?.workflow_phase ? job.workflow_phase.replace('PHASE_', 'Phase ').replace('_', ' ') : 'Phase 4'} · {completedPhasesCount} / {pipelineStages.length}
               </div>
             </div>
           </div>

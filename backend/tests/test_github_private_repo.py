@@ -76,6 +76,21 @@ def test_public_repo_no_credential_helper_created():
         adapter.cleanup_workspace("test_public")
 
 
+def test_public_repo_disables_host_git_credentials_and_configuration():
+    """Public staging cannot inherit stale workstation credentials."""
+    adapter = ControlledGitAdapter(allow_local_repos_for_test=True)
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
+
+        adapter._execute_git(["version"])
+
+    command = mock_run.call_args.args[0]
+    environment = mock_run.call_args.kwargs["env"]
+    assert "credential.helper=" in command
+    assert environment["GIT_CONFIG_GLOBAL"] == os.devnull
+    assert environment["GIT_CONFIG_NOSYSTEM"] == "1"
+
+
 # ==============================================================================
 # 2. CREDENTIAL HELPER ISOLATION AND HOST RESTRICTION
 # ==============================================================================
@@ -359,6 +374,9 @@ def test_job_intake_route_with_pinned_commit(client: TestClient):
     )
     assert intake_resp.status_code == 200
     intake_data = intake_resp.json()
-    assert intake_data["status"] == "INTAKE"
+    # Successful repository staging is immediately handed to the Analyzer by
+    # the authoritative supervisor; intake must not leave an executable job
+    # pointing at an unvalidated workspace.
+    assert intake_data["status"] == "ANALYZING"
     assert "git_token" not in intake_data
     assert intake_pat not in str(intake_data)

@@ -8,6 +8,7 @@ FROM scratch
 COPY --from=runtime /phase6-runtime/ /
 COPY offline-tools/ /usr/local/lib/python3.12/site-packages/
 COPY adapter.py /adapter.py
+COPY scenarios.json /scenarios.json
 COPY legacy_adapter.py /legacy_adapter.py
 COPY legacy_calc.py /legacy/calc.py
 COPY test_calc.py /acceptance/test_calc.py
@@ -18,3 +19,5 @@ ENV PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
 USER 65534:65534
 WORKDIR /work
 CMD ["python"]
+
+

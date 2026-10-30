@@ -347,7 +347,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({ jobs: propJobs, in
   }, [files, selectedFile]);
 
   // Handle Gate Review modal opening
-  const handleOpenGateReview = (gateType: 'G1' | 'G2' | 'G3') => {
+  const handleOpenGateReview = (gateType: 'G1' | 'G2' | 'G3' | 'G4') => {
     const matchingGate =
       gates.find((g) => g.job_id === selectedJobId && g.gate_type === gateType && g.status === 'PENDING') ||
       gates.find((g) => g.job_id === selectedJobId && g.status === 'PENDING') ||

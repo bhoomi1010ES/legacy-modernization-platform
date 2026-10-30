@@ -494,7 +494,11 @@ class PlannerCoordinator:
                 ))
 
             from app.models.module import Module
-            wave_by_module = {mid: wave.wave_number for wave in conversion_plan.waves for mid in wave.module_ids}
+            wave_by_module = {}
+            for wave in conversion_plan.waves:
+                for mid in wave.module_ids:
+                    if mid not in wave_by_module:
+                        wave_by_module[mid] = wave.wave_number
             for unit in conversion_plan.modules:
                 m_uuid = uuid.uuid5(job.job_id, unit.module_id)
                 existing_m = await db.get(Module, m_uuid)

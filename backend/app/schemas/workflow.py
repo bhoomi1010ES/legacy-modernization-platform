@@ -148,6 +148,18 @@ class PhaseProgress(BaseModel):
     status: Literal["PENDING", "RUNNING", "BLOCKED", "SUCCEEDED", "FAILED", "CANCELLED"]
 
 
+class WorkspaceProgress(BaseModel):
+    status: Literal["RECEIVED", "UNAVAILABLE", "RECOVERING", "RECOVERY_FAILED", "READY"]
+    received: bool
+    staged: bool
+    validated: bool
+    ready: bool
+    workspace_name: Optional[str] = None
+    commit_sha: Optional[str] = None
+    error_code: Optional[str] = None
+    message: Optional[str] = None
+
+
 class WorkflowStateResponse(BaseModel):
     job_id: str
     workflow_id: str
@@ -162,6 +174,7 @@ class WorkflowStateResponse(BaseModel):
     budget_warning: bool
     allowed_actions: list[Literal["cancel", "pause", "resume"]]
     phases: list[PhaseProgress]
+    workspace: WorkspaceProgress
     active_task_ids: list[str] = Field(default_factory=list)
     completed_task_ids: list[str] = Field(default_factory=list)
     blocked_task_ids: list[str] = Field(default_factory=list)

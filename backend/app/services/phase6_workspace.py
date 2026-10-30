@@ -5,6 +5,7 @@ import os
 import re
 from pathlib import Path, PurePosixPath
 from app.core.errors import ConflictException
+from app.services.repository_workspace_service import repository_workspace_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -103,8 +104,10 @@ async def git(repository: Path, *args: str) -> str:
             GIT_COMMITTER_NAME="Rebase",
             GIT_COMMITTER_EMAIL="rebase@example.invalid",
         )
-        process = await asyncio.create_subprocess_exec(
+        cmd = [
             "git",
+            "-c",
+            "safe.directory=*",
             "-c",
             f"core.hooksPath={os.devnull}",
             "-c",
@@ -118,21 +121,20 @@ async def git(repository: Path, *args: str) -> str:
             "-C",
             str(repository),
             *args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
+        ]
+        from app.core.subprocesses import run_subprocess_async
+
         try:
-            output, error = await asyncio.wait_for(process.communicate(), timeout=30)
+            res = await run_subprocess_async(cmd, env=env, timeout=30.0)
         except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
             raise ConflictException("Git workspace operation timed out")
-        if process.returncode:
+        if res.returncode:
+            err_msg = res.stderr.decode("utf-8", errors="replace").strip() if res.stderr else ""
+            logger.error("Git workspace operation failed with rc %s: %s", res.returncode, err_msg)
             raise ConflictException(
-                "Git workspace operation failed; ensure a pinned, staged Git repository is available"
+                f"Git workspace operation failed: {err_msg or 'ensure a pinned, staged Git repository is available'}"
             )
-        return output.decode("utf-8", errors="replace").strip()
+        return res.stdout.decode("utf-8", errors="replace").strip()
     except Exception:
         logger.exception("phase6.git failed")
         raise
@@ -140,20 +142,19 @@ async def git(repository: Path, *args: str) -> str:
 
 def repository_for(job_id: str) -> Path:
     try:
-        backend = Path(__file__).resolve().parents[2]
-        roots = [backend / "repo_workspaces", backend.parent / "repo_workspaces"]
-        for root in roots:
-            for suffix in ("", "_git"):
-                candidate = root / f"job_{job_id}{suffix}"
-                if (
-                    candidate.is_dir()
-                    and (candidate / ".git").is_dir()
-                    and not (candidate / ".git").is_symlink()
-                    and not candidate.is_symlink()
-                    and not getattr(candidate, "is_junction", lambda: False)()
-                ):
-                    return candidate.resolve()
-        raise ConflictException(
+        from app.core.errors import WorkspaceNotFoundException
+
+        authoritative = repository_workspace_service.get_workspace_path(job_id)
+        if (
+            authoritative.is_dir()
+            and (authoritative / ".git").exists()
+            and (authoritative / ".rebase_workspace.json").is_file()
+            and not (authoritative / ".git").is_symlink()
+            and not authoritative.is_symlink()
+            and not getattr(authoritative, "is_junction", lambda: False)()
+        ):
+            return authoritative.resolve()
+        raise WorkspaceNotFoundException(
             "Staged Git repository unavailable; conversion is blocked"
         )
     except Exception:
@@ -177,11 +178,30 @@ async def prepare(
         path = ROOT / attempt_id
         path.parent.mkdir(parents=True, exist_ok=True)
         branch = f"job/{job_id}/module/{module_id}/attempt/{number}"
+        try:
+            wt_list = await git(repository, "worktree", "list", "--porcelain")
+            current_wt_dir = None
+            for wt_line in wt_list.splitlines():
+                if wt_line.startswith("worktree "):
+                    current_wt_dir = wt_line.split(" ", 1)[1].strip()
+                elif wt_line.startswith("branch "):
+                    b_ref = wt_line.split(" ", 1)[1].strip()
+                    if b_ref == f"refs/heads/{branch}" and current_wt_dir and current_wt_dir != str(path):
+                        try:
+                            await git(repository, "worktree", "remove", "--force", current_wt_dir)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
         if path.exists():
-            raise ConflictException(
-                "Attempt workspace already exists; old attempts cannot be overwritten"
-            )
-        await git(repository, "worktree", "add", "-b", branch, str(path), commit)
+            try:
+                await git(repository, "worktree", "remove", "--force", str(path))
+            except Exception:
+                pass
+            import shutil
+            shutil.rmtree(path, ignore_errors=True)
+        await git(repository, "worktree", "prune")
+        await git(repository, "worktree", "add", "-B", branch, str(path), commit)
         return path, branch
     except Exception:
         logger.exception("phase6.prepare failed | attempt_id=%s", attempt_id)
@@ -211,7 +231,15 @@ async def apply_changes(
             targets[name] = safe_target(worktree, name, matches[0])
         for relative, path in targets.items():
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(files[relative], encoding="utf-8", newline="\n")
+            content = files[relative]
+            if isinstance(content, str) and ";base64," in content and content.startswith("data:"):
+                import base64
+                b64_str = content.split(";base64,", 1)[1]
+                path.write_bytes(base64.b64decode(b64_str))
+            else:
+                if isinstance(content, str) and "\x00" in content:
+                    content = content.replace("\x00", "")
+                path.write_text(content, encoding="utf-8", newline="\n")
         await git(worktree, "add", "--", *targets)
         diff = await git(worktree, "diff", "--cached", "--no-ext-diff", "--no-textconv")
         await git(
@@ -252,8 +280,16 @@ async def file_snapshot(worktree: Path) -> dict[str, str]:
             size += path.stat().st_size
             if size > 8 * 1048576:
                 raise ValueError("Verification workspace exceeds 8 MiB adapter limit")
-            data = path.read_text(encoding="utf-8")
-            if get_secret_redactor().redact_text(data) != data:
+            try:
+                data = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                import hashlib
+                raw_bytes = path.read_bytes()
+                digest = hashlib.sha256(raw_bytes).hexdigest()
+                data = f"[binary asset: {len(raw_bytes)} bytes, sha256:{digest}]"
+            redactor = get_secret_redactor()
+            check_fn = getattr(redactor, "has_secret_material", lambda t: redactor.redact_text(t) != t)
+            if check_fn(data):
                 raise ValueError("Secret material found in verification workspace")
             files[name] = data
         return files

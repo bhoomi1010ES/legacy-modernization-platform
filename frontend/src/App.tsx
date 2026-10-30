@@ -198,6 +198,7 @@ export const App: React.FC = () => {
       return (
         <ApprovalGates
           gates={gates}
+          jobs={jobs}
           onRefreshGates={async () => {
             const all = await loadGatesForJobs(jobs);
             setGates(all);
@@ -220,7 +221,7 @@ export const App: React.FC = () => {
       return <ModuleExecution jobs={jobs} />;
     }
     if (currentPath === '/verification') {
-      return <Verification onNavigate={navigate} />;
+      return <Verification jobs={jobs} onNavigate={navigate} />;
     }
     if (currentPath === '/reports') {
       return <Reports jobs={jobs} />;
@@ -252,12 +253,16 @@ export const App: React.FC = () => {
     );
   };
 
+  const activeJobId = typeof localStorage !== 'undefined' ? localStorage.getItem('rebase_active_job_id') : null;
+  const activeJob = jobs.find((j) => j.job_id === activeJobId) || jobs[0] || null;
+
   return (
     <Layout
       currentPath={currentPath}
       onNavigate={navigate}
       user={user}
       pendingGatesCount={pendingGatesCount}
+      activeJob={activeJob}
       onLogout={handleLogout}
     >
       {renderContent()}

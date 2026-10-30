@@ -13,6 +13,7 @@ from app.core.errors import ForbiddenException, NotFoundException
 from app.domain.state_machine import RBACPolicy
 from app.models.audit import AuditEvent
 from app.models.job import Job, JobMembership
+from app.models.phase4 import RepositorySnapshotModel
 from app.models.user import User
 from app.models.workflow import WorkflowGate
 from app.schemas.gates import GateDecisionRequest, GateType
@@ -25,6 +26,7 @@ from app.schemas.workflow import (
     WorkflowGateResponse,
     WorkflowNode,
     WorkflowStateResponse,
+    WorkspaceProgress,
 )
 from app.services.gate_service import gate_service
 from app.services.supervisor_service import PHASE_NODE, STATUS_NODE, supervisor_service
@@ -129,6 +131,58 @@ async def get_workflow(
             allowed.append("pause")
         if RBACPolicy.has_permission(effective_role, "job:cancel"):
             allowed.append("cancel")
+    repository_snapshot = await db.scalar(
+        select(RepositorySnapshotModel)
+        .where(RepositorySnapshotModel.job_id == job.job_id)
+        .order_by(RepositorySnapshotModel.version.desc())
+        .limit(1)
+    )
+    latest_workspace_event = await db.scalar(
+        select(AuditEvent)
+        .where(
+            AuditEvent.job_id == job.job_id,
+            AuditEvent.event_type.like("WORKSPACE_%"),
+        )
+        .order_by(AuditEvent.created_at.desc())
+        .limit(1)
+    )
+    from app.services.repository_workspace_service import repository_workspace_service
+
+    workspace_validation = await repository_workspace_service.validate_workspace(
+        job.job_id,
+        expected_commit=repository_snapshot.commit_sha if repository_snapshot else None,
+        expected_source=job.source_repository,
+    )
+    workspace_status = "READY" if workspace_validation.is_ready else "UNAVAILABLE"
+    if workspace_validation.is_ready:
+        # Filesystem/Git/identity validation is current evidence. A historical
+        # recovery-started audit must not make a restored workspace look stuck.
+        workspace_status = "READY"
+    elif not job.source_repository:
+        workspace_status = "UNAVAILABLE"
+    elif latest_workspace_event and latest_workspace_event.event_type == "WORKSPACE_RECOVERY_STARTED":
+        workspace_status = "RECOVERING"
+    elif latest_workspace_event and latest_workspace_event.event_type == "WORKSPACE_RECOVERY_FAILED":
+        workspace_status = "RECOVERY_FAILED"
+    elif not workspace_validation.is_ready and repository_snapshot is None:
+        workspace_status = "RECEIVED"
+    workspace_progress = WorkspaceProgress(
+        status=workspace_status,
+        received=bool(job.source_repository),
+        staged=workspace_validation.path is not None and workspace_validation.path.exists(),
+        validated=workspace_validation.is_ready,
+        ready=workspace_validation.is_ready,
+        workspace_name=(
+            workspace_validation.path.name if workspace_validation.path is not None else None
+        ),
+        commit_sha=workspace_validation.commit_sha,
+        error_code=workspace_validation.error_code,
+        message=(
+            "Repository workspace restored and ready."
+            if workspace_validation.is_ready
+            else workspace_validation.error_message
+        ),
+    )
     return WorkflowStateResponse(
         job_id=str(job.job_id), workflow_id=str(job.workflow_id or job.job_id),
         current_phase=current_phase, status=JobStatus(job.status), active_node=current,
@@ -136,7 +190,7 @@ async def get_workflow(
         workflow_version=job.workflow_version, budget_used=float(job.budget_used_usd),
         budget_limit=float(job.budget_limit_usd),
         budget_warning=float(job.budget_limit_usd) > 0 and float(job.budget_used_usd) / float(job.budget_limit_usd) >= 0.8,
-        allowed_actions=allowed, phases=phases,
+        allowed_actions=allowed, phases=phases, workspace=workspace_progress,
         active_task_ids=snapshot.get("active_task_ids", []),
         completed_task_ids=snapshot.get("completed_task_ids", []),
         blocked_task_ids=snapshot.get("blocked_task_ids", []),

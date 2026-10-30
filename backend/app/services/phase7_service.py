@@ -249,6 +249,7 @@ async def queue_integration(db, job, key: str, actor: str) -> AgentRun:
             if (
                 run.task_payload.get("phase") == 7
                 and run.task_payload.get("request_key") == key
+                and (run.status in ("QUEUED", "RUNNING") or (run.output_payload or {}).get("status") == "READY_FOR_REVIEW")
             ):
                 return run
         if any(run.status in ("QUEUED", "RUNNING") for run in runs):
@@ -313,7 +314,14 @@ async def execute_integration(db, run_id) -> dict:
             raise ConflictException("Queued integration inputs changed")
         run.status = "RUNNING"
         await db.commit()
-        repo = workspace.repository_for(str(job.job_id))
+        from app.services.repository_workspace_service import repository_workspace_service
+
+        repo = await repository_workspace_service.ensure_workspace(
+            db,
+            job,
+            expected_commit=bindings[0]["source_commit"],
+            correlation_id=run.correlation_id,
+        )
         merged = await engine.merge_verified(
             repo,
             str(job.job_id),

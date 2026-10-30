@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import type { GateDetail } from '../types/domain';
+import type { GateDetail, Job } from '../types/domain';
 import { StatusBadge } from '../components/StatusBadge';
 import { GateReviewModal } from '../components/GateReviewModal';
 import {
@@ -9,6 +9,7 @@ import {
 
 interface ApprovalGatesProps {
   gates: GateDetail[];
+  jobs?: Job[];
   onRefreshGates: () => Promise<void> | void;
   onGateDecision: (gateId: string, decision: any, rationale: string, waivers?: any[], options?: Record<string, string>) => Promise<void>;
   onNavigate: (path: string) => void;
@@ -18,7 +19,7 @@ type Filter = 'ALL' | 'PENDING' | 'APPROVED' | 'CHANGES';
 
 const hashPreview = (gate: GateDetail) => gate.artifact_hash || Object.values(gate.artifact_hashes || {})[0] || 'No artifact hash';
 
-export const ApprovalGates: React.FC<ApprovalGatesProps> = ({ gates, onRefreshGates, onGateDecision, onNavigate }) => {
+export const ApprovalGates: React.FC<ApprovalGatesProps> = ({ gates, jobs, onRefreshGates, onGateDecision, onNavigate }) => {
   const [filter, setFilter] = useState<Filter>('PENDING');
   const [selectedGate, setSelectedGate] = useState<GateDetail | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -99,6 +100,17 @@ export const ApprovalGates: React.FC<ApprovalGatesProps> = ({ gates, onRefreshGa
         </article>;
       })}</div>}
 
-    {selectedGate && <GateReviewModal gate={selectedGate} onClose={() => setSelectedGate(null)} onSubmit={async (decision, rationale, waivers, options) => { await onGateDecision(selectedGate.gate_id, decision, rationale, waivers, options); setSelectedGate(null); await refresh(); }} />}
+    {selectedGate && (
+      <GateReviewModal
+        gate={selectedGate}
+        job={jobs?.find((j) => j.job_id === selectedGate.job_id)}
+        onClose={() => setSelectedGate(null)}
+        onSubmit={async (decision, rationale, waivers, options) => {
+          await onGateDecision(selectedGate.gate_id, decision, rationale, waivers, options);
+          setSelectedGate(null);
+          await refresh();
+        }}
+      />
+    )}
   </div>;
 };

@@ -203,8 +203,9 @@ class JobService:
             correlation_id=correlation_id,
         )
 
-    def acquire_intake_workspace(
+    async def acquire_intake_workspace(
         self,
+        db: AsyncSession,
         job_id: str,
         repo_url: str,
         revision: str = "main",
@@ -216,40 +217,21 @@ class JobService:
         user_id: Optional[str] = None,
         is_admin: bool = False,
     ) -> Tuple[Path, str]:
-        """Acquires approved repository snapshot into permanent job workspace for actual job intake.
+        """Compatibility facade for the authoritative workspace service.
 
-        For Git sources: clones via ControlledGitAdapter, enforcing pinned_commit.
-        For Local sources: promotes staged preview snapshot, verifying snapshot_fingerprint.
+        IntakeAgent is the normal caller. Keeping this facade prevents older
+        command handlers from reintroducing an independent clone/path policy.
         """
-        is_local = (
-            (source_type == "local")
-            or (repo_url and repo_url.startswith("local://"))
-            or (repo_url and Path(repo_url).is_absolute())
-        )
-        if is_local:
-            from app.services.local_source_adapter import LocalSourceAdapter
-            adapter = LocalSourceAdapter()
-            if preview_snapshot_id:
-                return adapter.promote_staging_to_workspace(
-                    snapshot_id=preview_snapshot_id,
-                    job_id=str(job_id),
-                    user_id=str(user_id or ""),
-                    expected_fingerprint=snapshot_fingerprint,
-                    is_admin=is_admin,
-                )
-            else:
-                clean_path = repo_url.removeprefix("local://")
-                return adapter.materialize_local_path(
-                    local_dir=Path(clean_path),
-                    job_id=str(job_id),
-                    expected_fingerprint=snapshot_fingerprint,
-                )
+        from app.services.repository_workspace_service import repository_workspace_service
 
-        return self.git_adapter.clone_repository(
-            job_id=str(job_id),
-            repo_url=repo_url,
+        return await repository_workspace_service.stage_repository(
+            db,
+            job_id,
+            source=repo_url,
             revision=revision,
             pinned_commit=pinned_commit,
-            access_token=git_token,
+            git_token=git_token,
+            preview_snapshot_id=preview_snapshot_id,
+            snapshot_fingerprint=snapshot_fingerprint,
         )
 

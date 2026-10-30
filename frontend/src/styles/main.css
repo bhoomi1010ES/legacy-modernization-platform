@@ -1420,6 +1420,13 @@ input[type="number"] {
 .workflow-blocker strong, .workflow-blocker span { display: block; font-size: 11px; }
 .workflow-blocker span { margin-top: 2px; color: var(--foreground); }
 .workflow-budget { display: grid; grid-template-columns: auto minmax(180px, 1fr); gap: 14px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+.workspace-lifecycle { display: grid; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--background); }
+.workspace-lifecycle > div, .workspace-lifecycle p { display: flex; align-items: center; gap: 7px; font-size: 10px; }
+.workspace-lifecycle > div span { margin-left: auto; color: var(--muted-foreground); font-size: 9px; font-weight: 700; }
+.workspace-lifecycle ol { display: flex; flex-wrap: wrap; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.workspace-lifecycle li { padding: 4px 7px; border: 1px solid var(--border); border-radius: var(--radius-full); color: var(--muted-foreground); font-size: 9px; }
+.workspace-lifecycle li.done { border-color: color-mix(in oklch, var(--success) 35%, var(--border)); background: var(--success-surface); color: var(--success); }
+.workspace-lifecycle p, .workspace-lifecycle small { color: var(--warning); }
 .workflow-budget > div:first-child { display: flex; align-items: center; gap: 7px; font-size: 10px; }
 .workflow-budget em { color: var(--warning); font-size: 9px; font-style: normal; font-weight: 700; }
 .workflow-budget-track { height: 6px; border-radius: var(--radius-full); background: var(--muted); overflow: hidden; }

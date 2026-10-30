@@ -223,7 +223,7 @@ describe('Multi-Agent Execution Workspace (Redesigned Code Workspace)', () => {
 
     // Panel 3: Agent Execution
     expect(markup).toContain('Agent Execution');
-    expect(markup).toContain('Phase 4 Multi-Agent Pipeline');
+    expect(markup).toContain('Multi-Agent Pipeline Progression');
     expect(markup).toContain('Analysis Coordinator');
     expect(markup).toContain('Structure Worker');
 

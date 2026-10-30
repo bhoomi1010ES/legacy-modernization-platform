@@ -36,6 +36,7 @@ from app.services.feasibility_agent import feasibility_agent
 from app.services.g3_service import g3_service
 from app.services.intake_agent import intake_agent
 from app.services.planner_coordinator import planner_coordinator
+from app.services.repository_workspace_service import repository_workspace_service
 from app.services.supervisor_service import supervisor_service
 
 logger = logging.getLogger(__name__)
@@ -116,16 +117,13 @@ class Phase4PipelineOrchestrator:
                 content_hash=snap_record.content_hash,
             )
 
-            # Reconstruct workspace path
-            backend_dir = Path(__file__).resolve().parent.parent.parent
-            workspace_candidates = (
-                backend_dir.parent / "repo_workspaces" / f"job_{job_id_str}",
-                backend_dir / "repo_workspaces" / f"job_{job_id_str}",
-                backend_dir / "repo_workspaces" / f"job_{job_id_str}_git",
+            # Authoritative workspace resolution & validation for Stage 2 (Analyzer)
+            workspace_path = await repository_workspace_service.ensure_workspace(
+                db,
+                job,
+                expected_commit=snap_record.commit_sha if hasattr(snap_record, "commit_sha") else None,
+                correlation_id=correlation_id,
             )
-            workspace_path = next((path for path in workspace_candidates if path.exists()), workspace_candidates[0])
-            if not workspace_path.exists() and job.source_repository and Path(job.source_repository).exists():
-                workspace_path = Path(job.source_repository)
 
             # Build inventory
             inventory, _, _ = intake_agent.build_deterministic_inventory(workspace_path, job_id_str)

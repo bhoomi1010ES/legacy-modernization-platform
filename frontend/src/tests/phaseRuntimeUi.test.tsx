@@ -23,6 +23,11 @@ const workflow: WorkflowState = {
   blocking_reason: 'Human decision required for G2.', checkpoint_sequence: 8,
   workflow_version: 1, budget_used: 42, budget_limit: 100, budget_warning: false,
   allowed_actions: ['pause', 'cancel'], updated_at: '2026-10-22T11:00:00Z',
+  workspace: {
+    status: 'READY', received: true, staged: true, validated: true, ready: true,
+    workspace_name: 'job_1d12db40', commit_sha: 'abc123',
+    message: 'Repository workspace restored and ready.',
+  },
   phases: [
     { node: 'analysis', label: 'Feasibility analysis', status: 'SUCCEEDED' },
     { node: 'gate_g2', label: 'G2 characterization freeze', status: 'BLOCKED' },
@@ -55,6 +60,24 @@ describe('Phase 2 and Phase 3 operational UI', () => {
     expect(markup).toContain('Sequence 8');
     expect(markup).toContain('Human decision required for G2.');
     expect(markup).toContain('G2 characterization freeze');
+    expect(markup).toContain('Repository workspace');
+    expect(markup).toContain('Workspace validated');
+    expect(markup).toContain('Repository workspace restored and ready.');
+  });
+
+  it('shows recoverable workspace loss as recovery rather than a generic agent failure', () => {
+    const recovering = {
+      ...workflow,
+      workspace: {
+        ...workflow.workspace!, status: 'RECOVERING' as const,
+        ready: false, validated: false,
+        message: 'Workspace unavailable; restoring the pinned repository snapshot.',
+      },
+    };
+    const markup = renderToStaticMarkup(<WorkflowProgress workflow={recovering} events={[]} />);
+    expect(markup).toContain('Recovering repository workspace');
+    expect(markup).toContain('Workspace unavailable; restoring the pinned repository snapshot.');
+    expect(markup).not.toContain('Agent Failed');
   });
 
   it('renders a version-bound gate with an authorized review action', () => {

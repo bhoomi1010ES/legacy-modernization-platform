@@ -353,6 +353,26 @@ class SupervisorRouter:
     def __init__(self):
         pass
 
+    async def _is_gate_rejected_for_evidence(
+        self, db: AsyncSession, job_id: UUID, gate_type: str, artifacts: List[Artifact]
+    ) -> tuple[bool, str]:
+        """Checks if the most recent gate was rejected and evidence has not changed."""
+        latest_gate = (
+            await db.execute(
+                select(WorkflowGate)
+                .where(WorkflowGate.job_id == job_id, WorkflowGate.gate_type == gate_type)
+                .order_by(WorkflowGate.version.desc())
+            )
+        ).scalars().first()
+        if not latest_gate or latest_gate.status != "REJECTED":
+            return False, ""
+
+        gate_hashes = latest_gate.artifact_hashes or {}
+        current_hashes = {a.content_hash for a in artifacts}
+        if gate_hashes and all(h in current_hashes for h in gate_hashes.values()):
+            return True, f"Gate {gate_type} was rejected by human reviewer. A gate stays closed until its evidence changes."
+        return False, ""
+
     async def evaluate_next_action(
         self,
         db: AsyncSession,
@@ -511,6 +531,14 @@ class SupervisorRouter:
                 )
             else:
                 # All three Phase 1 artifacts present -> Open Gate G1
+                rej, rej_msg = await self._is_gate_rejected_for_evidence(db, job.job_id, "G1", artifacts)
+                if rej:
+                    return SupervisorDecision(
+                        action=SupervisorAction.WAIT,
+                        reason=rej_msg,
+                        target_status=JobStatus.ANALYZING.value,
+                        gate_state={"gate_type": "G1", "status": "REJECTED", "stale": True},
+                    )
                 return SupervisorDecision(
                     action=SupervisorAction.ADVANCE_GATE,
                     agent_id="AnalyzerCoordinator",
@@ -546,6 +574,14 @@ class SupervisorRouter:
                 )
             else:
                 # Both baseline characterization and schema migration plan exist -> Open Gate G2
+                rej, rej_msg = await self._is_gate_rejected_for_evidence(db, job.job_id, "G2", artifacts)
+                if rej:
+                    return SupervisorDecision(
+                        action=SupervisorAction.WAIT,
+                        reason=rej_msg,
+                        target_status=JobStatus.CHARACTERIZING.value,
+                        gate_state={"gate_type": "G2", "status": "REJECTED", "stale": True},
+                    )
                 return SupervisorDecision(
                     action=SupervisorAction.ADVANCE_GATE,
                     agent_id="CharacterizerAgent",
@@ -575,6 +611,14 @@ class SupervisorRouter:
                     dependency_state={"inputs": ["TARGET_BLUEPRINT", "CHARACTERIZATION_SUITE", "SCHEMA_MIGRATION_PLAN"], "ready": True},
                 )
             else:
+                rej, rej_msg = await self._is_gate_rejected_for_evidence(db, job.job_id, "G3", artifacts)
+                if rej:
+                    return SupervisorDecision(
+                        action=SupervisorAction.WAIT,
+                        reason=rej_msg,
+                        target_status=JobStatus.PLANNING.value,
+                        gate_state={"gate_type": "G3", "status": "REJECTED", "stale": True},
+                    )
                 return SupervisorDecision(
                     action=SupervisorAction.ADVANCE_GATE,
                     agent_id="PlannerCoordinator",

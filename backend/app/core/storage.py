@@ -80,13 +80,30 @@ class LocalStorageAdapter(StorageAdapter):
     async def get_object(self, key: str) -> bytes:
         path = self._resolve_safe_path(key)
         if not path.is_file():
+            clean_key = key.replace("\\", "/").lstrip("/")
+            candidates = [
+                Path.cwd() / "artifacts" / clean_key,
+                Path.cwd().parent / "artifacts" / clean_key,
+                Path.cwd() / "backend" / "artifacts" / clean_key,
+            ]
+            for cand in candidates:
+                if cand.is_file():
+                    return cand.read_bytes()
             raise StorageNotFoundException(key)
         data = path.read_bytes()
         return data
 
     async def object_exists(self, key: str) -> bool:
         path = self._resolve_safe_path(key)
-        return path.is_file()
+        if path.is_file():
+            return True
+        clean_key = key.replace("\\", "/").lstrip("/")
+        candidates = [
+            Path.cwd() / "artifacts" / clean_key,
+            Path.cwd().parent / "artifacts" / clean_key,
+            Path.cwd() / "backend" / "artifacts" / clean_key,
+        ]
+        return any(cand.is_file() for cand in candidates)
 
     async def delete_object(self, key: str) -> bool:
         path = self._resolve_safe_path(key)

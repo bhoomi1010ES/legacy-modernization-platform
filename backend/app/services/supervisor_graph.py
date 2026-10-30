@@ -236,6 +236,17 @@ async def node_execute_agent(state: SupervisorLoopState) -> dict:
             if agent_name in ("CodeWriter", "CODE_WRITER"):
                 from app.models.module import Module
                 from app.services.code_writer import code_writer_service
+                from app.services.repository_workspace_service import repository_workspace_service
+                try:
+                    await repository_workspace_service.ensure_workspace(db, job, correlation_id=corr_id)
+                except Exception as ws_err:
+                    job.blocking_reason = f"Workspace unavailable: {ws_err}"
+                    await db.commit()
+                    return {
+                        "execution_verdict": "WAIT",
+                        "blocking_reason": f"Workspace unavailable: {ws_err}",
+                        "events": [{"type": "WORKSPACE_UNAVAILABLE", "error": str(ws_err)}],
+                    }
 
                 # Extract module ID from task_id e.g. "convert-<uuid>"
                 task_id = state.get("selected_task_id", "")
@@ -313,6 +324,17 @@ async def node_execute_agent(state: SupervisorLoopState) -> dict:
 
             elif agent_name in ("AnalyzerCoordinator", "ANALYZER"):
                 from app.services.phase4_orchestrator import phase4_orchestrator
+                from app.services.repository_workspace_service import repository_workspace_service
+                try:
+                    await repository_workspace_service.ensure_workspace(db, job, correlation_id=corr_id)
+                except Exception as ws_err:
+                    job.blocking_reason = f"Workspace unavailable: {ws_err}"
+                    await db.commit()
+                    return {
+                        "execution_verdict": "WAIT",
+                        "blocking_reason": f"Workspace unavailable: {ws_err}",
+                        "events": [{"type": "WORKSPACE_UNAVAILABLE", "error": str(ws_err)}],
+                    }
                 await phase4_orchestrator.run_pipeline_stage2_analysis_and_feasibility(db, job, correlation_id=corr_id)
                 return {"execution_verdict": "SUCCESS", "events": [{"type": "ANALYSIS_SUCCESS"}]}
 
