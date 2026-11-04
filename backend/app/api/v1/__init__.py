@@ -15,6 +15,7 @@ from app.api.v1.phase4 import router as phase4_router
 from app.api.v1.phase5 import router as phase5_router
 from app.api.v1.phase6 import router as phase6_router
 from app.api.v1.phase7 import router as phase7_router
+from app.characterization.api.router import router as characterization_router
 
 api_v1_router = APIRouter()
 api_v1_router.include_router(auth_router)
@@ -31,5 +32,6 @@ api_v1_router.include_router(phase4_router)
 api_v1_router.include_router(phase5_router)
 api_v1_router.include_router(phase6_router)
 api_v1_router.include_router(phase7_router)
+api_v1_router.include_router(characterization_router)
 
 __all__ = ["api_v1_router"]

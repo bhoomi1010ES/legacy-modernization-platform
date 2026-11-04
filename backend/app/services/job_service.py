@@ -112,11 +112,11 @@ class JobService:
         )
         db.add(new_job)
 
-        # Grant owner membership with ADMIN role
+        # Grant owner membership with least-privilege DEVELOPER role (SEC-03)
         membership = JobMembership(
             job_id=job_id,
             user_id=user.user_id,
-            role_id="ADMIN",
+            role_id="DEVELOPER",
         )
         db.add(membership)
 
@@ -153,26 +153,19 @@ class JobService:
         status: Optional[str] = None,
     ) -> Tuple[List[Job], int]:
         """Lists authorized jobs with deterministic ordering and pagination."""
-        if user.role == "SUPER_ADMIN":
-            query = select(Job)
-            count_query = select(func.count(Job.job_id))
-            if status:
-                query = query.where(Job.status == status)
-                count_query = count_query.where(Job.status == status)
-        else:
-            query = (
-                select(Job)
-                .join(JobMembership, JobMembership.job_id == Job.job_id)
-                .where(JobMembership.user_id == user.user_id)
-            )
-            count_query = (
-                select(func.count(Job.job_id))
-                .join(JobMembership, JobMembership.job_id == Job.job_id)
-                .where(JobMembership.user_id == user.user_id)
-            )
-            if status:
-                query = query.where(Job.status == status)
-                count_query = count_query.where(Job.status == status)
+        query = (
+            select(Job)
+            .join(JobMembership, JobMembership.job_id == Job.job_id)
+            .where(JobMembership.user_id == user.user_id)
+        )
+        count_query = (
+            select(func.count(Job.job_id))
+            .join(JobMembership, JobMembership.job_id == Job.job_id)
+            .where(JobMembership.user_id == user.user_id)
+        )
+        if status:
+            query = query.where(Job.status == status)
+            count_query = count_query.where(Job.status == status)
 
         query = query.order_by(Job.created_at.desc()).offset(offset).limit(limit)
 

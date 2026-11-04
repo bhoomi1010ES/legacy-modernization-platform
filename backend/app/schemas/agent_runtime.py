@@ -261,6 +261,13 @@ class ModelUsage(BaseModel):
     input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
     cost_usd: float = Field(default=0.0, ge=0.0)
+    reported_input_tokens: Optional[int] = Field(default=None, ge=0)
+    reported_output_tokens: Optional[int] = Field(default=None, ge=0)
+    provider_request_id: Optional[str] = None
+    provider_model_id: Optional[str] = None
+    pricing_table_version: Optional[str] = None
+    estimated_cost: Optional[float] = Field(default=None, ge=0.0)
+    billed_cost: Optional[float] = Field(default=None, ge=0.0)
 
 
 class ModelResponse(BaseModel):

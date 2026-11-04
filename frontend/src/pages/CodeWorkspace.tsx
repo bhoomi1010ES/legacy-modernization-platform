@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import type { Job, WorkflowState, WorkflowEvent, GateDetail } from '../types/domain';
+import type { Job, WorkflowState, WorkflowEvent, GateDetail, AgentRun } from '../types/domain';
 import type { FileInventoryItem, DetectedTechnologyProfile } from '../types/phase4';
 import { api } from '../services/api';
 import { ProjectExplorer } from '../components/workspace/ProjectExplorer';
@@ -42,6 +42,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({ jobs: propJobs, in
   // Execution & Live Event state
   const [workflow, setWorkflow] = useState<WorkflowState | null>(null);
   const [events, setEvents] = useState<WorkflowEvent[]>([]);
+  const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
   const [gates, setGates] = useState<GateDetail[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [activeGateForReview, setActiveGateForReview] = useState<GateDetail | null>(null);
@@ -173,12 +174,13 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({ jobs: propJobs, in
       setError(null);
 
       try {
-        const [jobRes, repoRes, workflowRes, eventsRes, gatesRes] = await Promise.allSettled([
+        const [jobRes, repoRes, workflowRes, eventsRes, gatesRes, agentRunsRes] = await Promise.allSettled([
           api.getJob(selectedJobId),
           api.getRepository(selectedJobId),
           api.getWorkflow(selectedJobId),
           api.getWorkflowEvents(selectedJobId, 100),
           api.getAllGates(selectedJobId),
+          api.getAgents(selectedJobId),
         ]);
 
         if (!mounted) return;
@@ -226,6 +228,9 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({ jobs: propJobs, in
         if (gatesRes.status === 'fulfilled') {
           setGates(gatesRes.value || []);
         }
+        if (agentRunsRes.status === 'fulfilled') {
+          setAgentRuns(agentRunsRes.value || []);
+        }
       } catch (err) {
         if (mounted) {
           setError(err instanceof Error ? err.message : 'Failed to load job repository and execution state.');
@@ -244,15 +249,17 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({ jobs: propJobs, in
 
     pollTimerRef.current = window.setInterval(async () => {
       try {
-        const [updatedEvents, updatedWorkflow, updatedJob] = await Promise.all([
+        const [updatedEvents, updatedWorkflow, updatedJob, updatedAgentRuns] = await Promise.all([
           api.getWorkflowEvents(selectedJobId, 100).catch(() => null),
           api.getWorkflow(selectedJobId).catch(() => null),
           api.getJob(selectedJobId).catch(() => null),
+          api.getAgents(selectedJobId).catch(() => null),
         ]);
 
         if (updatedEvents) setEvents(updatedEvents);
         if (updatedWorkflow) setWorkflow(updatedWorkflow);
         if (updatedJob) setSelectedJob(updatedJob);
+        if (updatedAgentRuns) setAgentRuns(updatedAgentRuns);
 
         // If files are not yet loaded in UI (e.g. intake just finished), poll repository
         if (filesCountRef.current === 0) {
@@ -324,9 +331,10 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({ jobs: propJobs, in
     // If job is in active analysis and no active file was explicitly set,
     // designate the first pending/code file as currently analyzing for live visibility
     if (
-      selectedJob?.status === 'ANALYZING' ||
-      selectedJob?.status === 'CHARACTERIZING' ||
-      selectedJob?.status === 'AWAITING_GATE_G1'
+      workflow?.active_node !== 'escalation' &&
+      (selectedJob?.status === 'ANALYZING' ||
+        selectedJob?.status === 'CHARACTERIZING' ||
+        selectedJob?.status === 'AWAITING_GATE_G1')
     ) {
       const pendingFiles = files.filter(
         (f) => !f.is_documentation && statuses[f.path] === 'PENDING'
@@ -337,8 +345,13 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({ jobs: propJobs, in
       }
     }
 
+    if (workflow?.active_node === 'escalation') {
+      if (activeFile) statuses[activeFile] = 'ERROR';
+      activeFile = null;
+    }
+
     return { fileStatuses: statuses, activeAnalyzingFile: activeFile };
-  }, [files, events, selectedJob]);
+  }, [files, events, selectedJob, workflow]);
 
   // Selected file item metadata
   const selectedFileItem = useMemo(() => {
@@ -453,6 +466,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({ jobs: propJobs, in
           job={selectedJob}
           workflow={workflow}
           events={events}
+          agentRuns={agentRuns}
           selectedFile={selectedFile}
           selectedFileItem={selectedFileItem}
           fileStatuses={fileStatuses}

@@ -100,7 +100,7 @@ GATE_ARTIFACT_TYPES = {
     "G1": {"LEGACYMODEL", "TARGETBLUEPRINT", "FEASIBILITYREPORT"},
     "G2": {"CHARACTERIZATIONSUITE", "SCHEMAMIGRATIONPLAN"},
     "G3": {"CONVERSIONPLAN"},
-    "G4": {"JOBREPORT", "SYSTEMVERIFICATION", "INTEGRATIONREPORT", "SBOM"},
+    "G4": {"JOBREPORT", "SYSTEMVERIFICATION", "INTEGRATIONREPORT", "SBOM", "DELIVERYPACKAGE", "MODERNIZATIONMANIFEST"},
 }
 
 
@@ -945,7 +945,7 @@ class SupervisorService:
                     .where(
                         Artifact.job_id == job.job_id,
                         Artifact.artifact_id.in_(approved_art_ids),
-                        Artifact.artifact_type.in_(["CONVERSION_PLAN", "ConversionPlan"]),
+                        Artifact.artifact_type == "CONVERSION_PLAN",
                     )
                     .order_by(Artifact.version.desc())
                     .limit(1)
@@ -955,7 +955,7 @@ class SupervisorService:
                     select(Artifact)
                     .where(
                         Artifact.job_id == job.job_id,
-                        Artifact.artifact_type.in_(["CONVERSION_PLAN", "ConversionPlan"]),
+                        Artifact.artifact_type == "CONVERSION_PLAN",
                     )
                     .order_by(Artifact.created_at.desc(), Artifact.version.desc())
                     .limit(1)
@@ -1015,7 +1015,7 @@ class SupervisorService:
             await validate_package(db, job, report_hash)
             if job.status not in ("INTEGRATING", "AWAITING_GATE_G4"):
                 raise ConflictException("G4 submission requires an integrated candidate")
-            await self.transition(db, job.job_id, JobStatus.AWAITING_GATE_G4, actor_id=actor, reason="Review exact integrated commit, JobReport, SBOM and uncovered behavior")
+            await self.transition(db, job.job_id, JobStatus.AWAITING_GATE_G4, actor_id=actor, reason="Review exact project ZIP, manifest, JobReport, SBOM and uncovered behavior")
             return await db.scalar(select(WorkflowGate).where(WorkflowGate.job_id == job.job_id, WorkflowGate.gate_type == "G4", WorkflowGate.status == "PENDING").order_by(WorkflowGate.version.desc()).limit(1))
         except Exception:
             import logging
@@ -1090,6 +1090,11 @@ class SupervisorService:
                 if not evidence.get("verification", {}).get("passed") or not evidence.get("verification", {}).get("available") or evidence.get("review", {}).get("status") != "PASS" or evidence.get("baseline_hash") != current["baseline_hash"]:
                     raise ConflictException("Cannot verify a module without independent current execution and review evidence")
             module.status = attempt.status = status
+            if status == "WAITING_FOR_HUMAN":
+                job.blocking_reason = (
+                    "WAITING_FOR_HUMAN: "
+                    + (reason or "Repeated verification failure or repair budget exhausted")
+                )
             module.lease_owner = module.lease_expires_at = module.lease_heartbeat_at = None
             module.retry_count = attempt.attempt_number - 1
             attempt.failure_reason = reason
@@ -1536,7 +1541,12 @@ class SupervisorService:
             heartbeat(), name=f"supervisor-heartbeat-{job_id}"
         )
         try:
-            graph_task = asyncio.create_task(authoritative_supervisor_graph.ainvoke(initial_state))
+            graph_task = asyncio.create_task(
+                authoritative_supervisor_graph.ainvoke(
+                    initial_state,
+                    config={"configurable": {"thread_id": str(job_id), "correlation_id": correlation_id}},
+                )
+            )
             lease_lost_task = asyncio.create_task(lease_lost.wait())
             done, _ = await asyncio.wait(
                 {graph_task, lease_lost_task}, return_when=asyncio.FIRST_COMPLETED
@@ -1663,6 +1673,9 @@ class SupervisorService:
         approved_types = {g.gate_type for g in gates}
         if not {"G1", "G2", "G3"}.issubset(approved_types):
             raise ConflictException(f"Cannot recover Phase 6 job: missing approved gates (approved: {approved_types})")
+
+        if len(rationale.strip()) < 10:
+            raise ConflictException("Diagnostic rationale must be at least 10 characters long.")
 
         now = utc_now()
         if job.orchestration_owner and job.orchestration_lease_expires_at:

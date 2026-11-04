@@ -388,7 +388,7 @@ def test_api_jobs_create_with_pinned_commit_and_overrides(client: TestClient):
     client.cookies.clear()
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     assert login_resp.status_code == 200
     token = login_resp.cookies[settings.SESSION_COOKIE_NAME]

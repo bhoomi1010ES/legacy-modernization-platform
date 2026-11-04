@@ -1,0 +1,13 @@
+{
+  "release": "0.76.1",
+  "source": "https://github.com/aquasecurity/trivy/releases/download/v0.76.1/",
+  "authorization": "User approved Trivy and controller setup in this conversation",
+  "archive_sha256": "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0",
+  "binary_sha256": "d1dfca6ae10a1ad4540bb94e64f0510077c47008920a9b554986b39dca573d83",
+  "checksum_verified": true,
+  "version_output": "Version: 0.76.1",
+  "version_exit_code": 0,
+  "database_download_exit_code": 0,
+  "database_download_log": "2026-11-02T04:21:56-07:00\tINFO\t[vulndb] Need to update DB\n2026-11-02T04:21:56-07:00\tINFO\t[vulndb] Downloading vulnerability DB...\n2026-11-02T04:21:56-07:00\tINFO\t[vulndb] Downloading artifact...\trepo=\"mirror.gcr.io/aquasec/trivy-db:2\"\n2026-11-02T04:22:53-07:00\tINFO\t[vulndb] Artifact successfully downloaded\trepo=\"mirror.gcr.io/aquasec/trivy-db:2\"\n",
+  "status": "PASS"
+}

@@ -1,294 +1,101 @@
-"""Independent Docker verifier: no host mounts, network, shell input or image pulling."""
+"""Verification assessment and signed controller RPC. No Docker authority in the API."""
 
-import asyncio
 import json
 import logging
 import re
-import uuid
-from time import monotonic
-from pathlib import PurePosixPath
 from app.core.config import settings
 from app.schemas.phase6 import CheckSpec
-from app.services.phase5_engine import (
-    canonical,
-    digest,
-    normalize,
-    read_bounded,
-    strict_adapter_object,
-    reject_json_constant,
-)
 from app.schemas.phase5 import NormalizationRule
+from app.services.phase5_engine import canonical, digest, normalize, strict_adapter_object, reject_json_constant
 from app.services.secret_redactor import get_secret_redactor
+from app.services.sandbox_harness import HARNESS
+from app.services.sandbox_protocol import approved_command, validate_check_profile
+from app.services import sandbox_client
 
 logger = logging.getLogger(__name__)
 
-# This trusted harness is the entrypoint, never generated or editable by CodeWriter.
-HARNESS = r"""
-import json, pathlib, subprocess, sys, time, os, hashlib
-payload=json.load(sys.stdin)
-root=pathlib.Path('/work')
-root.mkdir(exist_ok=True)
-for name, content in payload['files'].items():
-    path=root/name
-    if path.is_absolute() and root not in path.parents: raise ValueError('unsafe snapshot')
-    path.parent.mkdir(parents=True,exist_ok=True)
-    path.write_text(content,encoding='utf-8')
-def fingerprint():
-    return {n: hashlib.sha256((root/n).read_bytes()).hexdigest() if (root/n).is_file() else None for n in payload['files']}
-initial=fingerprint()
-results=[]
-for check in payload['checks']:
-    start=time.monotonic()
+
+def configuration(target_stack=None):
+    from app.services.verification_profiles import get_profile
+    if target_stack is None:
+        raise ValueError("An exact job target stack is required to select a verification profile")
+    profile=get_profile(target_stack)
+    image=profile['image']
+    checks=[CheckSpec.model_validate(c).model_dump() for c in profile['checks']]
+    adapter=profile['adapter']
+    if not re.fullmatch(r"sha256:[a-f0-9]{64}",image):
+        raise ValueError("Configure an immutable local image digest")
+    if not validate_check_profile(checks, system=False, schema_required=any(c['category']=='schema' for c in checks)):
+        raise ValueError("Configure real build, unit, integration, static, security, dependency, license, runtime and required schema checks")
+    if not approved_command(adapter,adapter=True):
+        raise ValueError("Unsafe or missing verification profile")
+    return image,checks,adapter
+
+
+async def verified_runtime_args():
+    if settings.SANDBOX_RUNTIME not in {'docker-rootless', 'gvisor-rootless', 'e2b-microvm'}:
+        raise ValueError("Sandbox runtime is unverified")
+    info=await sandbox_client.health()
+    selected=info['runtime']['selected_runtime']
+    expected='runsc' if settings.SANDBOX_RUNTIME=='gvisor-rootless' else 'runc'
+    if selected!=expected: raise ValueError("Actual runtime differs from selected policy")
+    return ['--runtime='+selected]
+
+
+async def local_image(image):
+    info=await sandbox_client.health()
+    if image not in info.get('images',[]):
+        raise ValueError("Immutable image is not approved by the controller")
+    return image
+
+
+async def execute(files,cases,baseline_hash,*,system_checks=None,binding=None,frozen_profile=None):
     try:
-        run=subprocess.run(check['command'],cwd=root,input='',capture_output=True,text=True,timeout=30,shell=False)
-        results.append(dict(category=check['category'],command=check['command'],exit_code=run.returncode,duration_ms=(time.monotonic()-start)*1000,stdout=run.stdout[:32768],stderr=run.stderr[:32768]))
-    except subprocess.TimeoutExpired:
-        results.append(dict(category=check['category'],command=check['command'],exit_code=None,duration_ms=(time.monotonic()-start)*1000,status='TIMEOUT'))
-    except OSError:
-        results.append(dict(category=check['category'],command=check['command'],exit_code=None,duration_ms=(time.monotonic()-start)*1000,status='UNAVAILABLE',stderr='Configured executable is unavailable'))
-observations=[]
-for case in payload['cases']:
-    start=time.monotonic()
-    try:
-        run=subprocess.run(payload['adapter'],cwd=root,input=json.dumps(dict(scenario=case['name'],inputs=case['fixtures'])),capture_output=True,text=True,timeout=30,shell=False)
-        observations.append(dict(test_case_id=case['test_case_id'],command=payload['adapter'],exit_code=run.returncode,duration_ms=(time.monotonic()-start)*1000,stdout=run.stdout[:65536],stderr=run.stderr[:32768]))
-    except subprocess.TimeoutExpired:
-        observations.append(dict(test_case_id=case['test_case_id'],command=payload['adapter'],exit_code=None,duration_ms=(time.monotonic()-start)*1000,status='TIMEOUT'))
-    except OSError:
-        observations.append(dict(test_case_id=case['test_case_id'],command=payload['adapter'],exit_code=None,duration_ms=(time.monotonic()-start)*1000,status='UNAVAILABLE'))
-print(json.dumps(dict(checks=results,observations=observations,source_unchanged=initial==fingerprint()),allow_nan=False))
-"""
-
-
-def approved_command(command: list[str], *, adapter: bool = False) -> bool:
-    try:
-        if not command or any(
-            any(c in arg for c in (";", "|", "&", "`", "$", "\n", "\r", "\x00"))
-            for arg in command
-        ):
-            return False
-        executable = PurePosixPath(command[0]).name
-        if executable == "syft" and not adapter:
-            return command in (["syft", "version", "-o", "json"], ["syft", "scan", "dir:/work", "-o", "syft-json"])
-        if executable in {"python", "python3"}:
-            if adapter:
-                return (
-                    len(command) == 2
-                    and command[1].startswith("/")
-                    and ".." not in PurePosixPath(command[1]).parts
-                    and len(PurePosixPath(command[1]).parts) > 1
-                    and PurePosixPath(command[1]).parts[1] not in {"work", "tmp"}
-                    and command[1].endswith(".py")
-                )
-            return (
-                len(command) >= 3
-                and command[1] == "-m"
-                and command[2] in {"compileall", "pytest", "mypy", "ruff", "bandit"}
-                and "-c" not in command
-                and "--override-ini" not in command
-            )
-        return not adapter and (
-            executable in {"pytest", "tsc", "mypy", "ruff", "bandit"}
-            or (
-                executable in {"npm", "npm.cmd"}
-                and len(command) == 3
-                and command[1] == "run"
-                and command[2] in {"build", "test", "lint", "typecheck", "security"}
-            )
-        )
-    except Exception:
-        logger.exception("phase6.approved_command failed")
-        raise
-
-
-def configuration() -> tuple[str, list[dict], list[str]]:
-    try:
-        image = settings.PHASE6_SANDBOX_IMAGE
-        checks = [
-            CheckSpec.model_validate(c).model_dump()
-            for c in json.loads(settings.PHASE6_CHECK_COMMANDS_JSON)
-        ]
-        adapter = json.loads(settings.PHASE6_TARGET_COMMAND_JSON)
-        if (
-            not image
-            or image.startswith("-")
-            or not re.fullmatch(r"[A-Za-z0-9./:_@-]+", image)
-        ):
-            raise ValueError("PHASE6_SANDBOX_IMAGE is not configured")
-        if {c["category"] for c in checks} != {"build", "unit", "static", "security"}:
-            raise ValueError("Build, unit, static and security commands are required")
-        if (
-            not all(approved_command(c["command"]) for c in checks)
-            or not isinstance(adapter, list)
-            or not approved_command(adapter, adapter=True)
-        ):
-            raise ValueError("Unsafe or missing sandbox command configuration")
-        return image, checks, adapter
-    except Exception:
-        logger.exception("phase6.configuration unavailable")
-        raise
-
-
-async def local_image(image: str) -> str:
-    """Resolve a local immutable image ID without pulling or trusting a mutable tag."""
-    process = None
-    try:
-        process = await asyncio.create_subprocess_exec(
-            "docker",
-            "image",
-            "inspect",
-            "--format",
-            "{{.Id}}",
-            image,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        output, _ = await asyncio.wait_for(process.communicate(), timeout=10)
-        identity = output.decode().strip()
-        if process.returncode or not re.fullmatch(r"sha256:[a-f0-9]{64}", identity):
-            raise ValueError(
-                "Configured local image is unavailable; image pulling is disabled"
-            )
-        return identity
-    except Exception:
-        logger.exception("phase6.local_image unavailable")
-        raise
-    finally:
-        if process and process.returncode is None:
-            process.kill()
-            await process.wait()
-
-
-async def execute(files: dict[str, str], cases: list[dict], baseline_hash: str, *, system_checks: list[dict] | None = None) -> dict:
-    process = None
-    name = f"phase6-{uuid.uuid4().hex}"
-    start = monotonic()
-    try:
-        image, checks, adapter = configuration()
+        if frozen_profile:
+            image=frozen_profile['image'];checks=frozen_profile['checks'];adapter=frozen_profile['adapter']
+            if not validate_check_profile(checks, system=False, schema_required=any(c['category']=='schema' for c in checks)):
+                raise ValueError('Frozen verification profile is incomplete')
+        else:
+            image,checks,adapter=configuration()
         if system_checks is not None:
             from app.schemas.phase7 import SystemCheck
-            checks = [SystemCheck.model_validate(c).model_dump() for c in system_checks]
-            if not {"build", "unit", "integration", "static", "security"}.issubset({c["category"] for c in checks}) or not all(approved_command(c["command"]) for c in checks):
-                raise ValueError("Complete administrator-approved system checks are required")
-            if getattr(settings, "PHASE7_SANDBOX_IMAGE", ""):
-                image = settings.PHASE7_SANDBOX_IMAGE
-        image = await local_image(image)
-        payload = {
-            "files": files,
-            "cases": [
-                {k: case[k] for k in ("test_case_id", "name", "fixtures")}
-                for case in cases
-            ],
-            "checks": checks,
-            "adapter": adapter,
-        }
-        fingerprint = digest(
-            {
-                "files": files,
-                "baseline_hash": baseline_hash,
-                "image": image,
-                "checks": checks,
-                "adapter": adapter,
-            }
-        )
-        process = await asyncio.create_subprocess_exec(
-            "docker",
-            "run",
-            "--rm",
-            "--name",
-            name,
-            "--pull=never",
-            "--network=none",
-            "--read-only",
-            "--memory=256m",
-            "--cpus=1",
-            "--pids-limit=64",
-            "--cap-drop=ALL",
-            "--security-opt=no-new-privileges",
-            "--user=65534:65534",
-            "--log-driver=none",
-            "--tmpfs=/work:rw,nosuid,nodev,size=128m,mode=1777",
-            "--tmpfs=/tmp:rw,noexec,nosuid,size=32m",
-            "--entrypoint",
-            settings.PHASE6_SANDBOX_PYTHON,
-            "-i",
-            image,
-            "-I",
-            "-c",
-            HARNESS,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-
-        async def send():
-            try:
-                process.stdin.write(canonical(payload))
-                await process.stdin.drain()
-                process.stdin.close()
-            except Exception:
-                logger.exception("phase6.execute stdin failed")
-                raise
-
-        if process.stdout is None or process.stderr is None:
-            raise ValueError("Sandbox output streams are unavailable")
-        _, stdout, stderr, _ = await asyncio.wait_for(
-            asyncio.gather(
-                send(),
-                read_bounded(process.stdout),
-                read_bounded(process.stderr),
-                process.wait(),
-            ),
-            timeout=settings.PHASE6_SANDBOX_TIMEOUT,
-        )
-        if process.returncode:
-            return {
-                "available": False,
-                "reason": f"Sandbox unavailable or failed (exit {process.returncode}); no verification evidence accepted",
-                "checks": [],
-                "cases": [],
-            }
-        data = json.loads(
-            stdout,
-            object_pairs_hook=strict_adapter_object,
-            parse_constant=reject_json_constant,
-        )
-        assessed = assess(data, cases, checks, fingerprint, files=files)
-        assessed["image_id"] = image
-        assessed["container_name"] = name
-        assessed["duration_ms"] = (monotonic() - start) * 1000
-        return assessed
+            checks=[SystemCheck.model_validate(c).model_dump() for c in system_checks]
+            if not validate_check_profile(checks, system=True, schema_required=any(c['category']=='schema' for c in checks)):
+                raise ValueError("Complete administrator-approved system profile required")
+            if not frozen_profile:
+                raise ValueError("System verification must use the frozen target-stack profile")
+        execution={'image':image,'runtime':frozen_profile['runtime'] if frozen_profile else settings.SANDBOX_RUNTIME,'timeout':frozen_profile.get('timeout',settings.PHASE6_SANDBOX_TIMEOUT) if frozen_profile else settings.PHASE6_SANDBOX_TIMEOUT,
+            'files':files,'cases':[{k:c[k] for k in ('test_case_id','name','fixtures')} for c in cases],
+            'checks':checks,'adapter':adapter}
+        proof=await sandbox_client.execute(execution,binding)
+        if proof.get('execution_purpose')!='VERIFICATION':
+            raise ValueError('Diagnostic execution cannot count as independent verification')
+        observed=proof['execution']
+        if observed.get('exit_code')!=0 or not observed.get('observation') or not observed.get('cleanup',{}).get('container_absent'):
+            raise ValueError(observed.get('error') or 'Independent sandbox execution/cleanup failed')
+        fingerprint=digest({'execution':execution,'baseline_hash':baseline_hash})
+        result=assess(observed['observation'],cases,checks,fingerprint,files=files,image_digest=observed['image_digest'])
+        review=proof['review'];review_result=review.get('observation') or {'status':'BLOCKED','findings':[]}
+        if review.get('exit_code')!=0 or not review.get('cleanup',{}).get('container_absent'):
+            review_result={'status':'BLOCKED','findings':[]}
+        scan=proof['image_scan']
+        result.update(image_id=observed['image_digest'],container_name=observed['worker_id'],
+            runtime_evidence=observed,independent_review={**review_result,'worker_id':review['worker_id'],
+            'started_at':review['started_at'],'finished_at':review['finished_at']},image_scan=scan,
+            independent_worker_id=proof['worker_id'],controller_lease_token=proof['lease_token'],
+            controller_lease_generation=proof['lease_generation'],controller_lease_expires_at=proof['lease_expires_at'],controller_attestation=proof['attestation'])
+        result['passed']=result['passed'] and review_result['status']=='PASS' and scan['status']=='PASS'
+        if scan['status']!='PASS':
+            result['checks'].append({'category':'image_security','check_kind':'image_security','status':scan['status'],
+                'result':scan['status'],'exit_code':None,'tool_name':scan.get('tool','trivy'),
+                'tool_version':scan.get('tool_version','NOT_RUN'),'image_digest':image,'skipped_reason':scan.get('reason')})
+        return result
     except Exception as exc:
-        logger.exception(
-            "phase6.execute unavailable | error_type=%s", type(exc).__name__
-        )
-        return {
-            "available": False,
-            "reason": "Sandbox configuration, image, daemon, deadline or output validation unavailable",
-            "checks": [],
-            "cases": [],
-            "duration_ms": (monotonic() - start) * 1000,
-        }
-    finally:
-        if process:
-            if process.returncode is None:
-                process.kill()
-                await process.wait()
-            try:
-                cleanup = await asyncio.create_subprocess_exec(
-                    "docker",
-                    "rm",
-                    "--force",
-                    name,
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL,
-                )
-                await asyncio.wait_for(cleanup.wait(), timeout=10)
-            except Exception:
-                logger.exception("phase6.execute cleanup failed | container=%s", name)
+        logger.warning('sandbox blocked: %s',type(exc).__name__)
+        return {'available':False,'passed':False,'reason':str(exc)[:700],'checks':[],'cases':[]}
 
 
-def assess(data: dict, cases: list[dict], specs: list[dict], fingerprint: str, *, files: dict | None = None) -> dict:
+def assess(data: dict, cases: list[dict], specs: list[dict], fingerprint: str, *, files: dict | None = None, image_digest: str | None = None) -> dict:
     """Host-side deterministic comparison; adapters never supply pass/fail or expected outputs."""
     try:
         if (
@@ -305,14 +112,23 @@ def assess(data: dict, cases: list[dict], specs: list[dict], fingerprint: str, *
                 or not isinstance(item["duration_ms"], (float, int))
             ):
                 raise ValueError("Check evidence identity mismatch")
+            status=item.get('status')
+            if status not in {'PASS','FAIL','NOT_RUN','TIMEOUT','BLOCKED'}:
+                status='PASS' if type(item.get('exit_code')) is int and item['exit_code']==0 else 'FAIL'
+            if item.get('exit_code') is None:
+                status='TIMEOUT' if status=='TIMEOUT' else 'NOT_RUN'
+            if status=='PASS' and item['category'] in {'unit', 'integration', 'runtime', 'api_compatibility', 'schema'} and not item.get('case_count'):
+                status='NOT_RUN'
             checks.append(
                 {
                     **item,
-                    "status": (
-                        "PASS"
-                        if type(item.get("exit_code")) is int and item["exit_code"] == 0
-                        else "FAIL"
-                    ),
+                    "check_kind": item["category"],
+                    "command_profile_digest": digest(spec),
+                    "image_digest": image_digest,
+                    "source_commit_hash": None,
+                    "dependency_hashes": [],
+                    "status": status,
+                    "result": status,
                     "artifact_hash": fingerprint,
                 }
             )
@@ -321,26 +137,10 @@ def assess(data: dict, cases: list[dict], specs: list[dict], fingerprint: str, *
                 raise ValueError("Frozen test evidence mismatch")
             actual = None
             match = False
-            is_web_static = isinstance(case.get("expected"), dict) and "asset_integrity" in case.get("expected", {})
-            if is_web_static and files:
-                routes_ok = any(f.endswith(".html") for f in files)
-                expected_assets = case["expected"].get("asset_integrity", {}).get("module_specific_assets", [])
-                assets_ok = True
-                for asset in expected_assets:
-                    asset_path = asset.get("path")
-                    if asset_path and not any(f == asset_path or f.endswith("/" + PurePosixPath(asset_path).name) for f in files):
-                        assets_ok = False
-                        break
-                if routes_ok and assets_ok:
-                    actual = {
-                        "output": case["expected"],
-                        "side_effects": case.get("side_effects") or {"cookies_set": [], "dom_mutations": 0, "network_requests": 0, "storage_writes": 0},
-                    }
-                    match = True
-                else:
-                    actual = {"output": {"status": "FAILED", "reason": "Missing route or asset"}, "side_effects": None}
-                    match = False
-            elif type(observed.get("exit_code")) is int and observed["exit_code"] == 0:
+            # Presence of an HTML route or asset cannot stand in for browser
+            # behavior. Static-web behavior must be observed by the configured
+            # target adapter (which may drive a browser/DOM harness).
+            if type(observed.get("exit_code")) is int and observed["exit_code"] == 0:
                 actual = json.loads(
                     observed["stdout"],
                     object_pairs_hook=strict_adapter_object,
@@ -363,7 +163,8 @@ def assess(data: dict, cases: list[dict], specs: list[dict], fingerprint: str, *
                 {
                     "test_case_id": case["test_case_id"],
                     "actual": actual,
-                    "status": "PASS" if match else "FAIL",
+                    "status": "PASS" if match else "UNOBSERVED" if observed.get("status") == "UNOBSERVED" or observed.get("exit_code") is None else "FAIL",
+                    "difference_classification": "NONE" if match else "UNOBSERVED" if observed.get("status") == "UNOBSERVED" or observed.get("exit_code") is None else "REGRESSION",
                     "command": observed["command"],
                     "exit_code": observed.get("exit_code"),
                     "duration_ms": observed["duration_ms"],

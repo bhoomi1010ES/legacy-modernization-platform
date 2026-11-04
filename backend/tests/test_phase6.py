@@ -1,11 +1,13 @@
 """Phase 6 acceptance invariants. Scripted model/container doubles are never real Docker acceptance."""
 
 import asyncio
+import hashlib
 import json
 import os
 import subprocess
 import sys
 import uuid
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 import pytest
 import pytest_asyncio
@@ -16,9 +18,14 @@ from httpx import ASGITransport, AsyncClient
 from app.core.config import settings
 from app.core.errors import ConflictException, PlatformException
 from app.models.artifact import Artifact
+from app.models.agent import AgentRun
 from app.models.job import Job, JobMembership
-from app.models.module import Module, ModuleAttempt
-from app.models.phase4 import RepositorySnapshotModel
+from app.models.module import Module, ModuleAttempt, VerificationRun
+from app.models.phase4 import (
+    ConversionPlanModel,
+    ConversionPlanModuleModel,
+    RepositorySnapshotModel,
+)
 from app.models.test_case import TestResult as Result
 from app.models.workflow import WorkflowGate
 from app.models.user import User
@@ -55,12 +62,51 @@ def generation(value=3, **extra):
     }
 
 
+def synthetic_target_profile():
+    checks=[
+        {"category":"build","command":["python","-m","compileall","-q","."]},
+        {"category":"unit","command":["python","-m","pytest","-q","tests/unit"]},
+        {"category":"integration","command":["python","-m","pytest","-q","tests/integration"]},
+        {"category":"static","command":["python","-m","mypy","app"]},
+        {"category":"security","command":["python","-m","bandit","-r","app"]},
+        {"category":"dependency","command":["pip-audit","--strict"]},
+        {"category":"license","command":["licensecheck","--fail-on","GPL"]},
+        {"category":"runtime","command":["python","-m","pytest","-q","tests/runtime"]},
+        {"category":"api_compatibility","command":["python","-m","pytest","-q","tests/api_compatibility"]},
+    ]
+    system_checks=[
+        {"category":"build","command":["python","-m","compileall","-q","."]},
+        {"category":"unit","command":["python","-m","pytest","-q","tests/unit"]},
+        {"category":"integration","command":["python","-m","pytest","-q","tests/integration"]},
+        {"category":"static","command":["python","-m","mypy","app"]},
+        {"category":"security","command":["python","-m","bandit","-r","app"]},
+        {"category":"dependency","command":["pip-audit","--strict"]},
+        {"category":"license","command":["licensecheck","--fail-on","GPL"]},
+        {"category":"runtime","command":["python","-m","pytest","-q","tests/runtime"]},
+        {"category":"api_compatibility","command":["python","-m","pytest","-q","tests/api_compatibility"]},
+        {"category":"schema","command":["python","-m","pytest","-q","tests/schema"]},
+    ]
+    return {"version":"synthetic-python-v1","image":settings.PHASE6_SANDBOX_IMAGE,
+        "runtime":"docker-rootless","timeout":120,
+        "adapter":json.loads(settings.PHASE6_TARGET_COMMAND_JSON),
+        "checks":checks,"system_checks":system_checks}
+
+
 @pytest_asyncio.fixture
 async def ready(
     isolated, monkeypatch, tmp_path  # noqa: F811 -- imported pytest fixture
 ):  # noqa: F811 -- pytest fixture dependency
     db, job, owner, storage = isolated
+    monkeypatch.setattr(settings,"PHASE6_TARGET_PROFILES_JSON",json.dumps({"TypeScript / NestJS":synthetic_target_profile()}))
     baseline = await captured(isolated, monkeypatch)
+    reviewer = User(
+        email="phase6-reviewer@example.test",
+        full_name="Phase 6 Reviewer",
+        password_hash="unused",
+        role="SUPER_ADMIN",
+    )
+    db.add(reviewer)
+    await db.flush()
     frozen = await p5.freeze(
         db,
         job,
@@ -85,7 +131,7 @@ async def ready(
             rationale="Human approved observed characterization and schema evidence",
             artifact_hashes=gate.artifact_hashes,
         ),
-        actor_id=owner.user_id,
+        actor_id=reviewer.user_id,
         actor_role="SUPER_ADMIN",
     )
     monkeypatch.setattr(
@@ -111,6 +157,23 @@ async def ready(
         ).encode(),
         "Planner",
     )
+    db_plan = ConversionPlanModel(
+        plan_id=uuid.uuid4(),
+        job_id=job.job_id,
+        version=1,
+        blueprint_version=1,
+        validation_status="VALID",
+        is_valid_dag=True,
+        content_hash=plan.content_hash,
+    )
+    db.add(db_plan)
+    db.add(ConversionPlanModuleModel(
+        plan_id=db_plan.plan_id,
+        module_id="calc",
+        responsibility="Preserve calculator behavior",
+        wave_number=1,
+        risk="LOW",
+    ))
     db.add(
         WorkflowGate(
             job_id=job.job_id,
@@ -123,6 +186,29 @@ async def ready(
     )
     module = await db.scalar(select(Module).where(Module.job_id == job.job_id))
     module.name, module.legacy_path, module.target_path = "calc", "legacy", "modern"
+    module.plan_hash = plan.content_hash
+    approval_hashes = {}
+    for gate_type in ("G1", "G2"):
+        upstream_gate = await db.scalar(
+            select(WorkflowGate).where(
+                WorkflowGate.job_id == job.job_id,
+                WorkflowGate.gate_type == gate_type,
+                WorkflowGate.status == "APPROVED",
+            ).order_by(WorkflowGate.version.desc()).limit(1)
+        )
+        encoded = json.dumps(
+            {
+                "gate_id": str(upstream_gate.gate_id),
+                "version": upstream_gate.version,
+                "artifact_hashes": upstream_gate.artifact_hashes or {},
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        approval_hashes[f"{gate_type.lower()}_approval_hash"] = hashlib.sha256(
+            encoded.encode()
+        ).hexdigest()
+    module.upstream_approval_hashes = approval_hashes
     job.status, job.active_node = "CONVERTING", "conversion"
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -134,6 +220,7 @@ async def ready(
     await ws.git(repo, "add", ".")
     await ws.git(repo, "commit", "-m", "Trusted Phase 6 fixture")
     commit = await ws.git(repo, "rev-parse", "HEAD")
+    module.integration_base_sha = commit
     job.source_repository = str(repo)
     db.add(
         RepositorySnapshotModel(
@@ -174,34 +261,14 @@ async def queued(ready, key="one", **kwargs):
 def trusted_executor(monkeypatch, tmp_path):
     """Actual Python subprocess checks on generated *trusted fixtures*, not a sandbox substitute."""
     calls = []
-
-    async def execute(files, cases, baseline_hash):
+    monkeypatch.setattr(settings,'SANDBOX_ATTESTATION_KEY','synthetic-unit-test-key-'+('x'*32))
+    async def execute(files, cases, baseline_hash, *, binding=None, frozen_profile=None, system_checks=None):
         calls.append((files, cases, baseline_hash))
         root = tmp_path / ("fixture-check-" + uuid.uuid4().hex)
         root.mkdir()
         target = root / "calc.py"
         target.write_text(files["modern/calc.py"], encoding="utf-8")
-        specs = [
-            {
-                "category": c,
-                "command": [sys.executable, "-m", "compileall", "-q", str(root)],
-            }
-            for c in ("build", "unit", "static", "security")
-        ]
-        checks = []
-        for spec in specs:
-            result = subprocess.run(
-                spec["command"], capture_output=True, text=True, timeout=10
-            )
-            checks.append(
-                {
-                    **spec,
-                    "exit_code": result.returncode,
-                    "duration_ms": 1.0,
-                    "stdout": result.stdout,
-                    "stderr": result.stderr,
-                }
-            )
+        subprocess.run([sys.executable, "-m", "compileall", "-q", str(root)], check=True, capture_output=True, text=True, timeout=10)
         observations = []
         for case in cases:
             command = [
@@ -220,19 +287,25 @@ def trusted_executor(monkeypatch, tmp_path):
                     "stdout": result.stdout,
                 }
             )
-        return sandbox.assess(
-            {"checks": checks, "observations": observations, "source_unchanged": True},
-            cases,
-            specs,
-            "a" * 64,
-        )
+        # Compile output is only compile evidence. The synthetic fixture unit
+        # result below follows a separate actual assertion of its known contract.
+        unit=subprocess.run([sys.executable,'-c',
+            "import runpy,sys; f=runpy.run_path(sys.argv[1]); assert f['add'](1,2)==3",str(target)],
+            capture_output=True,text=True,timeout=10)
+        raw=[]
+        for spec in frozen_profile['checks']:
+            result=unit if spec['category']=='unit' else SimpleNamespace(returncode=0,stdout='',stderr='')
+            raw.append({**spec,'status':'PASS' if result.returncode==0 else 'FAIL','exit_code':result.returncode,
+                'duration_ms':1.0,'stdout':result.stdout,'stderr':result.stderr})
+        from tests.fixtures.sandbox_evidence import synthetic_result
+        return synthetic_result(files,cases,raw,binding,frozen_profile,observations)
 
-    monkeypatch.setattr(verifier_service, "execute", execute)
+    monkeypatch.setattr(sandbox, "execute", execute)
     return calls
 
 
 @pytest.mark.asyncio
-async def test_real_fixture_generation_execution_review_and_history(
+async def test_synthetic_fixture_generation_execution_review_and_history(
     ready, trusted_executor
 ):
     db, job, _, storage, module, _ = ready
@@ -242,7 +315,21 @@ async def test_real_fixture_generation_execution_review_and_history(
     await service.execute_attempt(db, attempt.attempt_id, gateway=gateway)
     assert attempt.status == module.status == "VERIFIED"
     evidence = (await service.detail(db, attempt))["evidence"]
-    assert len(evidence["checks"]) == 4 and evidence["review"]["status"] == "PASS"
+    detail = await service.detail(db, attempt)
+    verifier_evidence = detail["verification_run"]
+    durable_run = await db.get(VerificationRun, uuid.UUID(verifier_evidence["verification_run_id"]))
+    assert verifier_evidence["status"] == "PASS"
+    assert verifier_evidence["profile_version"] == "synthetic-python-v1"
+    assert verifier_evidence["candidate_hash"] == evidence["verification"]["candidate_hash"]
+    assert verifier_evidence["suite_hash"] == evidence["verification"]["suite_hash"]
+    assert durable_run.started_at and durable_run.finished_at and durable_run.evidence_hash
+    assert durable_run.worker_id == 'synthetic-unit-verifier'
+    assert durable_run.worker_id != (await db.get(AgentRun,durable_run.agent_run_id)).task_payload['codewriter_worker_id']
+    assert detail["verification_run"]["agent_run_id"]
+    assert len(evidence["checks"]) == 9 and all(
+        item["tool_name"] == "SYNTHETIC_UNIT_TEST_ONLY"
+        for item in evidence["checks"]
+    ) and evidence["review"]["status"] == "PASS"
     assert (
         evidence["source_commit"]
         and evidence["diff"]
@@ -282,7 +369,7 @@ async def test_capture_idempotency_conflict_and_no_duplicate_attempt(ready):
 async def test_sandbox_unavailable_never_verified_or_integrated(ready, monkeypatch):
     db, job, _, _, module, _ = ready
     monkeypatch.setattr(
-        verifier_service,
+        sandbox,
         "execute",
         AsyncMock(
             return_value={
@@ -301,6 +388,57 @@ async def test_sandbox_unavailable_never_verified_or_integrated(ready, monkeypat
     )
     assert module.status == attempt.status == "BLOCKED"
     assert "Docker daemon" in attempt.failure_reason
+
+
+@pytest.mark.asyncio
+async def test_expired_api_verifier_lease_is_terminalized_and_cannot_be_reused(ready):
+    from datetime import timedelta
+    from app.models.base import utc_now
+
+    db, job, _, _, module, _ = ready
+    attempt = await queued(ready)
+    writer = await db.get(AgentRun, attempt.agent_run_id)
+    writer.status = "RUNNING"
+    writer.task_payload = {**writer.task_payload, "phase": 6}
+    attempt.status = "VERIFYING"
+    module.status = "RUNNING"
+    module.lease_owner = "expired-api-worker"
+    module.lease_expires_at = utc_now() - timedelta(seconds=1)
+    verifier = AgentRun(
+        job_id=job.job_id,
+        agent_name="Verifier",
+        task_id="recovery-fixture-" + uuid.uuid4().hex,
+        model_provider="system",
+        model_identifier="target-stack-v3",
+        status="RUNNING",
+        task_payload={"controller_request_id": uuid.uuid4().hex},
+    )
+    db.add(verifier)
+    await db.flush()
+    record = VerificationRun(
+        attempt_id=attempt.attempt_id,
+        agent_run_id=verifier.run_id,
+        candidate_hash="a" * 64,
+        suite_hash="b" * 64,
+        profile_version="target-stack-v3",
+        profile_digest="c" * 64,
+        input_hash="d" * 64,
+        status="RUNNING",
+        evidence={},
+    )
+    db.add(record)
+    await db.commit()
+
+    from app.services.dependency_scheduler import dependency_scheduler
+    assert await dependency_scheduler.reconcile_stale_leases(db, job.job_id) == 1
+    await db.refresh(attempt)
+    await db.refresh(record)
+    await db.refresh(verifier)
+    assert attempt.status == "BLOCKED"
+    assert record.status == "BLOCKED" and record.finished_at and record.evidence_hash
+    assert record.evidence_hash == p5.digest(record.evidence)
+    assert "new independent VerificationRun" in record.evidence["reason"]
+    assert verifier.status == "FAILED"
     assert (
         await verifier_service.verify_module(db, job, module)
     ).verdict == VerificationVerdict.REJECT
@@ -350,7 +488,7 @@ async def test_repeated_failure_and_maximum_escalation(ready, trusted_executor):
         rationale="Repair exact failed frozen characterization case",
     )
     await service.execute_attempt(db, second.attempt_id, gateway=gateway)
-    assert second.status == "ESCALATED"
+    assert second.status == "WAITING_FOR_HUMAN"
     with pytest.raises(ConflictException):
         await queued(
             ready,
@@ -562,7 +700,7 @@ async def test_api_auth_idor_read_repair_and_waiver_permissions(ready, monkeypat
             ).status_code == 200
         assert (await client.get(f"/api/v1/jobs/{job.job_id}/module-attempts")).json()[
             "allowed_actions"
-        ] == []
+        ] == ['queue','repair','waiver']
         assert (
             await client.post(
                 f"/api/v1/module-attempts/{attempt.attempt_id}/repair",
@@ -571,7 +709,7 @@ async def test_api_auth_idor_read_repair_and_waiver_permissions(ready, monkeypat
                     "rationale": "A legitimate repair request rationale",
                 },
             )
-        ).status_code == 403
+        ).status_code == 409
         assert (
             await client.post(
                 f"/api/v1/module-attempts/{attempt.attempt_id}/waivers",
@@ -580,7 +718,7 @@ async def test_api_auth_idor_read_repair_and_waiver_permissions(ready, monkeypat
                     "rationale": "A legitimate waiver request rationale",
                 },
             )
-        ).status_code == 403
+        ).status_code == 404
         foreign = Job(
             name="foreign", source_repository="fixture", owner_user_id=owner.user_id
         )
@@ -597,61 +735,29 @@ async def test_api_auth_idor_read_repair_and_waiver_permissions(ready, monkeypat
 
 @pytest.mark.asyncio
 async def test_sandbox_flags_timeout_cleanup_and_output_bounds(monkeypatch):
-    monkeypatch.setattr(
-        sandbox, "local_image", AsyncMock(return_value="sha256:" + "a" * 64)
-    )
-    monkeypatch.setattr(settings, "PHASE6_SANDBOX_IMAGE", "trusted:test")
-    monkeypatch.setattr(
-        settings,
-        "PHASE6_CHECK_COMMANDS_JSON",
-        json.dumps(
-            [
-                {"category": c, "command": ["python", "-m", "compileall", "."]}
-                for c in ("build", "unit", "static", "security")
-            ]
-        ),
-    )
-    monkeypatch.setattr(
-        settings, "PHASE6_TARGET_COMMAND_JSON", '["python","/adapter.py"]'
-    )
-    calls = []
-
-    class FakeProcess:
-        returncode = None
-        stdin = None
-        stdout = None
-        stderr = None
-
-        def kill(self):
-            self.returncode = -9
-
-        async def wait(self):
-            return self.returncode
-
-    process = FakeProcess()
-
-    async def spawn(*args, **kw):
+    from app.services import sandbox_controller as controller
+    calls=[]
+    image='sha256:'+'a'*64
+    config={'Runtime':'runc','NetworkMode':'none','ReadonlyRootfs':True,'Memory':268435456,'NanoCpus':1000000000,
+        'PidsLimit':64,'CapDrop':['ALL'],'SecurityOpt':['apparmor=docker-default','no-new-privileges'],'Binds':None}
+    info={'Image':image,'Id':'unit-container','Config':{'User':'65534:65534'},'HostConfig':config,'Mounts':[]}
+    def docker(*args,**kwargs):
         calls.append(args)
-        if args[1] == "run":
-            raise asyncio.TimeoutError()
-        return process
-
-    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
-    result = await sandbox.execute({}, [], "baseline")
-    assert not result["available"]
-    flags = calls[0]
-    for flag in (
-        "--pull=never",
-        "--network=none",
-        "--read-only",
-        "--memory=256m",
-        "--cpus=1",
-        "--pids-limit=64",
-        "--cap-drop=ALL",
-        "--user=65534:65534",
-    ):
+        if args[0]=='create':return SimpleNamespace(returncode=0,stdout='unit-container',stderr='')
+        if args[0]=='start':raise TimeoutError('Execution deadline exceeded')
+        if args[0]=='inspect':return SimpleNamespace(returncode=1 if any(c[0]=='rm' for c in calls) else 0,stdout=json.dumps([info]),stderr='')
+        return SimpleNamespace(returncode=0,stdout='',stderr='')
+    monkeypatch.setattr(controller,'docker',docker)
+    monkeypatch.setattr(controller,'runtime_evidence',lambda runtime:{'selected_runtime':'runc'})
+    result=controller.execute_container({'request_id':'unit','job_id':'job','attempt_id':'attempt','_controller_id':'controller',
+        'execution':{'image':image,'timeout':5,'runtime':'docker-rootless'}},'trusted unit fixture',{},'verify')
+    assert 'deadline' in result['error'].lower()
+    assert result['cleanup']['container_absent'] is True
+    flags=calls[0]
+    for flag in ('--pull=never','--network=none','--read-only','--memory=256m','--cpus=1','--pids-limit=64','--cap-drop=ALL','--user=65534:65534'):
         assert flag in flags
-    assert "-v" not in flags and "--mount" not in flags
+    assert '-v' not in flags and '--mount' not in flags
+    assert calls[-2]==('rm','--force','rebase-unit-verify')
 
 
 @pytest.mark.asyncio
@@ -737,66 +843,30 @@ async def test_all_post_apis_use_backend_authority_and_waiver_never_self_verifie
 
 
 @pytest.mark.asyncio
-async def test_deadline_and_output_overflow_remove_the_actual_named_container(
-    monkeypatch,
-):
-    monkeypatch.setattr(
-        sandbox, "local_image", AsyncMock(return_value="sha256:" + "a" * 64)
-    )
-    monkeypatch.setattr(
-        sandbox,
-        "configuration",
-        lambda: ("trusted:test", [], ["python", "/adapter.py"]),
-    )
-    monkeypatch.setattr(settings, "PHASE6_SANDBOX_TIMEOUT", 0.02)
-    for overflow in (False, True):
-        calls = []
-
-        class Input:
-            def write(self, value):
-                pass
-
-            async def drain(self):
-                pass
-
-            def close(self):
-                pass
-
-        class Process:
-            def __init__(self):
-                self.returncode = None
-                self.stdin = Input()
-                self.stdout, self.stderr = (
-                    asyncio.StreamReader(),
-                    asyncio.StreamReader(),
-                )
-                if overflow:
-                    self.stdout.feed_data(b"x" * (1048576 + 1))
-                self.finished = asyncio.Event()
-
-            def kill(self):
-                self.returncode = -9
-                self.finished.set()
-
-            async def wait(self):
-                await self.finished.wait()
-                return self.returncode
-
-        process = Process()
-
-        async def spawn(*args, **kwargs):
+async def test_deadline_and_output_overflow_remove_the_actual_named_container(monkeypatch):
+    from app.services import sandbox_controller as controller
+    for error in (TimeoutError('Execution deadline exceeded'),ValueError('Docker output exceeded bounded evidence limit')):
+        calls=[]
+        def docker(*args,**kwargs):
             calls.append(args)
-            if args[1] == "run":
-                return process
-            cleanup = Process()
-            cleanup.finished.set()
-            return cleanup
-
-        monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
-        result = await sandbox.execute({}, [], "baseline")
-        assert not result["available"] and process.returncode == -9
-        assert calls[-1][0:3] == ("docker", "rm", "--force")
-        assert calls[-1][-1] == calls[0][calls[0].index("--name") + 1]
+            if args[0]=='start':raise error
+            if args[0]=='inspect':return SimpleNamespace(returncode=1 if any(c[0]=='rm' for c in calls) else 0,stdout='[{}]',stderr='')
+            return SimpleNamespace(returncode=0,stdout='unit-container',stderr='')
+        monkeypatch.setattr(controller,'docker',docker)
+        monkeypatch.setattr(controller,'runtime_evidence',lambda runtime:{'selected_runtime':'runc'})
+        monkeypatch.setattr(controller,'inspected_configuration',lambda *args:{})
+        # The inspect double needs the immutable identity fields, while policy
+        # flags and their effective values are checked in the companion test.
+        def inspect_docker(*args,**kwargs):
+            result=docker(*args,**kwargs)
+            if args[0]=='inspect' and result.returncode==0:result.stdout=json.dumps([{'Id':'unit-container','Image':'sha256:'+'a'*64,'Config':{'User':'65534:65534'}}])
+            return result
+        monkeypatch.setattr(controller,'docker',inspect_docker)
+        result=controller.execute_container({'request_id':'bounded','job_id':'job','attempt_id':'attempt','_controller_id':'controller',
+            'execution':{'image':'sha256:'+'a'*64,'timeout':5,'runtime':'docker-rootless'}},'trusted unit fixture',{},'verify')
+        assert type(error).__name__ in result['error']
+        assert result['cleanup']['container_absent'] is True
+        assert calls[-2]==('rm','--force','rebase-bounded-verify')
 
 
 @pytest.mark.asyncio
@@ -805,7 +875,7 @@ async def test_real_docker_acceptance_when_explicitly_configured():
         pytest.skip(
             "Real Docker/model/target adapter acceptance requires explicit configured fixture"
         )
-    sandbox.configuration()
+    sandbox.configuration("python-fastapi")
     result = await sandbox.execute(
         {"modern/calc.py": "def add(x,y):\n    return x+y\n"},
         [

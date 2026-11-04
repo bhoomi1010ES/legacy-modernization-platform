@@ -8,6 +8,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1 import api_v1_router
@@ -70,6 +71,17 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # SEC-05 / SEC-08: Host header protection
+    allowed_hosts = list(settings.ALLOWED_HOSTS or ["localhost", "127.0.0.1", "testserver"])
+    if settings.ENVIRONMENT == "production":
+        allowed_hosts = [h for h in allowed_hosts if h != "*"]
+        if not allowed_hosts:
+            allowed_hosts = ["localhost", "127.0.0.1"]
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=allowed_hosts,
+    )
+
     # Request ID and Correlation ID middleware
     @app.middleware("http")
     async def add_request_id_middleware(request: Request, call_next):
@@ -104,11 +116,13 @@ def create_app() -> FastAPI:
                 if check_val:
                     allowed = set(settings.CORS_ALLOWED_ORIGINS)
                     host = request.headers.get("host")
-                    is_allowed = (
-                        check_val in allowed
-                        or (host and host in check_val)
-                        or any(check_val == o for o in settings.CORS_ALLOWED_ORIGINS)
-                    )
+                    # SEC-08: Exact origin match or exact host match (no loose substring search)
+                    is_allowed = check_val in allowed
+                    if not is_allowed and host:
+                        from urllib.parse import urlparse
+                        parsed_val = urlparse(check_val)
+                        if parsed_val.netloc == host or parsed_val.hostname == host:
+                            is_allowed = True
                     if not is_allowed:
                         request_id = getattr(request.state, "request_id", f"req_{uuid4().hex[:12]}")
                         payload = ErrorEnvelope(

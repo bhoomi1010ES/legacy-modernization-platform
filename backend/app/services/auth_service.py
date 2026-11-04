@@ -77,15 +77,20 @@ class AuthService:
             raise ConflictException(f"An account with email '{clean_email}' already exists.")
 
         # Sanitize and assign role
-        privileged_roles = {"SUPER_ADMIN", "ADMIN", "PROJECT_MANAGER"}
+        privileged_roles = {"SUPER_ADMIN", "ADMIN", "PROJECT_MANAGER", "REVIEWER", "APPROVER"}
+        valid_roles = {"SUPER_ADMIN", "ADMIN", "PROJECT_MANAGER", "REVIEWER", "APPROVER", "DEVELOPER", "VIEWER"}
         requested_role = (role or "DEVELOPER").strip().upper()
         if requested_role in privileged_roles and not allow_privileged:
             raise ForbiddenException(
                 f"Self-assignment of privileged role '{requested_role}' is forbidden on public registration."
             )
-
-        valid_roles = {"SUPER_ADMIN", "ADMIN", "PROJECT_MANAGER", "REVIEWER", "DEVELOPER", "VIEWER"}
-        assigned_role = requested_role if requested_role in valid_roles else "DEVELOPER"
+        if requested_role not in valid_roles:
+            raise ForbiddenException(
+                f"Invalid or unauthorized role '{requested_role}' requested."
+            )
+        assigned_role = requested_role if allow_privileged else (
+            requested_role if requested_role in ("DEVELOPER", "VIEWER") else "DEVELOPER"
+        )
 
         # Create user
         pw_hash = hash_password(password)
@@ -131,7 +136,7 @@ class AuthService:
         await db.commit()
         await db.refresh(new_user)
 
-        permissions = sorted(list(RBACPolicy.ROLE_PERMISSIONS.get(new_user.role, set())))
+        permissions = RBACPolicy.permissions_for(new_user.role)
         return new_user, raw_session_token, permissions
 
     @staticmethod
@@ -152,8 +157,6 @@ class AuthService:
         user = res.scalar_one_or_none()
 
         is_valid_pw = verify_password(password, user.password_hash) if user else False
-        if user and not is_valid_pw and settings.ENVIRONMENT in ("development", "testing") and password in ("Password123!", "SecurePassword123!", "AdminSecure123!"):
-            is_valid_pw = True
 
         # Constant-time protection and generic error message against user enumeration
         if not user or not is_valid_pw:
@@ -182,7 +185,7 @@ class AuthService:
             .values(is_revoked=True)
         )
 
-        # Generate new unpredictable 256-bit session token
+        # Generate fresh session token
         raw_session_token = generate_session_id()
         token_hash = hash_session_token(raw_session_token)
         now = datetime.now(timezone.utc)
@@ -213,7 +216,7 @@ class AuthService:
         await db.commit()
 
         # Fetch permissions for effective profile
-        permissions = sorted(list(RBACPolicy.ROLE_PERMISSIONS.get(user.role, set())))
+        permissions = RBACPolicy.permissions_for(user.role)
         return user, raw_session_token, permissions
 
     @staticmethod
@@ -264,7 +267,7 @@ class AuthService:
             raise ForbiddenException("Account is disabled or inactive.")
 
         await db.commit()
-        permissions = sorted(list(RBACPolicy.ROLE_PERMISSIONS.get(user.role, set())))
+        permissions = RBACPolicy.permissions_for(user.role)
         return user, permissions
 
     @staticmethod

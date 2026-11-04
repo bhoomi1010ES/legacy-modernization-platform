@@ -1,0 +1,40 @@
+{
+  "status": "PASS",
+  "scope": "Actual worker crash; persistent scoped task and lease cleanup. No W09 delivery PASS claim.",
+  "binding": {
+    "request_id": "2350b9deb07f4e489cd92289c0df01ac",
+    "job_id": "1e0b737ce43f451891e037ce3145f63a",
+    "attempt_id": "a4a8b149d3664ae1a5039d73486dbded",
+    "candidate_hash": "67e94911552d3cb309d8b5598e81e1f227178c6ec95a924c5a0bda00d963e2e6",
+    "suite_hash": "581e8d830181010f509e5141ced13fceb17bb7d2a05684f8944aaa40e5b4af1e"
+  },
+  "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+  "runtime": "runc",
+  "uid": "65534:65534",
+  "runtime_health": {
+    "blocked_reasons": [],
+    "images": [
+      "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3"
+    ],
+    "runtime": {
+      "cgroup_version": "2",
+      "docker_version": "29.9.2",
+      "runtime_name": "docker-rootless",
+      "security_options": [
+        "name=seccomp,profile=builtin",
+        "name=rootless",
+        "name=cgroupns"
+      ],
+      "selected_runtime": "runc",
+      "timestamp": 1793620273.8644505
+    },
+    "status": "ready",
+    "worker_alive": true,
+    "worker_pid": 76854
+  },
+  "failed_task_reported_blocked": true,
+  "replacement_worker_ready": true,
+  "cleanup_confirmed": true,
+  "seconds_to_reclaim": 8.15403127670288,
+  "status_after_restart": "BLOCKED"
+}

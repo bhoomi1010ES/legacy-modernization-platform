@@ -8,15 +8,6 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-SCENARIOS_PATH = Path("/scenarios.json")
-SCENARIOS = {}
-if SCENARIOS_PATH.is_file():
-    try:
-        SCENARIOS = json.loads(SCENARIOS_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        logger.exception("Failed to load /scenarios.json")
-
-
 def main() -> None:
     try:
         request = json.load(sys.stdin)
@@ -53,21 +44,10 @@ def main() -> None:
             )
             return
 
-        if scenario in SCENARIOS:
-            spec = SCENARIOS[scenario]
-            json.dump(
-                {"output": spec.get("expected"), "side_effects": spec.get("side_effects")},
-                sys.stdout,
-                allow_nan=False,
-            )
-            return
-
-        # Generic fallback
-        json.dump(
-            {"output": None, "side_effects": None},
-            sys.stdout,
-            allow_nan=False,
-        )
+        # A fixture adapter can observe only its implemented application contract.
+        # Frozen expected values must never be shipped to or read by this process.
+        sys.stderr.write("UNOBSERVED: no approved application adapter implements this scenario\n")
+        raise SystemExit(78)
     except Exception:
         logger.exception("target_adapter failed")
         raise

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="3" time="4.040" timestamp="2026-11-02T05:16:20.762336-07:00" hostname="DESKTOP-I9N3GEL"><testcase classname="tests.test_w09_controller" name="test_verifier_never_uses_generic_profile_fallback" time="0.003" /><testcase classname="tests.test_w09_controller" name="test_readiness_reports_missing_controller_unavailable" time="0.005" /><testcase classname="tests.contracts.test_openapi_contracts" name="test_health_and_incomplete_sandbox_readiness_endpoints" time="0.222"><failure message="AssertionError: assert 'degraded' == 'ok'&#10;  &#10;  - ok&#10;  + degraded">client = &lt;starlette.testclient.TestClient object at 0x73de55b99c40&gt;
+
+    def test_health_and_incomplete_sandbox_readiness_endpoints(client: TestClient):
+        """A healthy database cannot hide a missing target verification profile."""
+        health_resp = client.get("/api/v1/health")
+        assert health_resp.status_code == 200
+        health_data = health_resp.json()
+&gt;       assert health_data["status"] == "ok"
+E       AssertionError: assert 'degraded' == 'ok'
+E         
+E         - ok
+E         + degraded
+
+tests/contracts/test_openapi_contracts.py:55: AssertionError</failure></testcase></testsuite></testsuites>

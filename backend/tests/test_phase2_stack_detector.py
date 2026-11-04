@@ -407,7 +407,7 @@ def test_detect_stack_endpoint_persists_metadata(client: TestClient):
     # 1. Login as Admin
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     assert login_resp.status_code == 200
 

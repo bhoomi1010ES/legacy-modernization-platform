@@ -4,11 +4,16 @@ from typing import List, Optional, Tuple
 from fastapi import APIRouter, Cookie, Depends, Header, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_current_user_and_permissions
+from app.api.deps import get_current_user_and_permissions
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.auth import ChangePasswordRequest, LoginRequest, RegisterRequest, UserResponse
+from app.schemas.auth import (
+    ChangePasswordRequest,
+    LoginRequest,
+    RegisterRequest,
+    UserResponse,
+)
 from app.schemas.system import SuccessResponse
 from app.services.auth_service import AuthService
 
@@ -37,10 +42,11 @@ async def register(
         email=payload.email,
         full_name=payload.full_name,
         password=payload.password,
-        role=payload.role or "DEVELOPER",
+        role="DEVELOPER",
         ip_address=ip,
         user_agent=user_agent,
         correlation_id=correlation_id,
+        allow_privileged=False,
     )
 
     # Set secure HttpOnly session cookie
@@ -63,8 +69,6 @@ async def register(
         permissions=permissions,
         created_at=user.created_at.isoformat(),
     )
-
-
 @router.post(
     "/login",
     response_model=UserResponse,

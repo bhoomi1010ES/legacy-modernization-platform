@@ -85,3 +85,5 @@ websockets==15.0.1
 wheel==0.45.1
 xgboost==3.4.1
 xxhash==4.0.1
+
+e2b>=2.62.0

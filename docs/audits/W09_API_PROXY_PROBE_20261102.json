@@ -1,0 +1,47 @@
+{
+  "probe": "W09_API_PROXY_PROBE_20261102",
+  "environment": "Ubuntu WSL; rootless Docker sandbox controller",
+  "backend": "http://127.0.0.1:8001",
+  "frontend_proxy": "http://127.0.0.1:3000",
+  "checks": [
+    {
+      "url": "/api/v1/health",
+      "path": "backend-direct",
+      "http_status": 200,
+      "response": {"status": "ok", "database": "connected"}
+    },
+    {
+      "url": "/api/v1/health",
+      "path": "vite-proxy",
+      "http_status": 200,
+      "response": {"status": "ok", "database": "connected"}
+    },
+    {
+      "url": "/api/v1/readiness",
+      "path": "vite-proxy",
+      "http_status": 503,
+      "response": {
+        "ready": false,
+        "components": {
+          "database": "healthy",
+          "storage": "healthy",
+          "agent_workers": "healthy",
+          "sandboxes": "profile_missing"
+        }
+      }
+    }
+  ],
+  "controller_health": {
+    "status": "ready",
+    "worker_alive": true,
+    "runtime": "docker-rootless/runc",
+    "approved_images": [
+      "sha256:42372f8e665d07f55d3d62d8c905f3b2f31295c91e439d05eea277d42bd85112",
+      "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3"
+    ]
+  },
+  "limitations": [
+    "No target-stack profile is configured, so sandbox execution readiness remains blocked.",
+    "A concurrent probe briefly observed a database connection failure; the sequential final probes returned connected/healthy."
+  ]
+}

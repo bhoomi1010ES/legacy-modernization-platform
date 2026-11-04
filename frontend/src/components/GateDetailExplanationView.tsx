@@ -157,7 +157,9 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
       ? charCases.map(c => ({
           legacy: `${c.interface || c.module || 'Endpoint'} · ${c.name}`,
           target: `${c.outcome}${c.duration_ms !== undefined ? ` (${c.duration_ms}ms)` : ''}`,
-          category: `Mode: ${c.execution_mode || 'SANDBOX'} · ${c.behavior || 'Recorded state transition'}`,
+          category: c.outcome === 'UNAVAILABLE'
+            ? `UNAVAILABLE: ${c.limitation || c.stderr_sample || 'No execution reason was recorded; this scenario is unobserved.'}`
+            : `Mode: ${c.execution_mode || 'SANDBOX'} · ${c.behavior || 'Recorded state transition'}`,
         }))
       : [
           {
@@ -174,10 +176,10 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
     job_id: job?.job_id || gate?.job_id || 'modernization_job',
     source_stack: sourceStack,
     target_stack: targetStack,
-    total_modules: conversionPlan?.modules?.length ?? 14,
-    total_tasks: conversionPlan?.estimates?.tasks_count ?? conversionPlan?.tasks?.length ?? 42,
-    waves_count: conversionPlan?.waves?.length ?? 3,
-    estimated_hours: conversionPlan?.estimates?.total_hours ?? 98.0,
+    total_modules: conversionPlan?.modules?.length ?? 0,
+    total_tasks: conversionPlan?.estimates?.tasks_count ?? conversionPlan?.tasks?.length ?? 0,
+    waves_count: conversionPlan?.waves?.length ?? 0,
+    estimated_hours: conversionPlan?.estimates?.total_hours ?? 0.0,
     dag_cycle_count: 0,
     status: 'TOPOLOGICALLY_VALIDATED',
     blueprint_contracts: [
@@ -228,10 +230,10 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
     job_id: job?.job_id || gate?.job_id || 'modernization_job',
     source_stack: sourceStack,
     target_stack: targetStack,
-    parity_rate: 1.0,
+    parity_rate: job?.status === 'COMPLETED' ? 1.0 : 0.0,
     unintended_regressions: 0,
-    approved_intentional_differences: 4,
-    strict_typing_score: 1.0,
+    approved_intentional_differences: 0,
+    strict_typing_score: job?.status === 'COMPLETED' ? 1.0 : 0.0,
     status: 'PARITY_VERIFIED',
     equivalence_proofs: [
       'Dual-Harness Replay Passed with Zero Regression Drift',
@@ -254,7 +256,7 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
     parity_matrix: [
       {
         legacy: 'HTTP API Contract Suite',
-        target: '42 / 42 Fixtures Matched (100%)',
+        target: job?.status === 'COMPLETED' ? 'All Fixtures Matched (100%)' : 'Verification Incomplete',
         category: 'Zero Unintended Payload Differences',
       },
       {
@@ -342,11 +344,13 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
     badgeText = '100% Cycle-Free Modular DAG';
     subtitleLead = 'Topological dependency decomposition and execution wave planning for transforming';
     card3Label = 'Modular Wave DAG';
-    card3Value = '3 Waves · 14 Modules';
+    card3Value = conversionPlan ? `${conversionPlan.waves?.length || 0} Waves · ${conversionPlan.modules?.length || 0} Modules` : 'Awaiting Plan Generation';
     card4Label = 'Deliverable Status';
-    card4Value = 'ConversionPlan v1';
+    card4Value = conversionPlan ? 'ConversionPlan v1' : 'EVIDENCE_UNAVAILABLE';
     specialistHeader = 'Specialist Wave Planning & Gate G3 Recommendation:';
-    specialistBody = `Topological dependency DAG validated with 0 cyclic dependencies. 14 decoupled modular domain packages scheduled across 3 sequential waves. Granular test contracts and compiler assertions attached to all 42 conversion tasks.`;
+    specialistBody = conversionPlan
+      ? `Topological dependency DAG validated with 0 cyclic dependencies. ${conversionPlan.modules?.length || 0} decoupled modular domain packages scheduled across ${conversionPlan.waves?.length || 0} waves.`
+      : 'EVIDENCE_UNAVAILABLE: Conversion plan deliverable evidence is missing or has not yet been computed.';
     matrixTitle = 'Topological Wave Schedule & Module Dependency Matrix';
     matrixSubtitle = `Wave Decomposition for ${sourceStack} -> ${targetStack}`;
     matrixCol1 = 'CONVERSION WAVE';
@@ -366,11 +370,13 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
     badgeText = '100% Replay Parity Verified';
     subtitleLead = 'Dual-harness differential execution and regression drift verification between';
     card3Label = 'Replay Parity Score';
-    card3Value = '100% Parity (0 Drift)';
+    card3Value = job?.status === 'COMPLETED' ? '100% Parity (0 Drift)' : 'Awaiting Verification';
     card4Label = 'Deliverable Status';
-    card4Value = 'EquivalenceReport v1';
+    card4Value = job?.status === 'COMPLETED' ? 'EquivalenceReport v1' : 'EVIDENCE_UNAVAILABLE';
     specialistHeader = 'Specialist Dual-Harness Verification & Gate G4 Recommendation:';
-    specialistBody = `Dual-harness replay completed across all golden characterization test fixtures. Zero unintended regressions or schema drifts detected. Approved intentional differences verified and cataloged for release sign-off.`;
+    specialistBody = job?.status === 'COMPLETED'
+      ? 'Dual-harness replay completed across all golden characterization test fixtures. Zero unintended regressions or schema drifts detected.'
+      : 'EVIDENCE_UNAVAILABLE: Final equivalence report evidence has not yet been verified or loaded.';
     matrixTitle = 'Differential Replay & Equivalence Proof Matrix';
     matrixSubtitle = `Dual-Harness Parity Audit: ${sourceStack} vs ${targetStack}`;
     matrixCol1 = 'VERIFICATION SUITE';
@@ -728,7 +734,7 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
                 <th
                   style={{
                     padding: '9px 16px',
-                    textAlign: 'right',
+                    textAlign: gateType === 'G2' ? 'left' : 'right',
                     fontSize: '10px',
                     fontWeight: 650,
                     textTransform: 'uppercase',
@@ -768,10 +774,10 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
                   >
                     {row.target}
                   </td>
-                  <td style={{ padding: '10px 16px', textAlign: 'right' }}>
+                  <td style={{ padding: '10px 16px', textAlign: gateType === 'G2' ? 'left' : 'right', maxWidth: gateType === 'G2' ? 420 : undefined }}>
                     <span
                       style={{
-                        display: 'inline-block',
+                        display: gateType === 'G2' ? 'block' : 'inline-block',
                         fontSize: '10.5px',
                         padding: '2px 8px',
                         borderRadius: 'var(--radius-sm)',
@@ -779,6 +785,8 @@ export const GateDetailExplanationView: React.FC<GateDetailExplanationViewProps>
                         color: 'var(--muted-foreground)',
                         border: '1px solid var(--border)',
                         fontWeight: 600,
+                        whiteSpace: gateType === 'G2' ? 'normal' : undefined,
+                        overflowWrap: gateType === 'G2' ? 'anywhere' : undefined,
                       }}
                     >
                       {row.category}

@@ -7,9 +7,9 @@ import uuid
 
 from sqlalchemy import func, select
 
-from app.core.errors import ConflictException, NotFoundException
+from app.core.errors import ConflictException, NotFoundException, PlatformException
 from app.models.agent import AgentRun
-from app.models.artifact import Artifact
+from app.models.artifact import Artifact, ArtifactType, normalize_artifact_type
 from app.models.audit import AuditEvent
 from app.models.base import utc_now
 from app.models.gate import GateDecision
@@ -36,11 +36,13 @@ async def publish(
     db, job, run, kind: str, payload: dict, lineage: list[str]
 ) -> Artifact:
     try:
+        canonical_kind = normalize_artifact_type(kind)
         await db.scalar(select(Job).where(Job.job_id == job.job_id).with_for_update())
         version = (
             await db.scalar(
                 select(func.max(Artifact.version)).where(
-                    Artifact.job_id == job.job_id, Artifact.artifact_type == kind
+                    Artifact.job_id == job.job_id,
+                    Artifact.artifact_type == canonical_kind,
                 )
             )
             or 0
@@ -48,12 +50,13 @@ async def publish(
         return await ArtifactService().create_artifact(
             db,
             job.job_id,
-            kind,
+            canonical_kind,
             version,
             canonical(payload),
-            "Integrator",
+            "Verifier" if canonical_kind == ArtifactType.SYSTEM_VERIFICATION.value else "Integrator",
             derived_from=lineage,
             extra_metadata={"phase": 7, "run_id": str(run.run_id)},
+            producer_run_id=uuid.UUID(run.task_payload['verifier_run_id']) if canonical_kind == ArtifactType.SYSTEM_VERIFICATION.value else run.run_id,
         )
     except Exception:
         logger.exception("phase7.publish failed | kind=%s", kind)
@@ -62,8 +65,9 @@ async def publish(
 
 async def artifact_view(db, job_id, kind: str, version: int | None = None) -> dict:
     try:
+        canonical_kind = normalize_artifact_type(kind)
         query = select(Artifact).where(
-            Artifact.job_id == job_id, Artifact.artifact_type == kind
+            Artifact.job_id == job_id, Artifact.artifact_type == canonical_kind
         )
         if version is not None:
             query = query.where(Artifact.version == version)
@@ -172,8 +176,8 @@ async def bindings_for(db, job) -> tuple[dict, list[dict]]:
                     "status": module.status,
                     "attempt_id": str(attempt.attempt_id),
                     "attempt_number": attempt.attempt_number,
-                    "branch": attempt.git_branch,
-                    "commit": evidence["commit"],
+                    "base_sha": evidence["base_sha"],
+                    "diff_hash": evidence["diff_hash"],
                     "source_commit": evidence["source_commit"],
                     "code_hash": evidence["code_hash"],
                     "code_artifact_id": evidence["code_artifact_id"],
@@ -208,7 +212,8 @@ def identity(current: dict, bindings: list[dict]) -> str:
                         for key in (
                             "module_id",
                             "attempt_id",
-                            "commit",
+                            "base_sha",
+                            "diff_hash",
                             "code_hash",
                             "verification_hash",
                             "review_hash",
@@ -291,9 +296,11 @@ async def queue_integration(db, job, key: str, actor: str) -> AgentRun:
 
 
 async def execute_integration(db, run_id) -> dict:
-    """Fresh Git candidate + real sandbox. No production migration, deployment or gate approval."""
+    """Fresh uncommitted candidate + real sandbox. No production migration or gate approval."""
     start = monotonic()
     run = None
+    repo = None
+    candidate_path = None
     try:
         run = await db.scalar(
             select(AgentRun)
@@ -329,6 +336,7 @@ async def execute_integration(db, run_id) -> dict:
             bindings[0]["source_commit"],
             bindings,
         )
+        candidate_path = merged.get("workspace")
         files = merged.pop("files", {})
         verification = {
             "available": False,
@@ -341,23 +349,29 @@ async def execute_integration(db, run_id) -> dict:
         schema = await read_payload(
             await latest(db, job.job_id, "SCHEMA_MIGRATION_PLAN")
         )
-        if merged["status"] == "MERGED":
-            try:
-                profile = engine.system_profile(bool(schema["tables"]))
-            except (ValueError, TypeError):
-                verification["reason"] = (
-                    "Administrator full-system check profile unavailable"
-                )
-            else:
-                verification = await sandbox.execute(
-                    files,
-                    current["cases"],
-                    current["baseline_hash"],
-                    system_checks=profile,
-                )
+        profile=[]
+        if merged['status']=='MERGED':
+            profile=engine.system_profile(bool(schema['tables']),job.target_stack)
+        from app.services.durable_verification import prepare_and_execute
+        verification, system_verification_run, verifier_agent = await prepare_and_execute(
+            db, job, {'candidate_hash':merged.get('candidate_hash') or digest({'conflict':merged}),
+                'suite_hash':digest({'baseline_hash':current['baseline_hash'],'cases':current['cases']}),
+                'baseline_hash':current['baseline_hash'],'files':files,'cases':current['cases'],
+                'profile_digest':digest(profile),'system_checks':profile},
+            integration_run_id=run.run_id, artifact_refs=[b['code_artifact_id'] for b in bindings],
+        )
+        run.task_payload={**run.task_payload,'verifier_run_id':str(verifier_agent.run_id)}
+        system_verification_run.status='BLOCKED' if not verification.get('available') else 'PASS' if verification.get('passed') else 'FAIL'
+        system_verification_run.finished_at=utc_now()
+        system_verification_run.evidence={'verification':verification,'candidate_hash':system_verification_run.candidate_hash,'suite_hash':system_verification_run.suite_hash}
+        system_verification_run.evidence_hash=digest(system_verification_run.evidence)
+        verifier_agent.status='SUCCEEDED' if system_verification_run.status=='PASS' else 'FAILED'
+        verifier_agent.completed_at=utc_now()
+        verifier_agent.output_payload=verification
+        await db.commit()
         verification.update(
             run_id=str(run.run_id),
-            integrated_commit=merged["commit"],
+            candidate_hash=merged.get("candidate_hash"),
             baseline_hash=current["baseline_hash"],
         )
         verification_artifact = await publish(
@@ -374,12 +388,15 @@ async def execute_integration(db, run_id) -> dict:
             job,
             run,
             "SBOM",
-            {**sbom, "integrated_commit": merged["commit"]},
+            {**sbom, "candidate_hash": merged.get("candidate_hash")},
             [str(verification_artifact.artifact_id)],
         )
         review_report = review(
             files, [], verification_artifact.content_hash, execution=verification
         )
+        remote_review=verification.get('independent_review') or {'status':'BLOCKED','findings':[]}
+        review_report['findings'] += remote_review.get('findings',[])
+        if remote_review['status']!='PASS' or review_report['findings']: review_report['status']='REJECTED'
         rows = []
         definitions = {case["test_case_id"]: case for case in current["cases"]}
         for case in verification.get("cases", []):
@@ -425,6 +442,52 @@ async def execute_integration(db, run_id) -> dict:
             and sbom["status"] == "GENERATED"
             and counts["unobserved"] == 0
         )
+        zip_artifact = manifest_artifact = None
+        package_sha256 = None
+        packaged_at = None
+        manifest_file_names = []
+        archive_file_names = []
+        if ready:
+            from datetime import datetime, timezone
+            import hashlib
+
+            zip_bytes, archive_file_names = engine.package_project(
+                __import__("pathlib").Path(merged["workspace"]),
+                list(filter(None, (await workspace.git(__import__("pathlib").Path(merged["workspace"]), "ls-files", "-z")).split("\x00"))),
+            )
+            manifest_file_names = sorted({name for binding in bindings for name in binding["changed_files"]})
+            package_sha256 = hashlib.sha256(zip_bytes).hexdigest()
+            packaged_at = datetime.now(timezone.utc).isoformat()
+            zip_version = (await db.scalar(select(func.max(Artifact.version)).where(
+                Artifact.job_id == job.job_id, Artifact.artifact_type == ArtifactType.DELIVERY_PACKAGE.value
+            )) or 0) + 1
+            zip_artifact = await ArtifactService().create_artifact(
+                db, job.job_id, ArtifactType.DELIVERY_PACKAGE.value, zip_version, zip_bytes,
+                "Integrator", derived_from=[str(verification_artifact.artifact_id)],
+                media_type="application/zip", extra_metadata={"phase": 7, "run_id": str(run.run_id)},
+                commit=False,
+            )
+            manifest = {
+                "job_id": str(job.job_id),
+                "source_repository_reference": {"repository": __import__("app.services.secret_redactor", fromlist=["get_secret_redactor"]).get_secret_redactor().redact_text(job.source_repository), "revision": job.source_revision, "job_id": str(job.job_id), "baseline_source_sha": bindings[0]["source_commit"]},
+                "target_technology_stack": job.target_stack,
+                "changesets": [{"changeset_artifact_id": b["code_artifact_id"], "attempt_id": b["attempt_id"]} for b in bindings],
+                "modified_and_generated_files": manifest_file_names,
+                "archive_files": archive_file_names,
+                "verification_results": {"verification_artifact_id": str(verification_artifact.artifact_id), "verification_hash": verification_artifact.content_hash, "passed": verification.get("passed"), "checks": [{"category": item.get("category"), "status": item.get("status"), "exit_code": item.get("exit_code"), "tool_version": item.get("tool_version")} for item in verification.get("checks", [])], "counts": counts},
+                "artifact_id": str(zip_artifact.artifact_id),
+                "zip_sha256": package_sha256,
+                "packaging_timestamp": packaged_at,
+            }
+            manifest_version = (await db.scalar(select(func.max(Artifact.version)).where(
+                Artifact.job_id == job.job_id, Artifact.artifact_type == ArtifactType.MODERNIZATION_MANIFEST.value
+            )) or 0) + 1
+            manifest_artifact = await ArtifactService().create_artifact(
+                db, job.job_id, ArtifactType.MODERNIZATION_MANIFEST.value, manifest_version,
+                canonical(manifest), "Integrator",
+                derived_from=[str(zip_artifact.artifact_id), str(verification_artifact.artifact_id)],
+                extra_metadata={"phase": 7, "run_id": str(run.run_id)}, commit=False,
+            )
         status = (
             "READY_FOR_REVIEW"
             if ready
@@ -447,6 +510,10 @@ async def execute_integration(db, run_id) -> dict:
                 else "NOT_APPLICABLE" if not schema["tables"] else "UNVERIFIED"
             ),
             "review": review_report,
+            "zip_artifact_id": str(zip_artifact.artifact_id) if zip_artifact else None,
+            "zip_sha256": package_sha256,
+            "manifest_artifact_id": str(manifest_artifact.artifact_id) if manifest_artifact else None,
+            "manifest_hash": manifest_artifact.content_hash if manifest_artifact else None,
         }
         integration_artifact = await publish(
             db,
@@ -479,7 +546,7 @@ async def execute_integration(db, run_id) -> dict:
             )
         limitations += [
             "Equivalence covers executed frozen scenarios only, not line/branch coverage.",
-            "PR publishing requires deliberate provider configuration; no production cutover is included.",
+            "Git branch/PR publishing and production cutover are not included; delivery is the verified ZIP.",
         ]
         report = JobReport(
             job_id=str(job.job_id),
@@ -488,8 +555,9 @@ async def execute_integration(db, run_id) -> dict:
             source_stack=job.source_stack,
             target_stack=job.target_stack,
             source_commit=bindings[0]["source_commit"],
-            integrated_commit=merged["commit"],
-            branch=merged["branch"],
+            integrated_commit=None,
+            branch="",
+            candidate_hash=merged.get("candidate_hash") or "",
             baseline_hash=current["baseline_hash"],
             plan_hash=current["plan_hash"],
             gate_ids=current["gate_ids"],
@@ -530,6 +598,8 @@ async def execute_integration(db, run_id) -> dict:
                     "diff": merged.get("diff", ""),
                     "merge_history": merged["merge_history"],
                 },
+                "delivery_zip": ({"artifact_id": str(zip_artifact.artifact_id), "sha256": package_sha256, "files": manifest_file_names} if zip_artifact else None),
+                "manifest": ({"artifact_id": str(manifest_artifact.artifact_id), "hash": manifest_artifact.content_hash} if manifest_artifact else None),
                 "verification": {
                     "artifact_id": str(verification_artifact.artifact_id),
                     "hash": verification_artifact.content_hash,
@@ -568,8 +638,10 @@ async def execute_integration(db, run_id) -> dict:
             "report_artifact_id": str(report_artifact.artifact_id),
             "report_hash": report_artifact.content_hash,
             "report_version": report_artifact.version,
-            "commit": merged["commit"],
-            "branch": merged["branch"],
+            "candidate_hash": merged.get("candidate_hash"),
+            "zip_artifact_id": str(zip_artifact.artifact_id) if zip_artifact else None,
+            "zip_sha256": package_sha256,
+            "manifest_artifact_id": str(manifest_artifact.artifact_id) if manifest_artifact else None,
         }
         run.output_artifact_refs = [
             str(item.artifact_id)
@@ -579,7 +651,7 @@ async def execute_integration(db, run_id) -> dict:
                 integration_artifact,
                 report_artifact,
             )
-        ]
+        ] + [str(item.artifact_id) for item in (zip_artifact, manifest_artifact) if item]
         run.trace_payload = {
             "events": ["QUEUED", "RUNNING", status],
             "agent_version": "phase7-integrator-v1",
@@ -615,10 +687,16 @@ async def execute_integration(db, run_id) -> dict:
                 await db.commit()
                 return run.output_payload
         raise
+    finally:
+        if repo is not None and candidate_path is not None:
+            try:
+                await engine.cleanup_candidate(repo, candidate_path)
+            except Exception:
+                logger.exception("phase7 candidate cleanup failed | run_id=%s", run_id)
 
 
 async def validate_package(db, job, report_hash: str, *, gate=None) -> dict:
-    """G4/PR readiness is computed from exact current bytes, commits and persisted results."""
+    """G4 readiness is computed from exact ZIP/manifest bytes and persisted verification."""
     try:
         report = await artifact_view(db, job.job_id, "JOB_REPORT")
         content = report["content"]
@@ -654,11 +732,8 @@ async def validate_package(db, job, report_hash: str, *, gate=None) -> dict:
                 raise ConflictException(
                     "Final package references a stale evidence version"
                 )
-            if (
-                view["content"].get("integrated_commit", view["content"].get("commit"))
-                != content["integrated_commit"]
-            ):
-                raise ConflictException("Final package commit identity mismatch")
+            if view["content"].get("candidate_hash") != content["candidate_hash"]:
+                raise ConflictException("Final package candidate identity mismatch")
         if (
             sbom["content"]["status"] != "GENERATED"
             or verification["content"].get("passed") is not True
@@ -667,6 +742,16 @@ async def validate_package(db, job, report_hash: str, *, gate=None) -> dict:
             raise ConflictException(
                 "Final package lacks successful full verification/SBOM"
             )
+        from app.models.module import VerificationRun
+        from app.services.verification_proof import validate_success
+        try:
+            record=await db.get(VerificationRun,uuid.UUID(verification['content']['verification_run_id']))
+            verifier=await db.get(AgentRun,record.agent_run_id) if record else None
+            if not record or record.status!='PASS' or record.integration_run_id!=run.run_id or record.evidence_hash!=digest(record.evidence) or not verifier or verifier.job_id!=job.job_id or verifier.agent_name!='Verifier' or verifier.status!='SUCCEEDED':
+                raise ValueError('Current independent verification record is missing or invalid')
+            validate_success(verification['content'],verifier,job.job_id)
+        except (ValueError,KeyError,TypeError) as exc:
+            raise ConflictException('Final package lacks current independent controller proof') from exc
         rows = list(
             (
                 await db.execute(
@@ -695,14 +780,22 @@ async def validate_package(db, job, report_hash: str, *, gate=None) -> dict:
             raise ConflictException(
                 "Final persisted results are missing, invalidated or inconsistent"
             )
-        repo = workspace.repository_for(str(job.job_id))
-        if (
-            await workspace.git(repo, "rev-parse", content["branch"])
-            != content["integrated_commit"]
-        ):
-            raise ConflictException(
-                "Integration branch changed since final verification"
+        zip_ref = content.get("evidence", {}).get("delivery_zip")
+        manifest_ref = content.get("evidence", {}).get("manifest")
+        if not zip_ref or not manifest_ref:
+            raise ConflictException("Final report is missing its delivery ZIP and manifest")
+        try:
+            zip_artifact, zip_bytes = await ArtifactService().get_artifact_content(
+                db, job.job_id, uuid.UUID(zip_ref["artifact_id"])
             )
+        except PlatformException as exc:
+            raise ConflictException("Delivery ZIP integrity check failed") from exc
+        import hashlib
+        if hashlib.sha256(zip_bytes).hexdigest() != zip_ref["sha256"] or zip_artifact.content_hash != zip_ref["sha256"]:
+            raise ConflictException("Delivery ZIP SHA-256 validation failed")
+        manifest_view = await artifact_view(db, job.job_id, ArtifactType.MODERNIZATION_MANIFEST.value)
+        if manifest_view["artifact_id"] != manifest_ref["artifact_id"] or manifest_view["content_hash"] != manifest_ref["hash"]:
+            raise ConflictException("Modernization manifest is stale")
         if gate is not None:
             for view in (report, integration, verification, sbom):
                 if (
@@ -712,6 +805,11 @@ async def validate_package(db, job, report_hash: str, *, gate=None) -> dict:
                     raise ConflictException(
                         "G4 is not bound to the current evidence package"
                     )
+            if (
+                gate.artifact_hashes.get(str(zip_artifact.artifact_id)) != zip_artifact.content_hash
+                or gate.artifact_hashes.get(manifest_view["artifact_id"]) != manifest_view["content_hash"]
+            ):
+                raise ConflictException("G4 is not bound to the exact ZIP and manifest hashes")
         return report
     except Exception:
         logger.exception("phase7.validate_package failed | job_id=%s", job.job_id)
@@ -799,8 +897,9 @@ async def record_delivery(db, job, gate, decision) -> None:
         await db.flush()
         payload = {
             "job_id": str(job.job_id),
-            "branch": report["content"]["branch"],
-            "commit": report["content"]["integrated_commit"],
+            "candidate_hash": report["content"]["candidate_hash"],
+            "zip_artifact_id": report["content"]["evidence"]["delivery_zip"]["artifact_id"],
+            "zip_sha256": report["content"]["evidence"]["delivery_zip"]["sha256"],
             "report_id": report["artifact_id"],
             "report_hash": report["content_hash"],
             "report_version": report["version"],
@@ -813,21 +912,12 @@ async def record_delivery(db, job, gate, decision) -> None:
             "delivered_at": decision.decided_at.isoformat(),
             "production_cutover_included": False,
         }
-        try:
-            pr = await artifact_view(db, job.job_id, "PULL_REQUEST_RECORD")
-        except NotFoundException:
-            payload["pull_request"] = {"status": "MANUAL_REQUIRED"}
-        else:
-            payload["pull_request"] = (
-                pr["content"]
-                if pr["content"].get("report_hash") == report["content_hash"]
-                else {"status": "MANUAL_REQUIRED"}
-            )
+        payload['pull_request']={'status':'ZIP_DELIVERY','url':None}
         version = (
             await db.scalar(
                 select(func.max(Artifact.version)).where(
                     Artifact.job_id == job.job_id,
-                    Artifact.artifact_type == "DELIVERY_RECORD",
+                    Artifact.artifact_type == ArtifactType.DELIVERY_RECORD.value,
                 )
             )
             or 0
@@ -852,90 +942,19 @@ async def record_delivery(db, job, gate, decision) -> None:
 
 
 async def pull_request(db, job, request, actor: str, *, provider=None) -> dict:
-    """Idempotent explicit publishing action; manual handoff is not PR creation."""
+    """Compatibility endpoint: Git branch and PR publishing are disabled for ZIP delivery."""
     try:
         report = await validate_package(db, job, request.report_hash)
         content = report["content"]
-        key = f"phase7-pr:{job.job_id}:{request.idempotency_key}"
-        existing = await db.scalar(
-            select(WorkflowOutbox).where(WorkflowOutbox.idempotency_key == key)
-        )
-        if existing:
-            if existing.payload.get("report_hash") != request.report_hash:
-                raise ConflictException("PR idempotency key belongs to another report")
-            return existing.payload.get(
-                "result",
-                {
-                    "status": "UNKNOWN",
-                    "reason": "Prior external request is unresolved; inspect remote before retrying",
-                },
-            )
-        event = WorkflowOutbox(
-            job_id=job.job_id,
-            idempotency_key=key,
-            event_type="PHASE7_PULL_REQUEST",
-            status="PROCESSING",
-            attempts=1,
-            payload={"report_hash": request.report_hash},
-        )
-        db.add(event)
-        await db.commit()
-        manual = {
-            "status": "MANUAL_REQUIRED",
-            "branch": content["branch"],
-            "commit": content["integrated_commit"],
+        zip_ref = content["evidence"]["delivery_zip"]
+        return {
+            "status": "ZIP_DELIVERY",
             "report_hash": report["content_hash"],
-            "summary": f"Modernization review: {job.name}; report v{report['version']}; commit {content['integrated_commit']}; {content['counts']['passed']}/{content['counts']['total']} frozen cases passed. Review limitations/waivers and the SBOM before G4 approval.",
-            "instructions": [
-                "Review the exact candidate commit, versioned JobReport, SBOM and uncovered behavior.",
-                "Push this candidate branch using your approved Git credential workflow.",
-                "Create a draft pull request against the reviewed base branch; do not merge/deploy automatically.",
-            ],
+            "artifact_id": zip_ref["artifact_id"],
+            "sha256": zip_ref["sha256"],
+            "download_url": f"/api/v1/jobs/{job.job_id}/artifacts/{zip_ref['artifact_id']}/download",
+            "reason": "Git branch and pull request publishing are disabled; use the verified project ZIP.",
         }
-        if provider is None:
-            from app.services.git_provider import configured_provider
-
-            provider = configured_provider()
-        result = (
-            manual
-            if provider is None
-            else {
-                **manual,
-                **(
-                    await provider.create(
-                        branch=content["branch"],
-                        commit=content["integrated_commit"],
-                        title=f"Modernization review: {job.name}",
-                        body=manual["summary"],
-                    )
-                ),
-            }
-        )
-        await publish(
-            db,
-            job,
-            await db.get(AgentRun, uuid.UUID(content["run_id"])),
-            "PULL_REQUEST_RECORD",
-            result,
-            [report["artifact_id"]],
-        )
-        event.status, event.processed_at = "PROCESSED", utc_now()
-        event.payload = {"report_hash": request.report_hash, "result": result}
-        db.add(
-            AuditEvent(
-                job_id=job.job_id,
-                event_type="PULL_REQUEST_" + result["status"],
-                actor_type="USER",
-                actor_id=actor,
-                target_resource=report["artifact_id"],
-                payload={
-                    key: result.get(key)
-                    for key in ("status", "url", "branch", "commit", "report_hash")
-                },
-            )
-        )
-        await db.commit()
-        return result
     except Exception:
         logger.exception("phase7.pull_request failed")
         raise
@@ -970,6 +989,18 @@ async def delivery(db, job) -> dict:
             result["limitations"].append(
                 "Current report is blocked, stale, rejected or has missing execution/SBOM evidence"
             )
+        if result.get("package_current"):
+            zip_ref = report["content"].get("evidence", {}).get("delivery_zip")
+            manifest_ref = report["content"].get("evidence", {}).get("manifest")
+            if zip_ref and manifest_ref:
+                manifest=await artifact_view(db,job.job_id,ArtifactType.MODERNIZATION_MANIFEST.value)
+                result["delivery_zip"] = {
+                    **zip_ref,
+                    "download_url": f"/api/v1/jobs/{job.job_id}/artifacts/{zip_ref['artifact_id']}/download",
+                    "manifest_artifact_id": manifest_ref["artifact_id"],
+                    "manifest_hash": manifest_ref["hash"],
+                    "packaging_timestamp":manifest['content'].get('packaging_timestamp'),
+                }
         gate = await db.scalar(
             select(WorkflowGate)
             .where(WorkflowGate.job_id == job.job_id, WorkflowGate.gate_type == "G4")
@@ -983,13 +1014,6 @@ async def delivery(db, job) -> dict:
                 "version": gate.version,
                 "artifact_hashes": gate.artifact_hashes,
             }
-        try:
-            pr = await artifact_view(db, job.job_id, "PULL_REQUEST_RECORD")
-        except NotFoundException:
-            logger.debug("phase7.delivery optional PR absent | job_id=%s", job.job_id)
-        else:
-            if pr["content"].get("report_hash") == report["content_hash"]:
-                result["pull_request"] = pr["content"]
         if (
             job.status == "COMPLETED"
             and gate

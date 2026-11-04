@@ -1,0 +1,4 @@
+body { font-family: sans-serif; margin: 2rem; background: #f8fafc; color: #0f172a; }
+main { max-width: 600px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; }
+.ready { color: #16a34a; font-weight: bold; }
+button { padding: 0.5rem 1rem; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px; }

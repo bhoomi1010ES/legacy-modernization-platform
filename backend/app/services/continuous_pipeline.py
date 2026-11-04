@@ -40,6 +40,15 @@ class ContinuousPipelineService:
         correlation_id: Optional[str] = None,
     ) -> asyncio.Task:
         """Kicks off continuous execution in background without blocking the caller."""
+        from app.core.config import settings
+        from app.core.errors import ConflictException
+        if (getattr(settings, "ENVIRONMENT", "development") == "production" or getattr(settings, "APP_ENV", "") == "production") and not getattr(settings, "ENABLE_LEGACY_CONTINUOUS_PIPELINE", False):
+            raise ConflictException(
+                "Direct invocation of deprecated ContinuousPipelineService is disabled in production. Use SupervisorCommandService."
+            )
+        logger.warning(
+            "ContinuousPipelineService.trigger_continuous_pipeline is deprecated; delegating to supervisor_service.schedule_drive | job_id=%s", job_id
+        )
         return supervisor_service.schedule_drive(
             job_id, correlation_id=correlation_id or f"drive-{uuid.uuid4().hex[:12]}"
         )
@@ -178,7 +187,7 @@ class ContinuousPipelineService:
             await supervisor_service.require_planning_eligibility(session, job)
             plan = await session.scalar(select(Artifact).where(
                 Artifact.job_id == job.job_id,
-                Artifact.artifact_type.in_(("CONVERSION_PLAN", "ConversionPlan")),
+                Artifact.artifact_type == "CONVERSION_PLAN",
             ).order_by(Artifact.created_at.desc(), Artifact.version.desc()).limit(1))
             if plan:
                 payload = await read_payload(plan)

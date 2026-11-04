@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="11" time="9.510" timestamp="2026-11-02T05:10:02.121497-07:00" hostname="DESKTOP-I9N3GEL"><testcase classname="tests.test_phase6" name="test_real_fixture_generation_execution_review_and_history" time="2.425"><failure message="AssertionError: assert 'synthetic-python-v1' == 'target-stack-v3'&#10;  &#10;  - target-stack-v3&#10;  + synthetic-python-v1">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7a76cf64fec0&gt;, &lt;app.models.job.Job object at 0x7a76cfe1e2a0&gt;...ile-check-20261102/test_real_fixture_generation_e0/authoritative_workspaces/job_da2ed1b4-d6c8-42f1-a732-f6e863f58157'))
+trusted_executor = [({'legacy/calc.py': 'def add(x, y):\n    return x + y\n', 'modern/calc.py': 'def add(x, y):\n    return 3\n'}, [{'act...2:10:04.681578+00:00', 'duration_ms': None, ...}], 'abeb807ab1e653166a3bc71964ffe8a78ac97de8b85a1e5966d7f1002cc68777')]
+
+    @pytest.mark.asyncio
+    async def test_real_fixture_generation_execution_review_and_history(
+        ready, trusted_executor
+    ):
+        db, job, _, storage, module, _ = ready
+        attempt = await queued(ready)
+        assert attempt.status == "QUEUED" and module.status == "LEASED"
+        gateway = build_fake_gateway(FakeModelProvider([generation()]))
+        await service.execute_attempt(db, attempt.attempt_id, gateway=gateway)
+        assert attempt.status == module.status == "VERIFIED"
+        evidence = (await service.detail(db, attempt))["evidence"]
+        detail = await service.detail(db, attempt)
+        verifier_evidence = detail["verification_run"]
+        durable_run = await db.get(VerificationRun, uuid.UUID(verifier_evidence["verification_run_id"]))
+        assert verifier_evidence["status"] == "PASS"
+&gt;       assert verifier_evidence["profile_version"] == "target-stack-v3"
+E       AssertionError: assert 'synthetic-python-v1' == 'target-stack-v3'
+E         
+E         - target-stack-v3
+E         + synthetic-python-v1
+
+tests/test_phase6.py:319: AssertionError</failure></testcase><testcase classname="tests.test_phase6" name="test_expired_api_verifier_lease_is_terminalized_and_cannot_be_reused" time="1.059" /><testcase classname="tests.test_phase7" name="test_integration_verified_changesets_zip_report_counts_and_history" time="2.298" /><testcase classname="tests.test_w09_controller" name="test_target_verification_profile_rejects_missing_categories_and_mislabeled_compile" time="0.001" /><testcase classname="tests.test_w09_controller" name="test_target_verification_profile_requires_distinct_real_check_categories" time="0.001" /><testcase classname="tests.test_w09_controller" name="test_target_stack_profile_has_exact_version_image_and_frozen_digest" time="0.002" /><testcase classname="tests.test_w09_controller" name="test_zero_executed_test_cases_do_not_pass[unit]" time="0.001" /><testcase classname="tests.test_w09_controller" name="test_zero_executed_test_cases_do_not_pass[integration]" time="0.001" /><testcase classname="tests.test_w09_controller" name="test_zero_executed_test_cases_do_not_pass[runtime]" time="0.001" /><testcase classname="tests.test_w09_controller" name="test_zero_executed_test_cases_do_not_pass[api_compatibility]" time="0.001" /><testcase classname="tests.test_w09_controller" name="test_zero_executed_test_cases_do_not_pass[schema]" time="0.001" /></testsuite></testsuites>

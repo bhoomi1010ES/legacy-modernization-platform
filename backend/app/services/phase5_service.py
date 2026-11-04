@@ -1,3 +1,4 @@
+from typing import Any, Dict, List, Optional
 """Append-only Phase 5 artifacts, evidence discovery and G2 baseline lifecycle."""
 
 import logging
@@ -82,27 +83,26 @@ async def publish(
     payload: dict,
     lineage: list[str],
     metadata: dict,
+    producer_run_id: Optional[uuid.UUID] = None,
 ) -> Artifact:
     try:
-        key = f"jobs/{job_id}/artifacts/{kind}_v{version}.json"
-        checksum, size = await get_storage_adapter().put_object(key, canonical(payload))
-        artifact = Artifact(
-            artifact_id=uuid.uuid4(),
+        from app.services.artifact_service import artifact_service
+        producing_agent = (
+            "Characterizer" if kind == "CHARACTERIZATION_SUITE" else "SchemaData"
+        )
+        canonical_bytes = canonical(payload)
+        return await artifact_service.publish_artifact(
+            db=db,
             job_id=job_id,
             artifact_type=kind,
             version=version,
-            content_hash=checksum,
-            storage_path=key,
-            content_size_bytes=size,
-            producing_agent=(
-                "Characterizer" if kind == "CHARACTERIZATION_SUITE" else "SchemaData"
-            ),
+            content_bytes=canonical_bytes,
+            producing_agent=producing_agent,
             derived_from=lineage,
             extra_metadata={"phase": 5, **metadata},
+            producer_run_id=producer_run_id,
+            commit=False,
         )
-        db.add(artifact)
-        await db.flush()
-        return artifact
     except Exception:
         logger.exception("phase5.publish failed | job_id=%s", job_id)
         raise
@@ -255,12 +255,16 @@ async def capture(
             reproducibility = "UNAVAILABLE"
             second_obs = None
             if observation["available"]:
-                outcome = (
-                    "PASSED"
-                    if canonical(normalize(expected, scenario.normalization))
-                    == canonical(normalize(actual, scenario.normalization))
-                    else "FAILED"
-                )
+                if actual and isinstance(actual, dict) and actual.get("status") in ("FAILED", "NOT_RUN"):
+                    outcome = "FAILED" if actual.get("status") == "FAILED" else "UNAVAILABLE"
+                    reason = actual.get("reason") or observation.get("reason")
+                else:
+                    outcome = (
+                        "PASSED"
+                        if canonical(normalize(expected, scenario.normalization))
+                        == canonical(normalize(actual, scenario.normalization))
+                        else "FAILED"
+                    )
                 # Second independent execution proves golden capture is replayable, including side effects.
                 try:
                     second = await replay(scenario, workspace_path=workspace_dir, job=job)
@@ -303,6 +307,10 @@ async def capture(
                 "first_run_duration_ms": observation.get("duration_ms"),
                 "second_run_duration_ms": (
                     second_obs.get("duration_ms") if second_obs else None
+                ),
+                "source_provenance": observation.get("source_provenance"),
+                "second_run_source_provenance": (
+                    second_obs.get("source_provenance") if second_obs else None
                 ),
             }
             case = get_secret_redactor().redact_object(
@@ -387,6 +395,24 @@ async def capture(
             .limit(1)
         )
         lineage = [str(previous[0].artifact_id)] if previous else []
+        schema_run_id = uuid.uuid4()
+        schema_run = AgentRun(
+            run_id=schema_run_id,
+            job_id=job.job_id,
+            agent_name="SchemaData",
+            task_id=f"schema-data-{request.idempotency_key}",
+            model_provider="local",
+            model_identifier="ddl-schema-parser-v1",
+            status="SUCCEEDED",
+            input_tokens=None,
+            output_tokens=None,
+            cost_usd=None,
+            completed_at=utc_now(),
+            output_payload={"tables_count": len(request.tables or discovered_tables)},
+        )
+        db.add(schema_run)
+        await db.flush()
+
         schema_artifact = await publish(
             db,
             job.job_id,
@@ -395,7 +421,9 @@ async def capture(
             plan,
             lineage,
             {},
+            producer_run_id=schema_run_id,
         )
+        schema_run.output_artifact_refs = [str(schema_artifact.artifact_id)]
 
         # Build G2 Readiness report
         approved_count = sum(1 for c in cases if c["outcome"] == "PASSED")
@@ -405,7 +433,7 @@ async def capture(
         failed_count = sum(1 for c in cases if c["outcome"] == "FAILED")
 
         blocking_reasons = []
-        if approved_count == 0:
+        if len(cases) == 0 or approved_count == 0:
             blocking_reasons.append("Zero observed passing characterization scenarios")
         if non_repro_count > 0:
             blocking_reasons.append(f"{non_repro_count} scenarios yielded non-reproducible observations")
@@ -466,6 +494,28 @@ async def capture(
                 "Legacy runtime unavailable or no approved scenarios supplied; discovered tests have not been executed"
             )
         payload = SuiteArtifact.model_validate(payload).model_dump(mode="json")
+        char_run_id = uuid.uuid4()
+        char_run = AgentRun(
+            run_id=char_run_id,
+            job_id=job.job_id,
+            agent_name="Characterizer",
+            task_id=request.idempotency_key,
+            model_provider="local",
+            model_identifier="deterministic-replay-v5",
+            status="SUCCEEDED" if available else "BLOCKED",
+            input_tokens=0,
+            output_tokens=0,
+            cost_usd=0,
+            completed_at=utc_now(),
+            output_artifact_refs=[],
+            output_payload={
+                "runtime_available": available,
+                "case_count": len(cases),
+            },
+        )
+        db.add(char_run)
+        await db.flush()
+
         artifact = await publish(
             db,
             job.job_id,
@@ -474,29 +524,9 @@ async def capture(
             payload,
             lineage + [str(schema_artifact.artifact_id)],
             {"request_key": request.idempotency_key, "request_hash": fingerprint},
+            producer_run_id=char_run_id,
         )
-        db.add(
-            AgentRun(
-                job_id=job.job_id,
-                agent_name="Characterizer",
-                task_id=request.idempotency_key,
-                model_provider="local",
-                model_identifier="deterministic-replay-v5",
-                status="SUCCEEDED" if available else "BLOCKED",
-                input_tokens=0,
-                output_tokens=0,
-                cost_usd=0,
-                completed_at=utc_now(),
-                output_artifact_refs=[
-                    str(artifact.artifact_id),
-                    str(schema_artifact.artifact_id),
-                ],
-                output_payload={
-                    "runtime_available": available,
-                    "case_count": len(cases),
-                },
-            )
-        )
+        char_run.output_artifact_refs = [str(artifact.artifact_id)]
         for case in cases:
             db.add(
                 TestCase(

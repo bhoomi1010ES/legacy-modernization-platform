@@ -22,6 +22,10 @@ def review(
     try:
         findings = []
         for path, source in files.items():
+            if not isinstance(source, str):
+                # Binary content retains its exact bytes/hashes in sandbox transport.
+                # It is not executable source for this textual/AST reviewer.
+                continue
             rules: list[
                 tuple[str, Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"], str, str]
             ] = [
@@ -109,7 +113,7 @@ def review(
                         evidence_ref=evidence_hash,
                     ).model_dump()
                 )
-        combined = "\n".join(files.values())
+        combined = "\n".join(source for source in files.values() if isinstance(source, str))
         for contract in contracts:
             symbol = contract.get("symbol")
             if (

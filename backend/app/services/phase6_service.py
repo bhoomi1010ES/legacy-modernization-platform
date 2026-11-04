@@ -18,11 +18,12 @@ from app.core.errors import (
     MalformedModelOutputError,
 )
 from app.models.agent import AgentRun
-from app.models.artifact import Artifact
+from app.models.artifact import Artifact, ArtifactType, normalize_artifact_type
 from app.models.audit import AuditEvent
 from app.models.budget import BudgetUsage
 from app.models.job import Job
-from app.models.module import Module, ModuleAttempt
+from app.models.gate import GateDecision
+from app.models.module import Module, ModuleAttempt, VerificationRun
 from app.models.phase4 import (
     RepositorySnapshotModel,
     TargetBlueprintModel,
@@ -30,6 +31,7 @@ from app.models.phase4 import (
     ConversionPlanModuleModel,
 )
 from app.models.test_case import TestResult
+from app.models.worker import WorkerRegistry
 from app.schemas.phase6 import ChangeSet
 from app.services.artifact_service import ArtifactService
 from app.services import phase6_workspace as workspace
@@ -56,14 +58,16 @@ async def newest(db, module_id):
         raise
 
 
-async def publish(db, job, module, attempt, kind, data, lineage):
+async def publish(db, job, module, attempt, kind, data, lineage, *, producer_run_id=None):
     try:
+        canonical_kind = normalize_artifact_type(kind)
         # Serialize version allocation with all other Phase 6 publishers for this job.
         await db.scalar(select(Job).where(Job.job_id == job.job_id).with_for_update())
         version = (
             await db.scalar(
                 select(func.max(Artifact.version)).where(
-                    Artifact.job_id == job.job_id, Artifact.artifact_type == kind
+                    Artifact.job_id == job.job_id,
+                    Artifact.artifact_type == canonical_kind,
                 )
             )
             or 0
@@ -71,17 +75,18 @@ async def publish(db, job, module, attempt, kind, data, lineage):
         return await ArtifactService().create_artifact(
             db,
             job.job_id,
-            kind,
+            canonical_kind,
             version,
             canonical(data),
             (
                 "Verifier"
-                if kind == "VERIFICATION_REPORT"
-                else "Reviewer" if kind == "REVIEW_REPORT" else "CodeWriter"
+                if canonical_kind == ArtifactType.VERIFICATION_REPORT.value
+                else "Reviewer" if canonical_kind == ArtifactType.REVIEW_REPORT.value else "CodeWriter"
             ),
             module_id=module.module_id,
             derived_from=lineage,
             extra_metadata={"phase": 6, "attempt_id": str(attempt.attempt_id)},
+            producer_run_id=producer_run_id,
         )
     except Exception:
         logger.exception("phase6.publish failed")
@@ -94,6 +99,22 @@ async def detail(db, attempt):
             raise NotFoundException("ModuleAttempt", "unknown")
         run = await db.get(AgentRun, attempt.agent_run_id, populate_existing=True)
         evidence = dict(run.output_payload or {})
+        verification_run = await db.scalar(
+            select(VerificationRun)
+            .where(VerificationRun.attempt_id == attempt.attempt_id)
+            .order_by(VerificationRun.created_at.desc())
+            .limit(1)
+        )
+        verifier_agent_run = (
+            await db.get(AgentRun, verification_run.agent_run_id)
+            if verification_run and verification_run.agent_run_id
+            else None
+        )
+        verifier_worker = (
+            await db.get(WorkerRegistry, verification_run.worker_id)
+            if verification_run and verification_run.worker_id
+            else None
+        )
         # Validate every stored evidence artifact before exposing success or a diff.
         for reference in run.output_artifact_refs or []:
             artifact = await db.get(Artifact, uuid.UUID(reference))
@@ -105,20 +126,20 @@ async def detail(db, attempt):
             ):
                 raise ConflictException("Attempt evidence lineage mismatch")
             payload = await read_payload(artifact)
-            if artifact.artifact_type == "CONVERTED_MODULE":
+            if artifact.artifact_type == ArtifactType.CODE_MODULE.value:
                 evidence = {
                     **payload,
                     "code_artifact_id": str(artifact.artifact_id),
                     "code_hash": artifact.content_hash,
                 }
-            elif artifact.artifact_type == "VERIFICATION_REPORT":
+            elif artifact.artifact_type == ArtifactType.VERIFICATION_REPORT.value:
                 evidence.update(
                     verification=payload,
                     checks=payload.get("checks", []),
                     results=payload.get("cases", []),
                     verification_hash=artifact.content_hash,
                 )
-            elif artifact.artifact_type == "REVIEW_REPORT":
+            elif artifact.artifact_type == ArtifactType.REVIEW_REPORT.value:
                 evidence.update(review=payload, review_hash=artifact.content_hash)
         if "failure_signature" in (run.output_payload or {}):
             evidence["failure_signature"] = run.output_payload["failure_signature"]
@@ -128,6 +149,44 @@ async def detail(db, attempt):
             raise ConflictException(
                 "Verified status without immutable independent evidence is not valid"
             )
+        if attempt.status == "VERIFIED" and (
+            verification_run is None
+            or verification_run.status != "PASS"
+            or evidence.get("verification", {}).get("verification_run_id")
+            != str(verification_run.verification_run_id)
+            or evidence.get("verification", {}).get("candidate_hash")
+            != verification_run.candidate_hash
+            or evidence.get("verification", {}).get("suite_hash")
+            != verification_run.suite_hash
+            or verifier_agent_run is None
+            or verifier_agent_run.agent_name != "Verifier"
+            or verifier_agent_run.status != "SUCCEEDED"
+            or verifier_agent_run.run_id == run.run_id
+            or verifier_agent_run.task_payload.get("candidate_hash")
+            != verification_run.candidate_hash
+            or verifier_agent_run.task_payload.get("suite_hash")
+            != verification_run.suite_hash
+            or verifier_agent_run.task_payload.get("profile_digest")
+            != verification_run.profile_digest
+            or digest(verifier_agent_run.task_payload.get("inputs", {}))
+            != verification_run.input_hash
+            or verifier_agent_run.trace_payload.get("worker_id")
+            != verification_run.worker_id
+            or verifier_agent_run.trace_payload.get("worker_id")
+            == verifier_agent_run.task_payload.get("codewriter_worker_id")
+            or verifier_worker is None
+            or verifier_worker.worker_type != "VERIFIER"
+            or verification_run.evidence_hash != digest(verification_run.evidence)
+        ):
+            raise ConflictException(
+                "Verified status is not bound to a passing immutable run for this commit and suite"
+            )
+        if attempt.status == 'VERIFIED':
+            from app.services.verification_proof import validate_success
+            try:
+                validate_success(evidence['verification'],verifier_agent_run,run.job_id)
+            except (ValueError,KeyError,TypeError) as exc:
+                raise ConflictException('Historical or current verification lacks authentic independent execution proof') from exc
         return get_secret_redactor().redact_object(
             {
                 "attempt_id": str(attempt.attempt_id),
@@ -143,6 +202,19 @@ async def detail(db, attempt):
                     "trace": run.trace_payload,
                 },
                 "evidence": evidence,
+                "verification_run": ({
+                    "verification_run_id": str(verification_run.verification_run_id),
+                    "agent_run_id": str(verification_run.agent_run_id) if verification_run.agent_run_id else None,
+                    "status": verification_run.status,
+                    "worker_id": verification_run.worker_id,
+                    "candidate_hash": verification_run.candidate_hash,
+                    "suite_hash": verification_run.suite_hash,
+                    "profile_version": verification_run.profile_version,
+                    "profile_digest": verification_run.profile_digest,
+                    "started_at": verification_run.started_at.isoformat() if verification_run.started_at else None,
+                    "finished_at": verification_run.finished_at.isoformat() if verification_run.finished_at else None,
+                    "evidence_hash": verification_run.evidence_hash,
+                } if verification_run else None),
                 "completed_at": (
                     attempt.completed_at.isoformat() if attempt.completed_at else None
                 ),
@@ -222,7 +294,7 @@ async def queue(db, job, module, key, actor, *, previous=None, rationale=None):
         if last and last.status in ACTIVE:
             raise ConflictException("Module already has an active attempt")
         maximum = min(50, 1 + (job.max_repair_attempts or 40))
-        if last and (last.attempt_number >= maximum or last.status == "ESCALATED"):
+        if last and (last.attempt_number >= maximum or last.status == "WAITING_FOR_HUMAN"):
             raise ConflictException(
                 "Repair attempt limit exhausted; human escalation required"
             )
@@ -364,6 +436,10 @@ async def queue(db, job, module, key, actor, *, previous=None, rationale=None):
             raise ConflictException(
                 "Module dependencies, concurrency or budget block conversion"
             )
+        leased_module = claimed[0]
+        lease_owner = leased_module.lease_owner
+        if leased_module.module_id != module.module_id or not lease_owner:
+            raise ConflictException("Scheduler returned an invalid module lease")
         # Retain the job lock through lease + idempotency + unique attempt allocation.
         await db.scalar(select(Job).where(Job.job_id == job.job_id).with_for_update())
         last = await newest(db, module.module_id)
@@ -410,6 +486,43 @@ async def queue(db, job, module, key, actor, *, previous=None, rationale=None):
             "rationale": rationale,
             **eligibility,
         }
+        g3_decision = await db.scalar(
+            select(GateDecision).where(
+                GateDecision.job_id == job.job_id,
+                GateDecision.gate_id == uuid.UUID(eligibility["gate_ids"]["G3"]),
+                GateDecision.gate_type == "G3",
+                GateDecision.decision == "APPROVED",
+            )
+        )
+        approved_options = (g3_decision.selected_options or {}) if g3_decision else {}
+        provider_option = approved_options.get("CodeWriter.model_provider")
+        model_option = approved_options.get("CodeWriter.model_identifier")
+        if bool(provider_option) != bool(model_option):
+            raise ConflictException(
+                "G3 must approve both CodeWriter provider and model, or neither"
+            )
+        # Job-level choices are read only from the exact accepted G3 decision.
+        # The deployment choice remains the default when G3 selects neither.
+        model_provider = provider_option or settings.PHASE6_MODEL_PROVIDER or "unconfigured"
+        model_identifier = model_option or settings.PHASE6_MODEL_IDENTIFIER or "unconfigured"
+        model_approval_hash = digest(
+            {
+                "g3_gate_id": eligibility["gate_ids"]["G3"],
+                "g3_decision_id": str(g3_decision.decision_id) if g3_decision else None,
+                "provider": model_provider,
+                "model": model_identifier,
+            }
+        )
+        context.update(
+            model_provider=model_provider,
+            model_identifier=model_identifier,
+            model_approval_hash=model_approval_hash,
+            gateway_request_id=f"phase6-{uuid.uuid4()}",
+        )
+        if module.plan_hash != context["plan_hash"]:
+            raise ConflictException("Module contract plan hash differs from the G3-approved plan snapshot")
+        if module.integration_base_sha != context["source_commit"]:
+            raise ConflictException("Module worktree integration base differs from its approved plan snapshot")
         run = AgentRun(
             run_id=uuid.uuid4(),
             job_id=job.job_id,
@@ -417,14 +530,16 @@ async def queue(db, job, module, key, actor, *, previous=None, rationale=None):
             # Attempts are retries of one durable module conversion task.
             task_id=f"p6-{module.module_id}",
             correlation_id=f"p6-{uuid.uuid4().hex[:16]}",
-            model_provider=settings.PHASE6_MODEL_PROVIDER or "unconfigured",
-            model_identifier=settings.PHASE6_MODEL_IDENTIFIER or "unconfigured",
+            model_provider=model_provider,
+            model_identifier=model_identifier,
             status="QUEUED",
             task_payload=get_secret_redactor().redact_object(context),
             trace_payload={"events": ["QUEUED"]},
         )
         run.task_payload = {
             **run.task_payload,
+            "job_id": str(job.job_id),
+            "agent_run_id": str(run.run_id),
             "cases": [c for c in eligibility["cases"] if c["outcome"] == "PASSED"],
             "unobserved_cases": [
                 c for c in eligibility["cases"] if c["outcome"] != "PASSED"
@@ -446,12 +561,14 @@ async def queue(db, job, module, key, actor, *, previous=None, rationale=None):
             attempt_id=uuid.uuid4(),
             module_id=module.module_id,
             agent_run_id=run.run_id,
+            worker_id=lease_owner,
             attempt_number=number,
             status="QUEUED",
             git_branch=f"job/{job.job_id}/module/{module.module_id}/attempt/{number}",
             lease_generation=module.lease_generation,
         )
         db.add(attempt)
+        run.task_payload={**run.task_payload,'attempt_id':str(attempt.attempt_id)}
         if previous:
             ids = select(ModuleAttempt.attempt_id).where(
                 ModuleAttempt.module_id == module.module_id
@@ -493,6 +610,7 @@ async def hydrate_dependencies(
     """Materialize the verified transitive closure before the module's own scoped diff."""
     try:
         visited = {}
+        staged_files: set[str] = set()
 
         async def visit(reference, ancestors):
             try:
@@ -525,7 +643,9 @@ async def hydrate_dependencies(
                     worktree,
                     payload["files"],
                     payload.get("allowed_targets", payload["allowed_target"]),
+                    expected_staged_files=staged_files,
                 )
+                staged_files.update(payload["files"])
                 visited[identity] = reference["content_hash"]
             except Exception:
                 logger.exception("phase6.hydrate_dependency failed")
@@ -533,6 +653,7 @@ async def hydrate_dependencies(
 
         for reference in references:
             await visit(reference, set())
+        return staged_files
     except Exception:
         logger.exception("phase6.hydrate_dependencies failed")
         raise
@@ -559,6 +680,8 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
         run = await db.get(AgentRun, attempt.agent_run_id)
         module = await db.get(Module, attempt.module_id)
         job = await db.get(Job, module.job_id)
+        from app.services.verification_profiles import get_profile
+        target_profile = get_profile(job.target_stack)
         current = await supervisor_service.require_conversion_eligibility(db, job)
         context = run.task_payload
         if (
@@ -626,7 +749,7 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
         )
         attempt.git_branch = branch
         # Bring only verified dependency changes into this private worktree.
-        await hydrate_dependencies(
+        staged_dependency_files = await hydrate_dependencies(
             db,
             worktree,
             context["dependencies"],
@@ -694,6 +817,30 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
         run.input_tokens = usage["input_tokens"]
         run.output_tokens = usage["output_tokens"]
         run.cost_usd = Decimal(str(usage["cost_usd"]))
+        run.reported_input_tokens = usage.get("reported_input_tokens")
+        run.reported_output_tokens = usage.get("reported_output_tokens")
+        run.provider_request_id = (
+            usage.get("provider_request_id")
+            or trace.get("provider_request_id")
+            or trace.get("provider_metadata", {}).get("request_id")
+        )
+        run.provider_model_id = (
+            usage.get("provider_model_id")
+            or trace.get("provider_metadata", {}).get("actual_model")
+            or trace.get("provider_metadata", {}).get("model")
+        )
+        run.estimated_cost = (
+            Decimal(str(usage["estimated_cost"]))
+            if usage.get("estimated_cost") is not None
+            else None
+        )
+        run.billed_cost = (
+            Decimal(str(usage["billed_cost"]))
+            if usage.get("billed_cost") is not None
+            else None
+        )
+        if run.provider_model_id:
+            run.model_identifier = str(run.provider_model_id)[:100]
         job.budget_used_usd += run.cost_usd
         module.budget_used_usd += run.cost_usd
         db.add(
@@ -766,26 +913,30 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
         except Exception as ve:
             raise MalformedModelOutputError(f"Model output schema validation failed: {ve}") from ve
         if context.get("allowed_targets"):
-            target_prefix = str(PurePosixPath(context["allowed_targets"][0])).rstrip("/")
-            normalized_files = {}
-            for path_key, content in changes.files.items():
-                clean_key = path_key.replace("\\", "/").strip().lstrip("/")
-                if not any(
-                    clean_key == str(PurePosixPath(t))
-                    or clean_key.startswith(str(PurePosixPath(t)).rstrip("/") + "/")
-                    for t in context["allowed_targets"]
+            scopes = [PurePosixPath(t) for t in context["allowed_targets"]]
+            for path_key in changes.files:
+                # Treat model output as an untrusted ChangeSet. Path normalization
+                # could turn traversal/absolute paths into apparently safe paths.
+                path = PurePosixPath(path_key)
+                if (
+                    not path_key
+                    or "\\" in path_key
+                    or path.is_absolute()
+                    or path.as_posix() != path_key
+                    or any(part in {"", ".", ".."} for part in path.parts)
+                    or not any(
+                        path == scope or (not scope.suffix and scope in path.parents)
+                        for scope in scopes
+                    )
                 ):
-                    clean_key = f"{target_prefix}/{clean_key}"
-                clean_content = (content or '').replace('\x00', '')
-                clean_content = re.sub(
-                    r'from\s+app\.modules\.[a-zA-Z0-9_\-]+\.([a-zA-Z0-9_]+)\s+import',
-                    r'from .\1 import',
-                    clean_content,
-                )
-                normalized_files[clean_key] = clean_content
-            changes.files = normalized_files
+                    raise MalformedModelOutputError(
+                        f"Generated path is not a canonical path within an approved target: {path_key!r}"
+                    )
         applied = await workspace.apply_changes(
-            worktree, changes.files, context["allowed_targets"]
+            worktree,
+            changes.files,
+            context["allowed_targets"],
+            expected_staged_files=staged_dependency_files,
         )
         snapshot = await workspace.file_snapshot(worktree)
         evidence = {
@@ -821,18 +972,70 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
         run.output_artifact_refs = [str(code.artifact_id)]
         run.output_payload = dict(evidence)
         attempt.status = "VERIFYING"
+        run.status = "SUCCEEDED"
+        run.completed_at = utc_now()
         await db.commit()
         # ALL frozen cases, not only an optimistic module slice, run after every change.
-        verification = await verifier_service.execute(
-            snapshot, context["cases"], context["baseline_hash"]
+        suite_hash = digest({
+            "baseline_hash": context["baseline_hash"],
+            "cases": context["cases"],
+        })
+        execution_profile = {
+            "version": target_profile["version"],
+            "image": target_profile["image"],
+            "runtime": target_profile["runtime"],
+            "timeout": target_profile["timeout"],
+            "adapter": target_profile["adapter"],
+            "checks": target_profile["checks"],
+            "system_checks": target_profile["system_checks"],
+            "target_key": target_profile["target_key"],
+        }
+        profile_digest = digest(execution_profile)
+        verification_inputs = {
+            "candidate_hash": applied["candidate_hash"],
+            "suite_hash": suite_hash,
+            "baseline_hash": context["baseline_hash"],
+            "files": snapshot,
+            "cases": context["cases"],
+            "profile_version": target_profile["version"],
+            "profile_digest": profile_digest,
+            "execution_profile": execution_profile,
+            "policy": "G2 frozen cases; target-stack checks; missing tools block; no CodeWriter verdicts",
+        }
+        from app.services.worker_dispatch_service import worker_dispatch_service
+        from app.services.durable_verification import prepare_and_execute
+        verification, verification_run, verifier_run = await prepare_and_execute(
+            db, job, verification_inputs, attempt_id=attempt.attempt_id,
+            artifact_refs=[str(code.artifact_id), context['baseline_id']], codewriter_worker_id=lease_owner,
         )
+        verifier_worker_id = verification.get('independent_worker_id')
+        profile_digest = verification_run.profile_digest
         verification["unobserved_cases"] = [
             {k: c.get(k) for k in ("test_case_id", "name", "outcome")}
             for c in context.get("unobserved_cases", [])
         ]
         verification["baseline_hash"] = context["baseline_hash"]
-        verification["source_commit"] = applied["commit"]
+        verification["source_commit"] = applied["base_sha"]
+        verification["candidate_hash"] = applied["candidate_hash"]
+        verification["suite_hash"] = suite_hash
+        verification["verification_run_id"] = str(verification_run.verification_run_id)
+        verification["changeset_diff_hash"] = applied["diff_hash"]
         verification["verifier_version"] = "phase6-verifier-v1"
+        for check in verification.get("checks", []):
+            check["source_commit_hash"] = applied["base_sha"]
+            check["candidate_hash"] = applied["candidate_hash"]
+            check["image_digest"] = verification.get("image_id")
+            check["dependency_hashes"] = [
+                str(item.get("content_hash"))
+                for item in context.get("dependencies", [])
+                if item.get("content_hash")
+            ]
+        verification["coverage_ceiling"] = {
+            "executed_cases": len(verification.get("cases", [])),
+            "frozen_cases": len(context["cases"]),
+            "unobserved_cases": len(context.get("unobserved_cases", [])),
+            "claim": "Selected frozen scenarios only; does not establish complete behavior equivalence.",
+        }
         reviewer = review(
             changes.files,
             context["public_contracts"],
@@ -840,6 +1043,12 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
             design_notes=changes.design_notes,
             execution=verification,
         )
+        external_review=verification.get('independent_review') or {'status':'BLOCKED','findings':[]}
+        reviewer['findings'] += external_review.get('findings',[])
+        if external_review['status']!='PASS' or reviewer['findings']:
+            reviewer['status']='REJECTED'
+        reviewer.update(candidate_hash=applied['candidate_hash'],suite_hash=suite_hash,
+            controller_attestation=verification.get('controller_attestation'))
         verification_artifact = await publish(
             db,
             job,
@@ -848,6 +1057,7 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
             "VERIFICATION_REPORT",
             verification,
             [str(code.artifact_id), context["baseline_id"]],
+            producer_run_id=verifier_run.run_id,
         )
         review_artifact = await publish(
             db,
@@ -857,6 +1067,7 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
             "REVIEW_REPORT",
             reviewer,
             [str(code.artifact_id), str(verification_artifact.artifact_id)],
+            producer_run_id=uuid.UUID(verification['reviewer_agent_run_id']),
         )
         run.output_artifact_refs = [
             str(code.artifact_id),
@@ -893,17 +1104,30 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
             raise ConflictException(
                 "Attempt was interrupted or superseded; its execution cannot overwrite newer evidence"
             )
-        for item in verification.get("cases", []):
-            case = next(
-                c for c in context["cases"] if c["test_case_id"] == item["test_case_id"]
-            )
+        observed_by_id = {
+            item["test_case_id"]: item for item in verification.get("cases", [])
+        }
+        for case in context["cases"]:
+            item = observed_by_id.get(case["test_case_id"])
+            if item is None:
+                db.add(
+                    TestResult(
+                        test_case_id=uuid.UUID(case["test_case_id"]),
+                        attempt_id=attempt.attempt_id,
+                        outcome="FAILED",
+                        difference_classification="UNOBSERVED",
+                        legacy_output={"output": case["expected"], "side_effects": case["side_effects"]},
+                        converted_output=None,
+                    )
+                )
+                continue
             db.add(
                 TestResult(
                     test_case_id=uuid.UUID(item["test_case_id"]),
                     attempt_id=attempt.attempt_id,
                     outcome="PASSED" if item["status"] == "PASS" else "FAILED",
                     difference_classification=(
-                        "NONE" if item["status"] == "PASS" else "REGRESSION"
+                        item.get("difference_classification", "NONE" if item["status"] == "PASS" else "REGRESSION")
                     ),
                     legacy_output={
                         "output": case["expected"],
@@ -945,9 +1169,38 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
                 50, 1 + (job.max_repair_attempts or 40)
             ):
                 status, reason = (
-                    "ESCALATED",
+                    "WAITING_FOR_HUMAN",
                     "Repeated failure or repair limit exhausted; human review required",
                 )
+        verification_run.status = (
+            "BLOCKED" if not verification.get("available")
+            else "PASS" if verification.get("passed") and reviewer["status"] == "PASS"
+            else "FAIL"
+        )
+        verification_run.finished_at = utc_now()
+        verification_run.evidence = {
+            "verification": verification,
+            "review": reviewer,
+            "candidate_hash": applied["candidate_hash"],
+            "suite_hash": suite_hash,
+            "profile_digest": profile_digest,
+        }
+        verification_run.evidence_hash = digest(verification_run.evidence)
+        verifier_run.status = "SUCCEEDED" if verification_run.status == "PASS" else "FAILED"
+        verifier_run.output_payload = {
+            "verification_run_id": str(verification_run.verification_run_id),
+            "status": verification_run.status,
+            "evidence_hash": verification_run.evidence_hash,
+            "candidate_hash": verification_run.candidate_hash,
+            "suite_hash": verification_run.suite_hash,
+        }
+        verifier_run.completed_at = verification_run.finished_at
+        verifier_run.trace_payload = {
+            **verifier_run.trace_payload,
+            "events": ["QUEUED", "LEASED", "EXECUTED", verification_run.status],
+        }
+        if verifier_worker_id:
+            await worker_dispatch_service.deregister_worker(db, verifier_worker_id, "STOPPED")
         # Supervisor is the only caller allowed to publish the final module disposition.
         run.output_payload = dict(evidence)
         heartbeat_stop.set()

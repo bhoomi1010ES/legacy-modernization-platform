@@ -41,6 +41,16 @@ class AgentRun(Base):
     cost_usd: Mapped[Decimal] = mapped_column(
         Numeric(10, 4), default=Decimal("0.0000"), nullable=False
     )
+    
+    # Provider usage recording (W06 requirement 5: separate nullable fields, unknown is null not 0)
+    reported_input_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    reported_output_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    provider_request_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    provider_model_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    pricing_table_version: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    estimated_cost: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4), nullable=True)
+    billed_cost: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4), nullable=True)
+
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     failure_classification: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     task_payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)

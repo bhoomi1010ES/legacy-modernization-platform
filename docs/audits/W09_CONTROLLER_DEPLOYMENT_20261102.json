@@ -1,0 +1,40 @@
+{
+  "status": "PASS",
+  "unit": "rebase-sandbox-controller.service",
+  "unit_status": "active",
+  "health": {
+    "blocked_reasons": [],
+    "images": [
+      "sha256:42372f8e665d07f55d3d62d8c905f3b2f31295c91e439d05eea277d42bd85112",
+      "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3"
+    ],
+    "runtime": {
+      "cgroup_version": "2",
+      "docker_version": "29.9.2",
+      "runtime_name": "docker-rootless",
+      "security_options": [
+        "name=seccomp,profile=builtin",
+        "name=rootless",
+        "name=cgroupns"
+      ],
+      "selected_runtime": "runc",
+      "timestamp": 1793618721.741399
+    },
+    "status": "ready",
+    "worker_alive": true
+  },
+  "private_configuration_mode": "0o600",
+  "api_configuration_keys_updated": [
+    "PHASE6_SANDBOX_IMAGE",
+    "PHASE7_SANDBOX_IMAGE",
+    "SANDBOX_ATTESTATION_KEY",
+    "SANDBOX_CONTROLLER_URL",
+    "SANDBOX_DISPATCH_KEY",
+    "SANDBOX_RUNTIME"
+  ],
+  "api_environment_backup_created": true,
+  "control_plane_database_credentials_passed_to_worker": false,
+  "diagnostics_enabled": false,
+  "api_restart_required": true,
+  "live_migrations_applied": false
+}

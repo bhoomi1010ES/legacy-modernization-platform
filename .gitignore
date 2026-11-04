@@ -55,6 +55,18 @@ wheels/
 # 3. Testing, Type Checking & Code Quality
 .pytest_cache/
 **/.pytest_cache/
+.pytest_temp/
+**/.pytest_temp/
+.test_runs/
+**/.test_runs/
+w09-safe-test-temp/
+**/w09-safe-test-temp/
+temp_pytest_run/
+**/temp_pytest_run/
+backups/
+**/backups/
+converted_projects/
+**/converted_projects/
 .coverage
 .coverage.*
 htmlcov/

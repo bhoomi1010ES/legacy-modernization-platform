@@ -296,7 +296,7 @@ def test_job_create_never_persists_git_token(client: TestClient):
     client.cookies.clear()
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     assert login_resp.status_code == 200
     token = login_resp.cookies[settings.SESSION_COOKIE_NAME]
@@ -346,7 +346,7 @@ def test_job_intake_route_with_pinned_commit(client: TestClient):
     client.cookies.clear()
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     assert login_resp.status_code == 200
     session_cookie = login_resp.cookies[settings.SESSION_COOKIE_NAME]

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 from pathlib import Path
 from app.core.config import settings
 from app.core.errors import IncompleteModelOutputError, MalformedModelOutputError
@@ -12,6 +13,15 @@ PROMPT = Path(__file__).resolve().parents[1] / "prompts" / "phase6-codewriter-v1
 
 
 class CodeWriterService:
+    @staticmethod
+    def _request_cost_cap(context: dict, source_count: int) -> float:
+        """Pre-allocate the attempt ceiling across the monolithic call and fallback chunks."""
+        attempt_cap = float(
+            context.get("cost_reservation", settings.PHASE6_MAX_TASK_COST_USD)
+        )
+        fallback_calls = math.ceil(source_count / 3) if source_count > 1 else 0
+        return attempt_cap / (1 + fallback_calls)
+
     async def generate(self, context: dict, sources: dict, *, gateway=None):
         try:
             if gateway is None and (
@@ -68,14 +78,25 @@ class CodeWriterService:
                 ],
                 "max_tokens": settings.PHASE6_MAX_OUTPUT_TOKENS,
                 "temperature": 0,
+                "prompt_revision": "phase6-codewriter-v1",
+                "request_id": context.get("gateway_request_id"),
+                "ledger_context": {
+                    "job_id": context.get("job_id"),
+                    "run_id": context.get("agent_run_id"),
+                    "attempt_id":context.get('attempt_id'),
+                    "selection_hash":context.get('model_approval_hash'),
+                },
             }
-            if settings.PHASE6_MODEL_PROVIDER == "openai":
+            provider = context.get("model_provider", settings.PHASE6_MODEL_PROVIDER)
+            model = context.get("model_identifier", settings.PHASE6_MODEL_IDENTIFIER)
+            if provider == "openai":
                 req["response_format"] = {"type": "json_object"}
             result = await gateway.complete(
-                provider=settings.PHASE6_MODEL_PROVIDER,
-                model=settings.PHASE6_MODEL_IDENTIFIER,
+                provider=provider,
+                model=model,
                 max_retries=2,
                 request=req,
+                max_cost_usd=self._request_cost_cap(context, len(sources)),
             )
             response = result.response
             output = response.output
@@ -145,15 +166,26 @@ class CodeWriterService:
                 ],
                 "max_tokens": settings.PHASE6_MAX_OUTPUT_TOKENS,
                 "temperature": 0,
+                "prompt_revision": "phase6-codewriter-v1-chunked",
+                "request_id": f"{context.get('gateway_request_id', 'phase6')}-chunk-{chunk_idx + 1}",
+                "ledger_context": {
+                    "job_id": context.get("job_id"),
+                    "run_id": context.get("agent_run_id"),
+                    "attempt_id":context.get('attempt_id'),
+                    "selection_hash":context.get('model_approval_hash'),
+                },
             }
-            if settings.PHASE6_MODEL_PROVIDER == "openai":
+            provider = context.get("model_provider", settings.PHASE6_MODEL_PROVIDER)
+            model = context.get("model_identifier", settings.PHASE6_MODEL_IDENTIFIER)
+            if provider == "openai":
                 req["response_format"] = {"type": "json_object"}
 
             result = await gateway.complete(
-                provider=settings.PHASE6_MODEL_PROVIDER,
-                model=settings.PHASE6_MODEL_IDENTIFIER,
+                provider=provider,
+                model=model,
                 max_retries=2,
                 request=req,
+                max_cost_usd=self._request_cost_cap(context, len(sources)),
             )
             resp = result.response
             total_attempts += result.attempts

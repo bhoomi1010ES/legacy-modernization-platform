@@ -70,11 +70,11 @@ async def _create_test_job(
     limit: str = "2000",
 ) -> Job:
     """Helper to provision a test job in the database."""
-    admin = await _get_or_create_test_user(db, "ADMIN")
+    owner = await _get_or_create_test_user(db, "DEVELOPER")
     job = Job(
         name=f"phase3-compliance-{uuid.uuid4().hex[:8]}",
         source_repository="https://github.com/acme/legacy-monolith-phase3",
-        owner_user_id=admin.user_id,
+        owner_user_id=owner.user_id,
         status=status.value,
         active_node=status.value.lower(),
         budget_used_usd=Decimal(used),

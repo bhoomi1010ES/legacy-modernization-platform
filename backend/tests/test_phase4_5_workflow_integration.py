@@ -75,6 +75,21 @@ from app.services.schema_data_agent import schema_data_service
 from app.services.supervisor_service import supervisor_service
 
 
+async def _get_reviewer_user(db) -> User:
+    user = User(
+        user_id=uuid.uuid4(),
+        email=f"reviewer_{uuid.uuid4().hex[:6]}@example.com",
+        full_name="Independent Reviewer",
+        password_hash="test_secret",
+        role="REVIEWER",
+        status="ACTIVE",
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
 async def _get_admin_user(db) -> User:
     user = await db.scalar(select(User).where(User.role.in_(["ADMIN", "SUPER_ADMIN"])).limit(1))
     if not user:
@@ -176,6 +191,7 @@ async def test_full_pipeline_g1_to_g3_readiness(repo_fixture, monkeypatch):
 
     async with AsyncSessionLocal() as db:
         admin = await _get_admin_user(db)
+        reviewer = await _get_reviewer_user(db)
         job = Job(
             job_id=uuid.uuid4(),
             name=f"test-p4-p5-{uuid.uuid4().hex[:6]}",
@@ -223,7 +239,7 @@ async def test_full_pipeline_g1_to_g3_readiness(repo_fixture, monkeypatch):
             artifact_hashes=gate_g1.artifact_hashes,
             options={"strategy": "PROCEED"},
         )
-        await gate_service.decide(db, gate_g1.gate_id, dec_req1, actor_id=admin.user_id, actor_role="ADMIN", correlation_id=corr_id)
+        await gate_service.decide(db, gate_g1.gate_id, dec_req1, actor_id=reviewer.user_id, actor_role="REVIEWER", correlation_id=corr_id)
         await db.refresh(job)
         assert job.status == JobStatus.CHARACTERIZING.value
 
@@ -268,7 +284,7 @@ async def test_full_pipeline_g1_to_g3_readiness(repo_fixture, monkeypatch):
             rationale="Golden vectors verified reproducible and schema mapping validated for PostgreSQL.",
             artifact_hashes=gate_g2.artifact_hashes,
         )
-        await gate_service.decide(db, gate_g2.gate_id, dec_req2, actor_id=admin.user_id, actor_role="ADMIN", correlation_id=corr_id)
+        await gate_service.decide(db, gate_g2.gate_id, dec_req2, actor_id=reviewer.user_id, actor_role="REVIEWER", correlation_id=corr_id)
         await db.refresh(job)
         assert job.status == JobStatus.PLANNING.value
 

@@ -70,15 +70,11 @@ async def _gate_access(db: AsyncSession, gate_id: UUID, user: User, permission: 
     gate = await db.get(WorkflowGate, gate_id)
     if not gate:
         raise NotFoundException("Gate", str(gate_id))
-    if user.role == "SUPER_ADMIN":
-        return gate, user.role
     membership = await db.scalar(select(JobMembership).where(
         JobMembership.job_id == gate.job_id, JobMembership.user_id == user.user_id
     ))
     if not membership:
         raise NotFoundException("Gate", str(gate_id))
-    if not RBACPolicy.has_permission(membership.role_id, permission):
-        raise ForbiddenException(f"Job membership role '{membership.role_id}' lacks '{permission}'.")
     return gate, membership.role_id
 
 
@@ -113,13 +109,10 @@ async def get_workflow(
         if job.status == "CANCELLED" and index == current_index:
             phase_status = "CANCELLED"
         phases.append(PhaseProgress(node=node, label=label, status=phase_status))
-    if user.role == "SUPER_ADMIN":
-        effective_role = user.role
-    else:
-        membership = await db.scalar(select(JobMembership).where(
-            JobMembership.job_id == job.job_id, JobMembership.user_id == user.user_id
-        ))
-        effective_role = membership.role_id if membership else "VIEWER"
+    membership = await db.scalar(select(JobMembership).where(
+        JobMembership.job_id == job.job_id, JobMembership.user_id == user.user_id
+    ))
+    effective_role = membership.role_id if membership else "DEVELOPER"
     allowed = []
     if job.status == "PAUSED":
         if RBACPolicy.has_permission(effective_role, "job:pause_resume"):

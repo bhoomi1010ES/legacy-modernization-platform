@@ -11,11 +11,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictException, NotFoundException
-from app.models.artifact import Artifact
+from app.models.artifact import Artifact, normalize_artifact_type
 from app.models.job import Job
 from app.models.phase4 import (
     AnalysisConflictRecord,
     ConversionPlanModel,
+    ConversionPlanModuleModel,
     FeasibilityDecisionModel,
     FeasibilityReportModel,
     LegacyModelRecord,
@@ -224,20 +225,45 @@ class G3Service:
                     select(Artifact).where(Artifact.job_id == job_id)
                 )
             ).scalars().all()
-            art_types_upper = {a.artifact_type.upper().replace("_", "") for a in artifacts}
+            normalized_artifacts = []
+            for artifact in artifacts:
+                try:
+                    normalized_artifacts.append((normalize_artifact_type(artifact.artifact_type), artifact))
+                except Exception as exc:
+                    raise ConflictException(f"Unknown artifact type blocks G3: {artifact.artifact_type!r}") from exc
+            art_types = {kind for kind, _ in normalized_artifacts}
 
             required_types = [
-                ("LEGACY_MODEL", "LEGACYMODEL"),
-                ("TARGET_BLUEPRINT", "TARGETBLUEPRINT"),
-                ("FEASIBILITY_REPORT", "FEASIBILITYREPORT"),
-                ("CHARACTERIZATION_SUITE", "CHARACTERIZATIONSUITE"),
-                ("SCHEMA_MIGRATION_PLAN", "SCHEMAMIGRATIONPLAN"),
-                ("CONVERSION_PLAN", "CONVERSIONPLAN"),
+                "LegacyModel", "TargetBlueprint", "FeasibilityReport",
+                "CHARACTERIZATION_SUITE", "SCHEMA_MIGRATION_PLAN", "CONVERSION_PLAN",
             ]
-            for canonical_name, clean_name in required_types:
-                if clean_name not in art_types_upper:
+            for canonical_name in required_types:
+                if canonical_name not in art_types:
                     missing_evidence.append(canonical_name)
                     blocking_reasons.append(f"Missing required upstream artifact: {canonical_name}")
+
+            plan_artifact = next(
+                (a for kind, a in normalized_artifacts
+                 if kind == "CONVERSION_PLAN" and a.version == plan_model.version),
+                None,
+            )
+            if plan_artifact is None:
+                blocking_reasons.append("Current ConversionPlan model has no matching canonical plan artifact")
+            else:
+                from app.models.module import Module
+                plan_module_names = set((await db.execute(
+                    select(ConversionPlanModuleModel.module_id).where(
+                        ConversionPlanModuleModel.plan_id == plan_model.plan_id
+                    )
+                )).scalars().all())
+                planned_modules = list((await db.execute(
+                    select(Module).where(
+                        Module.job_id == job_id,
+                        Module.name.in_(plan_module_names),
+                    )
+                )).scalars().all())
+                if not planned_modules or any(m.plan_hash != plan_artifact.content_hash for m in planned_modules):
+                    blocking_reasons.append("Module contracts are not bound to the exact ConversionPlan artifact hash")
 
             # 6. Verify Characterization baseline is frozen (Gate G2 approved)
             g2_gate = (
@@ -252,10 +278,7 @@ class G3Service:
                 blocking_reasons.append("Characterization baseline is not frozen: Gate G2 must be APPROVED.")
 
             # 7. Verify Schema/Data review is complete
-            schema_art = next(
-                (a for a in artifacts if a.artifact_type in ("SCHEMA_MIGRATION_PLAN", "SchemaMigrationPlan")),
-                None,
-            )
+            schema_art = next((a for kind, a in normalized_artifacts if kind == "SCHEMA_MIGRATION_PLAN"), None)
             if schema_art:
                 extra = schema_art.extra_metadata or {}
                 if extra.get("status") == "REVIEW_REQUIRED":

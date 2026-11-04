@@ -79,7 +79,7 @@ class TestResult(Base):
     __table_args__ = (
         CheckConstraint("outcome IN ('PASSED', 'FAILED')", name="chk_test_outcome"),
         CheckConstraint(
-            "difference_classification IN ('NONE', 'REGRESSION', 'INTENDED_DIFFERENCE', 'NONDETERMINISTIC', 'TEST_DEFECT')",
+            "difference_classification IN ('NONE', 'REGRESSION', 'INTENDED_DIFFERENCE', 'NONDETERMINISTIC', 'TEST_DEFECT', 'UNOBSERVED')",
             name="chk_difference_classification"
         ),
     )

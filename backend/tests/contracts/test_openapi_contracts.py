@@ -47,8 +47,16 @@ def test_api_version_prefix_consistency(client: TestClient):
         )
 
 
-def test_health_and_readiness_endpoints(client: TestClient):
-    """Verifies health and readiness probes respond with 200 OK."""
+def test_health_and_incomplete_sandbox_readiness_endpoints(client: TestClient, monkeypatch):
+    """A healthy database cannot hide a missing target verification profile."""
+    from app.api.v1 import system
+    async def healthy_database():
+        return True
+    async def healthy_controller():
+        return {"status": "ready", "worker_alive": True, "images": []}
+    monkeypatch.setattr("app.services.sandbox_client.health", healthy_controller)
+    monkeypatch.setattr("app.services.verification_profiles.available_profiles", lambda: [])
+    monkeypatch.setattr(system,"ping_database",healthy_database)
     health_resp = client.get("/api/v1/health")
     assert health_resp.status_code == 200
     health_data = health_resp.json()
@@ -56,17 +64,19 @@ def test_health_and_readiness_endpoints(client: TestClient):
     assert health_data["database"] == "connected"
 
     ready_resp = client.get("/api/v1/readiness")
-    assert ready_resp.status_code == 200
+    assert ready_resp.status_code == 503
     ready_data = ready_resp.json()
-    assert ready_data["ready"] is True
+    assert ready_data["ready"] is False
     assert "database" in ready_data["components"]
+    assert ready_data["components"]["agent_workers"] == "healthy"
+    assert ready_data["components"]["sandboxes"] == "profile_missing"
 
 
 def test_standardized_error_envelope_on_validation_failure(client: TestClient):
     """Validates that 422 Unprocessable Entity returns the standardized ErrorEnvelope."""
     client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     # Submit invalid budget < 50.0 and short name < 2 chars
     invalid_payload = {
@@ -90,7 +100,7 @@ def test_standardized_error_envelope_on_not_found(client: TestClient):
     """Validates that 404 Not Found returns the standardized ErrorEnvelope."""
     client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     response = client.get("/api/v1/jobs/JOB-NONEXISTENT")
     assert response.status_code == 404

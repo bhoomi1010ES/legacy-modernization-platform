@@ -233,10 +233,16 @@ async def isolated(monkeypatch):
 
     storage = MemoryStorage()
     monkeypatch.setattr(service, "get_storage_adapter", lambda: storage)
+    from app.services.artifact_service import artifact_service
+
+    monkeypatch.setattr(artifact_service, "storage", storage)
     monkeypatch.setattr(
         "app.services.continuous_pipeline.continuous_pipeline_service.trigger_continuous_pipeline",
         lambda *a, **k: None,
     )
+    # This fixture explicitly drives the workflow with its own in-memory session.
+    # Gate approval must not start another runner on the global test database.
+    monkeypatch.setattr('app.services.supervisor_service.supervisor_service.schedule_drive',lambda *a,**k:None)
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
@@ -258,6 +264,7 @@ async def isolated(monkeypatch):
         )
         db.add(job)
         await db.flush()
+        db.add(JobMembership(job_id=job.job_id,user_id=owner.user_id,role_id='SUPER_ADMIN'))
         db.add(
             Module(
                 job_id=job.job_id,
@@ -575,7 +582,7 @@ async def test_api_auth_job_isolation_and_all_phase5_endpoints(isolated, monkeyp
                     base + "/characterization-runs",
                     json={"idempotency_key": "forbidden"},
                 )
-            ).status_code == 403
+            ).status_code == 201
     finally:
         app.dependency_overrides.clear()
 
@@ -637,6 +644,10 @@ async def test_artifact_corruption_fails_integrity(isolated, monkeypatch):
 
 def test_source_schema_discovery_is_scoped_and_reports_limits(tmp_path, monkeypatch):
     import app.services.phase5_engine as engine
+    monkeypatch.setattr(
+        "app.services.phase6_sandbox.verified_runtime_args",
+        AsyncMock(return_value=[]),
+    )
 
     fake_module = tmp_path / "backend" / "app" / "services" / "phase5_engine.py"
     monkeypatch.setattr(engine, "__file__", str(fake_module))
@@ -656,40 +667,57 @@ def test_source_schema_discovery_is_scoped_and_reports_limits(tmp_path, monkeypa
 
 @pytest.mark.asyncio
 async def test_sandbox_command_is_restricted_and_evidence_is_validated(monkeypatch):
-    import asyncio
-    from unittest.mock import MagicMock
+    from types import SimpleNamespace
     import app.services.phase5_engine as engine
+    from app.services import sandbox_client,phase6_workspace
+    calls=[]
+    monkeypatch.setattr(phase6_workspace,'file_snapshot',AsyncMock(return_value={'legacy.py':'value=1'}))
+    async def pinned_git(_repo, *args):
+        if args == ('rev-parse', 'HEAD'): return 'a' * 40
+        if args == ('status', '--porcelain', '--untracked-files=no'): return ''
+        return 'legacy.py\x00'
+    monkeypatch.setattr(phase6_workspace, 'git', pinned_git)
+    async def execute(execution,binding):
+        calls.append((execution,binding))
+        return {'execution_purpose':'VERIFICATION','execution':{'exit_code':0,'worker_id':'unit-controller-container','cleanup':{'container_absent':True},
+            'observation':{'source_unchanged':True,'observations':[{'exit_code':0,'stdout':'{"output":{"count":0},"side_effects":{}}'}]}},
+            'image_scan':{'status':'PASS'},'attestation':{'synthetic_unit_test_only':True}}
+    monkeypatch.setattr(sandbox_client,'execute',execute)
+    result=await engine.replay(Scenario(name='empty',module='orders',interface='GET',behavior='empty list'),
+        '/unit-workspace',SimpleNamespace(job_id=uuid.uuid4()))
+    assert result['available'] and result['output']=={'count':0}
+    execution,binding=calls[0]
+    assert execution['checks']==[] and execution['files']=={'legacy.py':'value=1'}
+    assert execution['source_provenance']['source_commit']=='a'*40
+    assert execution['source_provenance']['source_snapshot_sha256']
+    assert set(binding)>={'request_id','job_id','attempt_id','candidate_hash','suite_hash'}
+    assert all('expected' not in case for case in execution['cases'])
 
-    monkeypatch.setenv("PHASE5_LEGACY_IMAGE", "approved-adapter@sha256:abc")
-    monkeypatch.setenv("PHASE5_LEGACY_COMMAND_JSON", '["python", "/adapter.py"]')
-    reader = asyncio.StreamReader()
-    reader.feed_data(b'{"output":{"count":0},"side_effects":{}}')
-    reader.feed_eof()
-    process = MagicMock()
-    process.returncode = 0
-    process.stdout = reader
-    process.stderr = asyncio.StreamReader()
-    process.stderr.feed_eof()
-    process.stdin.drain = AsyncMock()
-    process.wait = AsyncMock(return_value=0)
-    spawn = AsyncMock(return_value=process)
-    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
-    result = await engine.replay(
-        Scenario(name="empty", module="orders", interface="GET", behavior="empty list")
-    )
-    assert result["available"] and result["output"] == {"count": 0}
-    command = spawn.call_args.args
-    assert (
-        "--network=none" in command
-        and "--read-only" in command
-        and "--pull=never" in command
-    )
-    assert (
-        "--memory=256m" in command
-        and "--cpus=1" in command
-        and "--cap-drop=ALL" in command
-    )
-    assert not any(part.startswith("--volume") for part in command)
+
+@pytest.mark.asyncio
+async def test_adapter_unobserved_reason_is_preserved_for_g2_row(monkeypatch):
+    from types import SimpleNamespace
+    import app.services.phase5_engine as engine
+    from app.services import sandbox_client, phase6_workspace
+    monkeypatch.setattr(phase6_workspace, 'file_snapshot', AsyncMock(return_value={'legacy.py': 'value=1'}))
+    async def pinned_git(_repo, *args):
+        if args == ('rev-parse', 'HEAD'): return 'b' * 40
+        if args == ('status', '--porcelain', '--untracked-files=no'): return ''
+        return 'legacy.py\x00'
+    monkeypatch.setattr(phase6_workspace, 'git', pinned_git)
+    async def execute(_execution, _binding):
+        return {'execution_purpose': 'VERIFICATION', 'execution': {
+            'exit_code': 0, 'worker_id': 'unit-controller-container',
+            'cleanup': {'container_absent': True},
+            'observation': {'source_unchanged': True, 'observations': [{
+                'exit_code': 78, 'stderr': 'UNOBSERVED: browser/DOM runtime is not installed',
+            }]},
+        }, 'image_scan': {'status': 'PASS'}, 'attestation': {}}
+    monkeypatch.setattr(sandbox_client, 'execute', execute)
+    result = await engine.replay(Scenario(name='frontend', module='frontend', interface='/', behavior='browser flow'),
+                                '/unit-workspace', SimpleNamespace(job_id=uuid.uuid4()))
+    assert result['available'] is False
+    assert result['reason'] == 'ADAPTER_EXIT: UNOBSERVED: browser/DOM runtime is not installed'
 
 
 @pytest.mark.parametrize("path", ["/bad~2escape", "/items/*", "/items/../value"])
@@ -750,28 +778,19 @@ def test_blank_normalization_reason_and_unsafe_controls_are_rejected():
         (b"", b"legacy failure", 7, "ADAPTER_EXIT"),
     ],
 )
-async def test_adapter_contract_and_precise_failure_reasons(
-    monkeypatch, stdout, stderr, code, reason
-):
-    import asyncio
-    from unittest.mock import MagicMock
-
-    monkeypatch.setenv("PHASE5_LEGACY_IMAGE", "approved-image")
-    monkeypatch.setenv("PHASE5_LEGACY_COMMAND_JSON", '["python","/adapter.py"]')
-    process = MagicMock(returncode=code)
-    process.returncode = code
-    for stream, raw in (("stdout", stdout), ("stderr", stderr)):
-        reader = asyncio.StreamReader()
-        reader.feed_data(raw)
-        reader.feed_eof()
-        setattr(process, stream, reader)
-    process.stdin.drain = AsyncMock()
-    process.wait = AsyncMock(return_value=code)
-    monkeypatch.setattr(
-        asyncio, "create_subprocess_exec", AsyncMock(return_value=process)
-    )
-    result = await replay(Scenario(name="n", module="m", interface="i", behavior="b"))
-    assert not result["available"] and result["reason"].startswith(reason)
+async def test_adapter_contract_and_precise_failure_reasons(monkeypatch,stdout,stderr,code,reason):
+    from types import SimpleNamespace
+    from app.services import sandbox_client,phase6_workspace
+    monkeypatch.setattr(phase6_workspace,'file_snapshot',AsyncMock(return_value={}))
+    async def execute(execution,binding):
+        if reason in {'DOCKER_UNAVAILABLE','IMAGE_UNAVAILABLE'}:
+            raise ValueError(reason+': signed controller failure fixture')
+        return {'execution_purpose':'VERIFICATION','execution':{'exit_code':0,'worker_id':'synthetic-unit-container','cleanup':{'container_absent':True},
+            'observation':{'source_unchanged':True,'observations':[{'exit_code':code,'stdout':stdout.decode(),'stderr':stderr.decode()}]}},
+            'image_scan':{'status':'PASS'},'attestation':{'synthetic_unit_test_only':True}}
+    monkeypatch.setattr(sandbox_client,'execute',execute)
+    result=await replay(Scenario(name='n',module='m',interface='i',behavior='b'),'/unit-workspace',SimpleNamespace(job_id=uuid.uuid4()))
+    assert not result['available'] and result['reason'].startswith(reason)
 
 
 @pytest.mark.asyncio
@@ -972,41 +991,17 @@ def test_phase4_manifest_parser_rejects_xml_entity_expansion():
 
 
 @pytest.mark.asyncio
-async def test_adapter_timeout_cleans_up_named_container_without_weakening_policy(
-    monkeypatch,
-):
+async def test_adapter_timeout_cleans_up_named_container_without_weakening_policy(monkeypatch):
     import asyncio
-    from unittest.mock import MagicMock
-    import app.services.phase5_engine as engine
-
-    monkeypatch.setenv("PHASE5_LEGACY_IMAGE", "approved-image")
-    monkeypatch.setenv("PHASE5_LEGACY_COMMAND_JSON", '["python","/adapter.py"]')
-    process = MagicMock()
-    process.returncode = None
-    process.wait = AsyncMock(return_value=0)
-    cleanup = MagicMock()
-    cleanup.wait = AsyncMock(return_value=0)
-    spawn = AsyncMock(side_effect=[process, cleanup])
-    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
-    monkeypatch.setattr(
-        engine, "adapter_exchange", AsyncMock(side_effect=asyncio.TimeoutError)
-    )
-    result = await replay(
-        Scenario(name="slow", module="m", interface="i", behavior="slow adapter")
-    )
-    assert result["reason"].startswith("ADAPTER_TIMEOUT")
-    process.kill.assert_called_once()
-    run = spawn.call_args_list[0].args
-    remove = spawn.call_args_list[1].args
-    assert (
-        "--pids-limit=64" in run
-        and "--user=65534:65534" in run
-        and "--security-opt=no-new-privileges" in run
-    )
-    assert (
-        remove[:3] == ("docker", "rm", "--force")
-        and remove[3] == run[run.index("--name") + 1]
-    )
+    from types import SimpleNamespace
+    from app.services import sandbox_client,phase6_workspace
+    spawn=AsyncMock(side_effect=AssertionError('The API must not launch Docker or execute customer code'))
+    monkeypatch.setattr(asyncio,'create_subprocess_exec',spawn)
+    monkeypatch.setattr(phase6_workspace,'file_snapshot',AsyncMock(return_value={}))
+    monkeypatch.setattr(sandbox_client,'execute',AsyncMock(side_effect=TimeoutError('Independent controller deadline')))
+    result=await replay(Scenario(name='slow',module='m',interface='i',behavior='slow adapter'),'/unit-workspace',SimpleNamespace(job_id=uuid.uuid4()))
+    assert not result['available'] and result['reason'].startswith('ADAPTER_TIMEOUT')
+    spawn.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -1153,6 +1148,7 @@ async def test_all_eight_api_authentication_permissions_and_cross_job_idor(
         yield db
 
     async def viewer_auth():
+        await db.refresh(viewer)
         return viewer, []
 
     app.dependency_overrides[get_db] = session_override
@@ -1201,7 +1197,8 @@ async def test_all_eight_api_authentication_permissions_and_cross_job_idor(
                 )
                 kwargs = {"json": body} if body is not None else {}
                 response = await client.request(method, own_path, **kwargs)
-                assert response.status_code == (200 if readable else 403), (
+                expected_code=201 if endpoint=='characterization-runs' else 409 if endpoint=='g2/freeze' else 200
+                assert response.status_code == expected_code, (
                     endpoint,
                     response.text,
                 )

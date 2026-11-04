@@ -216,7 +216,7 @@ async def test_bounded_repair_escalation_prevents_infinite_loop(ready, trusted_e
     await phase6_service.execute_attempt(db, first.attempt_id, gateway=gateway)
     second = await queued(ready, "repeat", previous=first, rationale="Repair exact recorded characterization discrepancy")
     await phase6_service.execute_attempt(db, second.attempt_id, gateway=gateway)
-    assert second.status == "ESCALATED"
+    assert second.status == "WAITING_FOR_HUMAN"
     with pytest.raises(ConflictException):
         await queued(ready, "exhausted", previous=second, rationale="Must not exceed the configured repair bound")
 

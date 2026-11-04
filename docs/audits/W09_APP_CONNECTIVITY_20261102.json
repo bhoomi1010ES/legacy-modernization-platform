@@ -1,0 +1,21 @@
+{
+  "api": {
+    "http_status": 200,
+    "body": {
+      "status": "ok",
+      "version": "1.0.0",
+      "database": "connected"
+    }
+  },
+  "readiness": {
+    "error_type": "HTTPError"
+  },
+  "frontend_proxy": {
+    "http_status": 200,
+    "body": {
+      "status": "ok",
+      "version": "1.0.0",
+      "database": "connected"
+    }
+  }
+}

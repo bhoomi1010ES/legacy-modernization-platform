@@ -1,0 +1,17 @@
+[Unit]
+Description=Rebase independent rootless sandbox controller
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /mnt/c/Users/lenovo/Desktop/rebase/backend/app/services/sandbox_controller_launcher.py --config %h/.config/rebase/sandbox-controller.json
+Restart=on-failure
+RestartSec=5
+UMask=0077
+KillMode=control-group
+TimeoutStopSec=20
+LimitNOFILE=4096
+
+[Install]
+WantedBy=default.target

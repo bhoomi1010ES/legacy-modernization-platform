@@ -196,7 +196,7 @@ async def test_api_endpoints_evidence_consistency():
         assert res.status_code == 200
         att_body = res.json()
         assert att_body["status"] == "VERIFIED"
-        assert att_body["evidence"]["commit"] == "531f76a56424cea4c2ebc773b8cd649536a7d8b0"
+        assert att_body["evidence"]["base_sha"] == "531f76a56424cea4c2ebc773b8cd649536a7d8b0"
 
         # 4. Attempt diff endpoint
         res = await client.get(f"/api/v1/module-attempts/{ATTEMPT_4_ID}/diff")

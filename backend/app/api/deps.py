@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.errors import ForbiddenException, NotFoundException, UnauthorizedException
-from app.domain.state_machine import RBACPolicy
 from app.models.job import Job, JobMembership
 from app.models.user import User
 from app.services.auth_service import AuthService
@@ -84,10 +83,8 @@ def require_job_access(permission: str = "job:read"):
     """Validates that caller is authorized to access the specific job.
 
     Enforces:
-    1. Global SUPER_ADMIN exception (workspace owner).
-    2. Active JobMembership check.
-    3. Required role capability within the job context.
-    4. Anti-IDOR not-found masking policy where appropriate.
+    1. Active JobMembership check.
+    2. Anti-IDOR not-found masking policy where appropriate.
     """
     async def job_access_checker(
         job_id: str,
@@ -109,10 +106,6 @@ def require_job_access(permission: str = "job:read"):
         if not job:
             raise NotFoundException(resource="Job", resource_id=job_id)
 
-        # SUPER_ADMIN has global access
-        if user.role == "SUPER_ADMIN":
-            return job, user
-
         # Verify job membership
         mem_stmt = select(JobMembership).where(
             JobMembership.job_id == job.job_id,
@@ -125,12 +118,8 @@ def require_job_access(permission: str = "job:read"):
             # Consistent not-found response to avoid leaking job existence to unauthorized users
             raise NotFoundException(resource="Job", resource_id=job_id)
 
-        # Verify membership role possesses required permission
-        if not RBACPolicy.has_permission(membership.role_id, permission):
-            raise ForbiddenException(
-                f"Job membership role '{membership.role_id}' lacks required permission '{permission}'."
-            )
-
+        # All authenticated job members share capabilities; membership remains
+        # the job-level access boundary and prevents cross-job IDOR.
         return job, user
 
     return job_access_checker

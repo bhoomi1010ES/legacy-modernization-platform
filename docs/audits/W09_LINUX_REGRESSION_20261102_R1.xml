@@ -1,0 +1,318 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="11" failures="4" skipped="0" tests="74" time="42.901" timestamp="2026-11-02T05:00:39.690025-07:00" hostname="DESKTOP-I9N3GEL"><testcase classname="tests.test_phase6" name="test_real_fixture_generation_execution_review_and_history" time="2.569"><failure message="AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'&#10;  &#10;  - VERIFIED&#10;  + REPAIR_REQUIRED">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x78dbed6cf8c0&gt;, &lt;app.models.job.Job object at 0x78dbed60bb90&gt;...-broad-20261102-r1/test_real_fixture_generation_e0/authoritative_workspaces/job_36305f44-f97a-4265-bd5e-a55e5b7a39b0'))
+trusted_executor = [({'legacy/calc.py': 'def add(x, y):\n    return x + y\n', 'modern/calc.py': 'def add(x, y):\n    return 3\n'}, [{'act...2:00:41.830104+00:00', 'duration_ms': None, ...}], 'de04d4848fe0ab0db65df81f920c5c6e52925b3c49c35a6b796abb548129fed9')]
+
+    @pytest.mark.asyncio
+    async def test_real_fixture_generation_execution_review_and_history(
+        ready, trusted_executor
+    ):
+        db, job, _, storage, module, _ = ready
+        attempt = await queued(ready)
+        assert attempt.status == "QUEUED" and module.status == "LEASED"
+        gateway = build_fake_gateway(FakeModelProvider([generation()]))
+        await service.execute_attempt(db, attempt.attempt_id, gateway=gateway)
+&gt;       assert attempt.status == module.status == "VERIFIED"
+E       AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'
+E         
+E         - VERIFIED
+E         + REPAIR_REQUIRED
+
+tests/test_phase6.py:298: AssertionError</failure></testcase><testcase classname="tests.test_phase6" name="test_capture_idempotency_conflict_and_no_duplicate_attempt" time="1.002" /><testcase classname="tests.test_phase6" name="test_sandbox_unavailable_never_verified_or_integrated" time="1.410" /><testcase classname="tests.test_phase6" name="test_expired_api_verifier_lease_is_terminalized_and_cannot_be_reused" time="1.012" /><testcase classname="tests.test_phase6" name="test_repair_resolved_reruns_frozen_suite_and_invalidates_old" time="2.002"><failure message="AssertionError: assert ('REPAIR_REQUIRED' == 'VERIFIED'&#10;  &#10;  - VERIFIED&#10;  + REPAIR_REQUIRED)">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x78dbec5edd30&gt;, &lt;app.models.job.Job object at 0x78dbec4e5730&gt;...-broad-20261102-r1/test_repair_resolved_reruns_fr0/authoritative_workspaces/job_68d82b52-0ce2-440f-a111-da9c0d53f835'))
+trusted_executor = [({'legacy/calc.py': 'def add(x, y):\n    return x + y\n', 'modern/calc.py': 'def add(x, y):\n    return 4\n'}, [{'act...2:00:48.989582+00:00', 'duration_ms': None, ...}], '62b481bc2b6ee88ba8a9ae2f84ae26a7cfd13b8b49b3af50b83723a6ea0ac3b2')]
+
+    @pytest.mark.asyncio
+    async def test_repair_resolved_reruns_frozen_suite_and_invalidates_old(
+        ready, trusted_executor
+    ):
+        db, _, _, _, module, _ = ready
+        first = await queued(ready)
+        gateway = build_fake_gateway(FakeModelProvider([generation(4), generation(3)]))
+        await service.execute_attempt(db, first.attempt_id, gateway=gateway)
+        assert first.status == "REPAIR_REQUIRED"
+        second = await queued(
+            ready,
+            "repair",
+            previous=first,
+            rationale="Repair the recorded addition behavioral regression",
+        )
+        old = await db.scalar(select(Result).where(Result.attempt_id == first.attempt_id))
+        assert old.invalidated
+        await service.execute_attempt(db, second.attempt_id, gateway=gateway)
+&gt;       assert (
+            module.status == second.status == "VERIFIED"
+            and first.status == "REPAIR_REQUIRED"
+        )
+E       AssertionError: assert ('REPAIR_REQUIRED' == 'VERIFIED'
+E         
+E         - VERIFIED
+E         + REPAIR_REQUIRED)
+
+tests/test_phase6.py:446: AssertionError</failure></testcase><testcase classname="tests.test_phase6" name="test_repeated_failure_and_maximum_escalation" time="2.108" /><testcase classname="tests.test_phase6" name="test_pending_rejected_or_stale_gates_block_conversion[G1]" time="0.858" /><testcase classname="tests.test_phase6" name="test_pending_rejected_or_stale_gates_block_conversion[G2]" time="0.815" /><testcase classname="tests.test_phase6" name="test_pending_rejected_or_stale_gates_block_conversion[G3]" time="0.908" /><testcase classname="tests.test_phase6" name="test_dependency_order_target_conflicts_and_branch_isolation" time="1.122" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[../escape.py]" time="0.012" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[/etc/passwd]" time="0.005" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[modern/../../outside]" time="0.005" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[modern/tests/test_calc.py]" time="0.005" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[modern/.env]" time="0.005" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[another/calc.py]" time="0.005" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[modern\\calc.py]" time="0.005" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[modern/.git/hooks/x]" time="0.005" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[modern/a.spec.ts]" time="0.004" /><testcase classname="tests.test_phase6" name="test_reviewer_security_severity_contract_and_evidence" time="0.001" /><testcase classname="tests.test_phase6" name="test_unsafe_command_blocking[command0]" time="0.001" /><testcase classname="tests.test_phase6" name="test_unsafe_command_blocking[command1]" time="0.001" /><testcase classname="tests.test_phase6" name="test_unsafe_command_blocking[command2]" time="0.001" /><testcase classname="tests.test_phase6" name="test_unsafe_command_blocking[command3]" time="0.001" /><testcase classname="tests.test_phase6" name="test_unsafe_command_blocking[command4]" time="0.001" /><testcase classname="tests.test_phase6" name="test_codewriter_cannot_supply_verdict_or_arbitrary_api_commands" time="0.009" /><testcase classname="tests.test_phase6" name="test_stale_baseline_after_queue_fails_closed" time="0.883" /><testcase classname="tests.test_phase6" name="test_missing_model_configuration_is_blocked" time="1.123" /><testcase classname="tests.test_phase6" name="test_api_auth_idor_read_repair_and_waiver_permissions" time="1.138" /><testcase classname="tests.test_phase6" name="test_sandbox_flags_timeout_cleanup_and_output_bounds" time="0.125" /><testcase classname="tests.test_phase6" name="test_supervisor_pool_exits_only_after_independent_execution" time="1.761"><failure message="AssertionError: assert 'CONVERTING' == 'INTEGRATING'&#10;  &#10;  - INTEGRATING&#10;  + CONVERTING">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x78dbe7680920&gt;, &lt;app.models.job.Job object at 0x78dbe76144d0&gt;...-broad-20261102-r1/test_supervisor_pool_exits_onl0/authoritative_workspaces/job_09923d65-844d-41e8-ba16-a76d146a1366'))
+trusted_executor = [({'legacy/calc.py': 'def add(x, y):\n    return x + y\n', 'modern/calc.py': 'def add(x, y):\n    return 3\n'}, [{'act...2:01:00.279188+00:00', 'duration_ms': None, ...}], '1555311842837b6054c60542577107960470a2d59d84637f0591c6cdd319a49d')]
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x78dbed73e900&gt;
+
+    @pytest.mark.asyncio
+    async def test_supervisor_pool_exits_only_after_independent_execution(
+        ready, trusted_executor, monkeypatch
+    ):
+        from app.services.code_writer import code_writer_service
+    
+        db, job, *_ = ready
+        job.max_parallel_tasks = 1
+        await db.commit()
+        original = code_writer_service.generate
+        gateway = build_fake_gateway(FakeModelProvider([generation()]))
+    
+        async def scripted(context, sources, **kwargs):
+            return await original(context, sources, gateway=gateway)
+    
+        monkeypatch.setattr(code_writer_service, "generate", scripted)
+        await supervisor.run_phase6_pool(db, job)
+        await db.refresh(job)
+&gt;       assert job.status == "INTEGRATING"
+E       AssertionError: assert 'CONVERTING' == 'INTEGRATING'
+E         
+E         - INTEGRATING
+E         + CONVERTING
+
+tests/test_phase6.py:760: AssertionError</failure></testcase><testcase classname="tests.test_phase6" name="test_all_post_apis_use_backend_authority_and_waiver_never_self_verifies" time="1.966" /><testcase classname="tests.test_phase6" name="test_deadline_and_output_overflow_remove_the_actual_named_container" time="0.002" /><testcase classname="tests.test_phase6" name="test_real_docker_acceptance_when_explicitly_configured" time="0.003"><failure message="ValueError: Configure real build, unit, integration, static, security, dependency, license, runtime and required schema checks">@pytest.mark.asyncio
+    async def test_real_docker_acceptance_when_explicitly_configured():
+        if os.getenv("PHASE6_RUN_REAL_ACCEPTANCE") != "1":
+            pytest.skip(
+                "Real Docker/model/target adapter acceptance requires explicit configured fixture"
+            )
+&gt;       sandbox.configuration()
+
+tests/test_phase6.py:857: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def configuration():
+        image=settings.PHASE6_SANDBOX_IMAGE
+        checks=[CheckSpec.model_validate(c).model_dump() for c in json.loads(settings.PHASE6_CHECK_COMMANDS_JSON)]
+        adapter=json.loads(settings.PHASE6_TARGET_COMMAND_JSON)
+        if not re.fullmatch(r"sha256:[a-f0-9]{64}",image):
+            raise ValueError("Configure an immutable local image digest")
+        if not validate_check_profile(checks, system=False, schema_required=any(c['category']=='schema' for c in checks)):
+&gt;           raise ValueError("Configure real build, unit, integration, static, security, dependency, license, runtime and required schema checks")
+E           ValueError: Configure real build, unit, integration, static, security, dependency, license, runtime and required schema checks
+
+app/services/phase6_sandbox.py:25: ValueError</failure></testcase><testcase classname="tests.test_phase6" name="test_transitive_dependency_changes_are_hydrated_and_stale_plans_rejected" time="1.138" /><testcase classname="tests.test_phase7" name="test_integration_verified_changesets_zip_report_counts_and_history" time="1.530"><error message="failed on setup with &quot;AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'&#10;  &#10;  - VERIFIED&#10;  + REPAIR_REQUIRED&quot;">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x78dbe67f1850&gt;, &lt;app.models.job.Job object at 0x78dbe661d0d0&gt;...-broad-20261102-r1/test_integration_verified_chan0/authoritative_workspaces/job_d35d1bd7-650c-43a7-bac0-6493c7291500'))
+trusted_executor = [({'legacy/calc.py': 'def add(x, y):\n    return x + y\n', 'modern/calc.py': 'def add(x, y):\n    return 3\n'}, [{'act...2:01:05.365092+00:00', 'duration_ms': None, ...}], '039b341bb9e2f40b94f5058cfff27f290504609c17b30d8a464005a16d24c6a4')]
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x78dbe651ee10&gt;
+tmp_path = PosixPath('/tmp/w09-broad-20261102-r1/test_integration_verified_chan0')
+
+    @pytest_asyncio.fixture
+    async def verified(ready, trusted_executor, monkeypatch, tmp_path):  # noqa: F811
+        db, job, owner, storage, module, repo = ready
+        attempt = await queued(ready)
+        await p6.execute_attempt(
+            db,
+            attempt.attempt_id,
+            gateway=build_fake_gateway(FakeModelProvider([generation()])),
+        )
+&gt;       assert attempt.status == "VERIFIED"
+E       AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'
+E         
+E         - VERIFIED
+E         + REPAIR_REQUIRED
+
+tests/test_phase7.py:41: AssertionError</error></testcase><testcase classname="tests.test_phase7" name="test_g4_exact_human_approval_and_immutable_delivery" time="1.356"><error message="failed on setup with &quot;AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'&#10;  &#10;  - VERIFIED&#10;  + REPAIR_REQUIRED&quot;">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x78dbe68b69c0&gt;, &lt;app.models.job.Job object at 0x78dbe677bf50&gt;...-broad-20261102-r1/test_g4_exact_human_approval_a0/authoritative_workspaces/job_e9672da2-3009-4e91-a423-a88d99016d2f'))
+trusted_executor = [({'legacy/calc.py': 'def add(x, y):\n    return x + y\n', 'modern/calc.py': 'def add(x, y):\n    return 3\n'}, [{'act...2:01:06.872592+00:00', 'duration_ms': None, ...}], '9a025145f07f3d4145dbe41477ddfb6f487a5fb112cd55d55a700322b8b2829a')]
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x78dbec4bf530&gt;
+tmp_path = PosixPath('/tmp/w09-broad-20261102-r1/test_g4_exact_human_approval_a0')
+
+    @pytest_asyncio.fixture
+    async def verified(ready, trusted_executor, monkeypatch, tmp_path):  # noqa: F811
+        db, job, owner, storage, module, repo = ready
+        attempt = await queued(ready)
+        await p6.execute_attempt(
+            db,
+            attempt.attempt_id,
+            gateway=build_fake_gateway(FakeModelProvider([generation()])),
+        )
+&gt;       assert attempt.status == "VERIFIED"
+E       AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'
+E         
+E         - VERIFIED
+E         + REPAIR_REQUIRED
+
+tests/test_phase7.py:41: AssertionError</error></testcase><testcase classname="tests.test_phase7" name="test_rejection_invalidates_system_results_requires_fresh_version" time="1.329"><error message="failed on setup with &quot;AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'&#10;  &#10;  - VERIFIED&#10;  + REPAIR_REQUIRED&quot;">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x78dbe66dd220&gt;, &lt;app.models.job.Job object at 0x78dbe75f9400&gt;...-broad-20261102-r1/test_rejection_invalidates_sys0/authoritative_workspaces/job_4dac92f7-fc3b-46b6-8e7b-dfa9820c2184'))
+trusted_executor = [({'legacy/calc.py': 'def add(x, y):\n    return x + y\n', 'modern/calc.py': 'def add(x, y):\n    return 3\n'}, [{'act...2:01:08.249581+00:00', 'duration_ms': None, ...}], 'bcbe5d4c867d485112960a7aac11598b3c6c1e8202a34b040e8a0eaa443ed318')]
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x78dbec16e1e0&gt;
+tmp_path = PosixPath('/tmp/w09-broad-20261102-r1/test_rejection_invalidates_sys0')
+
+    @pytest_asyncio.fixture
+    async def verified(ready, trusted_executor, monkeypatch, tmp_path):  # noqa: F811
+        db, job, owner, storage, module, repo = ready
+        attempt = await queued(ready)
+        await p6.execute_attempt(
+            db,
+            attempt.attempt_id,
+            gateway=build_fake_gateway(FakeModelProvider([generation()])),
+        )
+&gt;       assert attempt.status == "VERIFIED"
+E       AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'
+E         
+E         - VERIFIED
+E         + REPAIR_REQUIRED
+
+tests/test_phase7.py:41: AssertionError</error></testcase><testcase classname="tests.test_phase7" name="test_final_package_tamper_blocks_g4[JOB_REPORT]" time="1.517"><error message="failed on setup with &quot;AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'&#10;  &#10;  - VERIFIED&#10;  + REPAIR_REQUIRED&quot;">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x78dbe64fbef0&gt;, &lt;app.models.job.Job object at 0x78dbe623c4a0&gt;...-broad-20261102-r1/test_final_package_tamper_bloc0/authoritative_workspaces/job_dbdb5f91-68cd-4fa3-99ab-b3e2706261e7'))
+trusted_executor = [({'legacy/calc.py': 'def add(x, y):\n    return x + y\n', 'modern/calc.py': 'def add(x, y):\n    return 3\n'}, [{'act...2:01:09.620027+00:00', 'duration_ms': None, ...}], '803709287cf40c0271531a53f8b0e41ba9bed895a1605e8101b03e7595360963')]
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x78dbe6307c80&gt;
+tmp_path = PosixPath('/tmp/w09-broad-20261102-r1/test_final_package_tamper_bloc0')
+
+    @pytest_asyncio.fixture
+    async def verified(ready, trusted_executor, monkeypatch, tmp_path):  # noqa: F811
+        db, job, owner, storage, module, repo = ready
+        attempt = await queued(ready)
+        await p6.execute_attempt(
+            db,
+            attempt.attempt_id,
+            gateway=build_fake_gateway(FakeModelProvider([generation()])),
+        )
+&gt;       assert attempt.status == "VERIFIED"
+E       AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'
+E         
+E         - VERIFIED
+E         + REPAIR_REQUIRED
+
+tests/test_phase7.py:41: AssertionError</error></testcase><testcase classname="tests.test_phase7" name="test_final_package_tamper_blocks_g4[SBOM]" time="1.532"><error message="failed on setup with &quot;AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'&#10;  &#10;  - VERIFIED&#10;  + REPAIR_REQUIRED&quot;">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x78dbe623e900&gt;, &lt;app.models.job.Job object at 0x78dbe6305e50&gt;...-broad-20261102-r1/test_final_package_tamper_bloc1/authoritative_workspaces/job_1f99486b-22a8-4c9a-a7d2-8d6d6dcdb7db'))
+trusted_executor = [({'legacy/calc.py': 'def add(x, y):\n    return x + y\n', 'modern/calc.py': 'def add(x, y):\n    return 3\n'}, [{'act...2:01:11.173528+00:00', 'duration_ms': None, ...}], '2927dc3b6d3bc5823d42de68bbd5449e7d30016c0a0b694f058598ed2054aef4')]
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x78dbe62b3800&gt;
+tmp_path = PosixPath('/tmp/w09-broad-20261102-r1/test_final_package_tamper_bloc1')
+
+    @pytest_asyncio.fixture
+    async def verified(ready, trusted_executor, monkeypatch, tmp_path):  # noqa: F811
+        db, job, owner, storage, module, repo = ready
+        attempt = await queued(ready)
+        await p6.execute_attempt(
+            db,
+            attempt.attempt_id,
+            gateway=build_fake_gateway(FakeModelProvider([generation()])),
+        )
+&gt;       assert attempt.status == "VERIFIED"
+E       AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'
+E         
+E         - VERIFIED
+E         + REPAIR_REQUIRED
+
+tests/test_phase7.py:41: AssertionError</error></testcase><testcase classname="tests.test_phase7" name="test_final_package_tamper_blocks_g4[SYSTEM_VERIFICATION]" time="1.463"><error message="failed on setup with &quot;AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'&#10;  &#10;  - VERIFIED&#10;  + REPAIR_REQUIRED&quot;">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x78dbe7359ac0&gt;, &lt;app.models.job.Job object at 0x78dbe75fb470&gt;...-broad-20261102-r1/test_final_package_tamper_bloc2/authoritative_workspaces/job_7dd43336-2ef5-48ac-a5dd-65957177a06a'))
+trusted_executor = [({'legacy/calc.py': 'def add(x, y):\n    return x + y\n', 'modern/calc.py': 'def add(x, y):\n    return 3\n'}, [{'act...2:01:12.822043+00:00', 'duration_ms': None, ...}], '16c8e878bb9bd3170e458f547ad8e053c9dd575e89c3ea807a9715bf5ed7b563')]
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x78dbe74d0d40&gt;
+tmp_path = PosixPath('/tmp/w09-broad-20261102-r1/test_final_package_tamper_bloc2')
+
+    @pytest_asyncio.fixture
+    async def verified(ready, trusted_executor, monkeypatch, tmp_path):  # noqa: F811
+        db, job, owner, storage, module, repo = ready
+        attempt = await queued(ready)
+        await p6.execute_attempt(
+            db,
+            attempt.attempt_id,
+            gateway=build_fake_gateway(FakeModelProvider([generation()])),
+        )
+&gt;       assert attempt.status == "VERIFIED"
+E       AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'
+E         
+E         - VERIFIED
+E         + REPAIR_REQUIRED
+
+tests/test_phase7.py:41: AssertionError</error></testcase><testcase classname="tests.test_phase7" name="test_final_package_tamper_blocks_g4[DeliveryPackage]" time="1.491"><error message="failed on setup with &quot;AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'&#10;  &#10;  - VERIFIED&#10;  + REPAIR_REQUIRED&quot;">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x78dbe62db620&gt;, &lt;app.models.job.Job object at 0x78dbe7792960&gt;...-broad-20261102-r1/test_final_package_tamper_bloc3/authoritative_workspaces/job_3ffc1ebf-3624-4b2c-b1b1-937e8fecc58f'))
+trusted_executor = [({'legacy/calc.py': 'def add(x, y):\n    return x + y\n', 'modern/calc.py': 'def add(x, y):\n    return 3\n'}, [{'act...2:01:14.258978+00:00', 'duration_ms': None, ...}], 'a2a037ce128e7ce65602ccfca800a748f1b9ffc8167a54656555c84d6a5de3d3')]
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x78dbe651cf80&gt;
+tmp_path = PosixPath('/tmp/w09-broad-20261102-r1/test_final_package_tamper_bloc3')
+
+    @pytest_asyncio.fixture
+    async def verified(ready, trusted_executor, monkeypatch, tmp_path):  # noqa: F811
+        db, job, owner, storage, module, repo = ready
+        attempt = await queued(ready)
+        await p6.execute_attempt(
+            db,
+            attempt.attempt_id,
+            gateway=build_fake_gateway(FakeModelProvider([generation()])),
+        )
+&gt;       assert attempt.status == "VERIFIED"
+E       AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'
+E         
+E         - VERIFIED
+E         + REPAIR_REQUIRED
+
+tests/test_phase7.py:41: AssertionError</error></testcase><testcase classname="tests.test_phase7" name="test_final_package_tamper_blocks_g4[ModernizationManifest]" time="1.711"><error message="failed on setup with &quot;AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'&#10;  &#10;  - VERIFIED&#10;  + REPAIR_REQUIRED&quot;">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x78dbe6460350&gt;, &lt;app.models.job.Job object at 0x78dbe6192b10&gt;...-broad-20261102-r1/test_final_package_tamper_bloc4/authoritative_workspaces/job_631ff523-b3ae-4596-adc0-9d520a25709a'))
+trusted_executor = [({'legacy/calc.py': 'def add(x, y):\n    return x + y\n', 'modern/calc.py': 'def add(x, y):\n    return 3\n'}, [{'act...2:01:15.860473+00:00', 'duration_ms': None, ...}], '8a124f92580b334defb2fea311fef86d97b3ab9d85609fb6da4369b0b796753e')]
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x78dbe60edfd0&gt;
+tmp_path = PosixPath('/tmp/w09-broad-20261102-r1/test_final_package_tamper_bloc4')
+
+    @pytest_asyncio.fixture
+    async def verified(ready, trusted_executor, monkeypatch, tmp_path):  # noqa: F811
+        db, job, owner, storage, module, repo = ready
+        attempt = await queued(ready)
+        await p6.execute_attempt(
+            db,
+            attempt.attempt_id,
+            gateway=build_fake_gateway(FakeModelProvider([generation()])),
+        )
+&gt;       assert attempt.status == "VERIFIED"
+E       AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'
+E         
+E         - VERIFIED
+E         + REPAIR_REQUIRED
+
+tests/test_phase7.py:41: AssertionError</error></testcase><testcase classname="tests.test_phase7" name="test_stale_report_and_tampered_zip_are_blocked" time="1.384"><error message="failed on setup with &quot;AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'&#10;  &#10;  - VERIFIED&#10;  + REPAIR_REQUIRED&quot;">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x78dbe5e7a330&gt;, &lt;app.models.job.Job object at 0x78dbe5f1a780&gt;...-broad-20261102-r1/test_stale_report_and_tampered0/authoritative_workspaces/job_d63704db-1df4-496d-97ed-32436414d0ae'))
+trusted_executor = [({'legacy/calc.py': 'def add(x, y):\n    return x + y\n', 'modern/calc.py': 'def add(x, y):\n    return 3\n'}, [{'act...2:01:17.555095+00:00', 'duration_ms': None, ...}], '9b3049770dbd9db4f9cc3f8c386a4836750c72aaefa04ff8e336c288acc06d2b')]
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x78dbe5ead490&gt;
+tmp_path = PosixPath('/tmp/w09-broad-20261102-r1/test_stale_report_and_tampered0')
+
+    @pytest_asyncio.fixture
+    async def verified(ready, trusted_executor, monkeypatch, tmp_path):  # noqa: F811
+        db, job, owner, storage, module, repo = ready
+        attempt = await queued(ready)
+        await p6.execute_attempt(
+            db,
+            attempt.attempt_id,
+            gateway=build_fake_gateway(FakeModelProvider([generation()])),
+        )
+&gt;       assert attempt.status == "VERIFIED"
+E       AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'
+E         
+E         - VERIFIED
+E         + REPAIR_REQUIRED
+
+tests/test_phase7.py:41: AssertionError</error></testcase><testcase classname="tests.test_phase7" name="test_unknown_waiver_cannot_override_checks" time="1.639"><error message="failed on setup with &quot;AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'&#10;  &#10;  - VERIFIED&#10;  + REPAIR_REQUIRED&quot;">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x78dbe5e7b380&gt;, &lt;app.models.job.Job object at 0x78dbe6462660&gt;...-broad-20261102-r1/test_unknown_waiver_cannot_ove0/authoritative_workspaces/job_66c200e9-0e67-4276-b17a-b19001342d55'))
+trusted_executor = [({'legacy/calc.py': 'def add(x, y):\n    return x + y\n', 'modern/calc.py': 'def add(x, y):\n    return 3\n'}, [{'act...2:01:19.042620+00:00', 'duration_ms': None, ...}], '82b0ac5b7c8bc90f305086b50dc33cdbb2edd96a7a95637a99471c0c20e16822')]
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x78dbe67f1850&gt;
+tmp_path = PosixPath('/tmp/w09-broad-20261102-r1/test_unknown_waiver_cannot_ove0')
+
+    @pytest_asyncio.fixture
+    async def verified(ready, trusted_executor, monkeypatch, tmp_path):  # noqa: F811
+        db, job, owner, storage, module, repo = ready
+        attempt = await queued(ready)
+        await p6.execute_attempt(
+            db,
+            attempt.attempt_id,
+            gateway=build_fake_gateway(FakeModelProvider([generation()])),
+        )
+&gt;       assert attempt.status == "VERIFIED"
+E       AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'
+E         
+E         - VERIFIED
+E         + REPAIR_REQUIRED
+
+tests/test_phase7.py:41: AssertionError</error></testcase><testcase classname="tests.test_phase7" name="test_manual_handoff_not_fake_pr_and_idempotent" time="1.440"><error message="failed on setup with &quot;AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'&#10;  &#10;  - VERIFIED&#10;  + REPAIR_REQUIRED&quot;">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x78dbe62c9730&gt;, &lt;app.models.job.Job object at 0x78dbe5eaf200&gt;...-broad-20261102-r1/test_manual_handoff_not_fake_p0/authoritative_workspaces/job_01f90ed1-2668-4b98-99db-da69bf3f8f7d'))
+trusted_executor = [({'legacy/calc.py': 'def add(x, y):\n    return x + y\n', 'modern/calc.py': 'def add(x, y):\n    return 3\n'}, [{'act...2:01:20.677721+00:00', 'duration_ms': None, ...}], 'a761acda0e49fa846e905a9558041109fb472387383dcec9385c9af4cbb4adeb')]
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x78dbe681ed50&gt;
+tmp_path = PosixPath('/tmp/w09-broad-20261102-r1/test_manual_handoff_not_fake_p0')
+
+    @pytest_asyncio.fixture
+    async def verified(ready, trusted_executor, monkeypatch, tmp_path):  # noqa: F811
+        db, job, owner, storage, module, repo = ready
+        attempt = await queued(ready)
+        await p6.execute_attempt(
+            db,
+            attempt.attempt_id,
+            gateway=build_fake_gateway(FakeModelProvider([generation()])),
+        )
+&gt;       assert attempt.status == "VERIFIED"
+E       AssertionError: assert 'REPAIR_REQUIRED' == 'VERIFIED'
+E         
+E         - VERIFIED
+E         + REPAIR_REQUIRED
+
+tests/test_phase7.py:41: AssertionError</error></testcase><testcase classname="tests.test_phase7" name="test_dependency_order_rejects_missing_and_cyclic_contracts" time="0.018" /><testcase classname="tests.test_phase7" name="test_sbom_unavailable_or_unsupported_never_claims_standard[-BLOCKED]" time="0.002" /><testcase classname="tests.test_phase7" name="test_sbom_unavailable_or_unsupported_never_claims_standard[unknown-NOT_RUN]" time="0.002" /><testcase classname="tests.test_phase7" name="test_sbom_unavailable_or_unsupported_never_claims_standard[syft-BLOCKED]" time="0.002" /><testcase classname="tests.test_w09_controller" name="test_signed_execution_rejects_modified_scope_and_expired_capability" time="0.002" /><testcase classname="tests.test_w09_controller" name="test_registered_runsc_flag_cannot_make_a_rootful_daemon_rootless" time="0.002" /><testcase classname="tests.test_w09_controller" name="test_execution_policy_rejects_false_unit_or_install_profiles[unit-command0]" time="0.003" /><testcase classname="tests.test_w09_controller" name="test_execution_policy_rejects_false_unit_or_install_profiles[unit-command1]" time="0.001" /><testcase classname="tests.test_w09_controller" name="test_execution_policy_rejects_false_unit_or_install_profiles[security-command2]" time="0.002" /><testcase classname="tests.test_w09_controller" name="test_target_verification_profile_rejects_missing_categories_and_mislabeled_compile" time="0.001" /><testcase classname="tests.test_w09_controller" name="test_target_verification_profile_requires_distinct_real_check_categories" time="0.002" /><testcase classname="tests.test_w09_controller" name="test_zero_executed_test_cases_do_not_pass[unit]" time="0.002" /><testcase classname="tests.test_w09_controller" name="test_zero_executed_test_cases_do_not_pass[integration]" time="0.002" /><testcase classname="tests.test_w09_controller" name="test_zero_executed_test_cases_do_not_pass[runtime]" time="0.002" /><testcase classname="tests.test_w09_controller" name="test_zero_executed_test_cases_do_not_pass[api_compatibility]" time="0.002" /><testcase classname="tests.test_w09_controller" name="test_zero_executed_test_cases_do_not_pass[schema]" time="0.002" /><testcase classname="tests.test_w09_controller" name="test_binary_snapshot_preserves_actual_bytes_and_hash" time="0.031" /><testcase classname="tests.test_w09_controller" name="test_verification_label_without_independent_run_is_rejected" time="0.003" /><testcase classname="tests.test_w09_controller" name="test_codewriter_run_cannot_publish_verification_under_verifier_label" time="0.003" /><testcase classname="tests.test_w09_controller" name="test_readiness_reports_missing_controller_unavailable" time="0.003" /><testcase classname="tests.test_w09_controller" name="test_cleanup_reclaims_expired_controller_lease" time="0.016" /><testcase classname="tests.test_w09_controller" name="test_controller_sqlite_handles_close_after_every_transaction" time="0.226" /><testcase classname="tests.test_w09_controller" name="test_concurrent_persistent_reservations_cannot_raise_or_exceed_cap" time="0.270" /><testcase classname="tests.test_w09_controller" name="test_delivery_download_rejects_pending_g4_stale_or_other_package[False-True-True]" time="0.003" /><testcase classname="tests.test_w09_controller" name="test_delivery_download_rejects_pending_g4_stale_or_other_package[True-False-True]" time="0.002" /><testcase classname="tests.test_w09_controller" name="test_delivery_download_rejects_pending_g4_stale_or_other_package[True-True-False]" time="0.002" /><testcase classname="tests.test_w09_controller" name="test_delivery_download_accepts_only_exact_approved_zip_and_manifest" time="0.003" /><testcase classname="tests.test_w09_controller" name="test_artifact_public_schema_contains_no_storage_location" time="0.001" /></testsuite></testsuites>

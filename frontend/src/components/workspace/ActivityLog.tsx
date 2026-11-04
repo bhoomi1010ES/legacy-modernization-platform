@@ -71,9 +71,19 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({
       let desc = '';
 
       const p = payload as Record<string, any>;
-      if (typeStr.includes('error') || typeStr.includes('fail')) {
+      if (typeStr.includes('escalat')) {
         category = 'error';
-        name = p.event_name || 'agent.error';
+        name = 'workflow.escalated';
+        status = 'failed';
+        desc = String(p.reason || p.message || 'Workflow stopped and needs attention');
+      } else if (
+        typeStr.includes('error') || typeStr.includes('fail') ||
+        (typeStr.includes('agent_result_recorded') &&
+          (['FAIL', 'FAILED', 'FAILURE', 'ESCALATE'].includes(String(p.verdict || '').toUpperCase()) ||
+            /\b(failed|failure|error)\b/i.test(String(p.reason || ''))))
+      ) {
+        category = 'error';
+        name = p.agent ? `${String(p.agent)} failed` : p.event_name || 'agent.error';
         status = 'failed';
         desc = String(p.message || p.error || p.reason || 'Agent execution encountered an unrecoverable failure');
       } else if (typeStr.includes('characteriz')) {
@@ -137,74 +147,6 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({
         type: 'file',
         status: 'started',
       });
-    }
-
-    // Default seed events if list is sparse so user sees canonical Phase 4 timeline events
-    if (list.length === 0) {
-      const now = new Date();
-      const formatTime = (minutesAgo: number) => {
-        const d = new Date(now.getTime() - minutesAgo * 60000);
-        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      };
-
-      list.push(
-        {
-          id: 'seed-1',
-          name: 'phase4.started',
-          description: 'Phase 4 execution initiated for job',
-          timestamp: formatTime(15),
-          type: 'phase',
-          status: 'started',
-        },
-        {
-          id: 'seed-2',
-          name: 'intake.completed',
-          description: 'Repository validated · SHA-256 inventory sealed',
-          timestamp: formatTime(12),
-          type: 'agent',
-          status: 'completed',
-        },
-        {
-          id: 'seed-3',
-          name: 'analysis.started',
-          description: 'Analysis coordinator started with 7 workers',
-          timestamp: formatTime(10),
-          type: 'agent',
-          status: 'started',
-        },
-        {
-          id: 'seed-4',
-          name: 'analysis.worker.started',
-          description: 'structure-worker · Analyzing project layout and symbols',
-          timestamp: formatTime(8),
-          type: 'worker',
-          status: 'started',
-        },
-        {
-          id: 'seed-5',
-          name: 'analysis.worker.completed',
-          description: 'structure-worker · Verified AST-backed boundaries',
-          timestamp: formatTime(6),
-          type: 'worker',
-          status: 'completed',
-        },
-        {
-          id: 'seed-6',
-          name: 'analysis.worker.started',
-          description: 'interface-worker · Inspecting API endpoints and routes',
-          timestamp: formatTime(5),
-          type: 'worker',
-          status: 'started',
-        },
-        {
-          id: 'seed-7',
-          name: 'analysis.progress',
-          description: 'Specialized analysis passes advancing in parallel',
-          timestamp: formatTime(3),
-          type: 'agent',
-          status: 'progress',
-        }
-      );
     }
 
     return list;
@@ -291,7 +233,7 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({
                   display: 'inline-block',
                 }}
               />
-              Live
+              Live · Polling active (5s)
             </span>
           </div>
 
@@ -381,7 +323,7 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({
       >
         {filteredEvents.length === 0 ? (
           <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: '11px' }}>
-            No matching events found.
+            {displayEvents.length === 0 ? 'No activity recorded yet for this job.' : 'No matching events found.'}
           </div>
         ) : (
           filteredEvents.map((evt) => (

@@ -277,16 +277,13 @@ async def _resolve_gate_job_and_user(
     if not job:
         raise NotFoundException("Job", job_id)
 
-    if user.role != "SUPER_ADMIN":
-        membership = await db.scalar(select(JobMembership).where(
-            JobMembership.job_id == job.job_id,
-            JobMembership.user_id == user.user_id,
-        ))
-        if not membership:
-            raise NotFoundException("Job", job_id)
-        setattr(user, "_effective_job_role", membership.role_id)
-    else:
-        setattr(user, "_effective_job_role", user.role)
+    membership = await db.scalar(select(JobMembership).where(
+        JobMembership.job_id == job.job_id,
+        JobMembership.user_id == user.user_id,
+    ))
+    if not membership:
+        raise NotFoundException("Job", job_id)
+    setattr(user, "_effective_job_role", membership.role_id)
 
     return job, user
 
@@ -311,10 +308,9 @@ async def list_pending_gates(
         "AWAITING_GATE_G4",
     ]
     stmt = select(Job).where(Job.status.in_(awaiting_statuses))
-    if user.role != "SUPER_ADMIN":
-        stmt = stmt.join(JobMembership, JobMembership.job_id == Job.job_id).where(
-            JobMembership.user_id == user.user_id
-        )
+    stmt = stmt.join(JobMembership, JobMembership.job_id == Job.job_id).where(
+        JobMembership.user_id == user.user_id
+    )
     stmt = stmt.order_by(Job.updated_at.desc()).offset(offset).limit(limit)
     res = await db.execute(stmt)
     jobs = list(res.scalars().all())
@@ -332,13 +328,10 @@ async def list_pending_gates(
         if durable is None:
             continue
         first_hash = next(iter(durable.artifact_hashes.values()), "sha256:no-artifact")
-        if user.role == "SUPER_ADMIN":
-            effective_role = user.role
-        else:
-            membership = await db.scalar(select(JobMembership).where(
-                JobMembership.job_id == j.job_id, JobMembership.user_id == user.user_id
-            ))
-            effective_role = membership.role_id if membership else "VIEWER"
+        membership = await db.scalar(select(JobMembership).where(
+            JobMembership.job_id == j.job_id, JobMembership.user_id == user.user_id
+        ))
+        effective_role = membership.role_id if membership else "DEVELOPER"
         can_decide = RBACPolicy.has_permission(effective_role, f"gate:approve_{g_type.value.lower()}")
         items.append(
             GateDetailResponse(

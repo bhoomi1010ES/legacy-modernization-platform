@@ -10,19 +10,29 @@ import logging
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[2] / "repo_workspaces" / "phase6"
+_WINDOWS_DEVICE_NAMES = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
+_FORBIDDEN_COMPONENTS = {
+    ".git", ".hg", ".svn", ".env", ".agents", ".codex", "node_modules",
+    ".ssh", ".aws", ".azure", ".config", "docker.sock",
+}
 
 
 def safe_target(root: Path, relative: str, allowed: str) -> Path:
     try:
-        if "\\" in relative or ":" in relative or "\x00" in relative:
+        if not isinstance(relative, str) or not relative or "\\" in relative or ":" in relative or "\x00" in relative:
             raise ValueError("Only repository-relative POSIX paths are allowed")
+        if relative.startswith("/") or relative.startswith("//"):
+            raise ValueError("Absolute paths are prohibited")
         parts = PurePosixPath(relative).parts
+        if PurePosixPath(relative).as_posix() != relative:
+            raise ValueError("Path must use canonical normalized POSIX form")
         permitted = PurePosixPath(allowed)
         if (
             not parts
-            or relative.startswith("/")
             or any(
-                p.lower() in {"..", ".git", "node_modules", ".env", ".agents", ".codex"}
+                p in {"", ".", ".."}
+                or p.lower() in _FORBIDDEN_COMPONENTS
+                or p.rstrip(" .").split(".", 1)[0].lower() in _WINDOWS_DEVICE_NAMES
                 for p in parts
             )
         ):
@@ -37,6 +47,8 @@ def safe_target(root: Path, relative: str, allowed: str) -> Path:
                 "CodeWriter cannot edit test/fixture/configuration evidence"
             )
         path = PurePosixPath(relative)
+        if any(p.startswith(".") for p in parts):
+            raise ValueError("Hidden control and configuration files are prohibited")
         if path.name.lower() in {
             "conftest.py",
             "pytest.ini",
@@ -56,13 +68,15 @@ def safe_target(root: Path, relative: str, allowed: str) -> Path:
             )
         if path != permitted and (permitted.suffix or permitted not in path.parents):
             raise ValueError("Path is outside the approved module target")
-        for parent in (root / relative, *(root / relative).parents):
-            if parent == root.parent:
+        root = root.resolve()
+        candidate = root.joinpath(*parts)
+        for parent in (candidate, *candidate.parents):
+            if parent == root:
                 break
             if parent.is_symlink() or getattr(parent, "is_junction", lambda: False)():
                 raise ValueError("Symlinks and junctions are prohibited")
-        result = (root / relative).resolve()
-        if root.resolve() not in result.parents:
+        result = candidate.resolve()
+        if root not in result.parents:
             raise ValueError("Path escapes isolated worktree")
         return result
     except Exception:
@@ -71,6 +85,10 @@ def safe_target(root: Path, relative: str, allowed: str) -> Path:
 
 
 async def git(repository: Path, *args: str) -> str:
+    if any(arg == 'commit' or (isinstance(arg, str) and arg.strip() == 'commit') for arg in args):
+        gitdir = repository / '.git'
+        if gitdir.is_file():
+            raise ConflictException('Git commit operations are forbidden during conversion and integration')
     try:
         # No provider/cloud credentials or repository-configured host executables.
         env = {
@@ -209,11 +227,22 @@ async def prepare(
 
 
 async def apply_changes(
-    worktree: Path, files: dict[str, str], allowed: str | list[str]
+    worktree: Path,
+    files: dict[str, str],
+    allowed: str | list[str],
+    *,
+    expected_staged_files: set[str] | None = None,
 ) -> dict:
     try:
-        if sum(len(v.encode()) for v in files.values()) > 1048576:
+        if not isinstance(files, dict) or not files or any(
+            not isinstance(name, str) or not isinstance(content, str)
+            for name, content in files.items()
+        ):
+            raise ValueError("ChangeSet files must be a non-empty map of text paths")
+        if sum(len(v.encode("utf-8")) for v in files.values()) > 1048576:
             raise ValueError("ChangeSet exceeds 1 MiB")
+        if any("\x00" in v for v in files.values()):
+            raise ValueError("NUL bytes are prohibited in generated text files")
         scopes = [allowed] if isinstance(allowed, str) else allowed
         targets = {}
         for name in files:
@@ -229,42 +258,84 @@ async def apply_changes(
             if not matches:
                 raise ValueError("Path is outside every approved module target")
             targets[name] = safe_target(worktree, name, matches[0])
+        staged_before = set(filter(None, (await git(worktree, "diff", "--cached", "--name-only", "-z")).split("\x00")))
+        if expected_staged_files is None:
+            expected_staged_files = set()
+        if staged_before != expected_staged_files:
+            raise ValueError("Pre-existing staged files differ from validated attempt evidence")
+        if set(targets).intersection(staged_before):
+            raise ValueError("ChangeSet overlaps an already validated staged dependency")
         for relative, path in targets.items():
             path.parent.mkdir(parents=True, exist_ok=True)
             content = files[relative]
-            if isinstance(content, str) and ";base64," in content and content.startswith("data:"):
-                import base64
-                b64_str = content.split(";base64,", 1)[1]
-                path.write_bytes(base64.b64decode(b64_str))
-            else:
-                if isinstance(content, str) and "\x00" in content:
-                    content = content.replace("\x00", "")
-                path.write_text(content, encoding="utf-8", newline="\n")
+            path.write_text(content, encoding="utf-8", newline="\n")
         await git(worktree, "add", "--", *targets)
         diff = await git(worktree, "diff", "--cached", "--no-ext-diff", "--no-textconv")
-        await git(
-            worktree, "commit", "--allow-empty", "-m", "Module conversion attempt"
-        )
+        changed = (await git(worktree, "diff", "--cached", "--name-only", "-z")).split("\x00")
+        if set(filter(None, changed)) != staged_before | set(targets):
+            raise ValueError("Staged repository changes differ from validated attempt evidence")
+        if any(name == ".gitmodules" or name.startswith(".git/") for name in changed):
+            raise ValueError("Repository metadata modifications are prohibited")
+        base_sha = await git(worktree, "rev-parse", "HEAD")
+        # The staged Git tree is a stable identity for the full candidate without
+        # creating a conversion-time commit. Verification binds this tree hash and
+        # the pinned source base SHA as a pair.
+        candidate_hash = await git(worktree, "write-tree")
+        if await git(worktree, "rev-parse", "HEAD") != base_sha:
+            raise ValueError("Candidate application changed the pinned source HEAD")
+        import hashlib
         return {
             "diff": diff,
+            "diff_hash": hashlib.sha256(diff.encode("utf-8")).hexdigest(),
             "changed_files": list(files),
-            "commit": await git(worktree, "rev-parse", "HEAD"),
+            "base_sha": base_sha,
+            "candidate_hash": candidate_hash,
+            "staged_files": sorted(staged_before | set(targets)),
         }
     except Exception:
         logger.exception("phase6.apply_changes failed")
         raise
 
 
-async def file_snapshot(worktree: Path) -> dict[str, str]:
-    """Send tracked files only; no .git, host environment, secrets or mutable mounts."""
+async def file_snapshot(
+    worktree: Path, *, exclude_paths: set[str] | frozenset[str] = frozenset()
+) -> dict[str, str]:
+    """Send tracked files only, with only explicitly named exclusions.
+
+    Callers that omit generated executables must record their hashes and reason
+    in the evidence binding. Exclusions are exact canonical tracked paths; this
+    does not change the default snapshot contract used by other phases.
+    """
     try:
         from app.services.secret_redactor import get_secret_redactor
 
+        for name in exclude_paths:
+            if (
+                not isinstance(name, str)
+                or not name
+                or PurePosixPath(name).as_posix() != name
+                or PurePosixPath(name).is_absolute()
+                or any(part in {".", ".."} for part in PurePosixPath(name).parts)
+            ):
+                raise ValueError("Invalid exact snapshot exclusion path")
         tracked = (await git(worktree, "ls-files", "-z")).split("\x00")
+        tracked_names = {name for name in tracked if name}
+        root = worktree.resolve()
+        for name in exclude_paths:
+            if name not in tracked_names:
+                raise ValueError("Snapshot exclusion must name an exact tracked file")
+            excluded_path = worktree / name
+            if (
+                excluded_path.is_symlink()
+                or getattr(excluded_path, "is_junction", lambda: False)()
+                or not excluded_path.is_file()
+                or root not in excluded_path.resolve().parents
+            ):
+                raise ValueError("Unsafe exact snapshot exclusion file")
         files = {}
         size = 0
         for name in tracked:
-            if not name or any(
+            if not name or name in exclude_paths or any(
                 p in {".git", ".env", "node_modules", ".agents", ".codex"}
                 or p.startswith(".env.")
                 for p in PurePosixPath(name).parts
@@ -286,10 +357,11 @@ async def file_snapshot(worktree: Path) -> dict[str, str]:
                 import hashlib
                 raw_bytes = path.read_bytes()
                 digest = hashlib.sha256(raw_bytes).hexdigest()
-                data = f"[binary asset: {len(raw_bytes)} bytes, sha256:{digest}]"
+                import base64
+                data = {"encoding": "base64", "data": base64.b64encode(raw_bytes).decode("ascii"), "sha256": digest}
             redactor = get_secret_redactor()
             check_fn = getattr(redactor, "has_secret_material", lambda t: redactor.redact_text(t) != t)
-            if check_fn(data):
+            if isinstance(data, str) and check_fn(data):
                 raise ValueError("Secret material found in verification workspace")
             files[name] = data
         return files

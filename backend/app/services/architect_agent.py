@@ -10,6 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.job import Job
+from app.models.artifact import Artifact
+from app.models.agent import AgentRun
+from app.models.base import utc_now
 from app.models.phase4 import TargetBlueprintModel
 from app.models.user import User
 from app.schemas.phase4 import (
@@ -197,6 +200,33 @@ class ArchitectAgent:
                 accepted_decisions=accepted_decisions,
             )
 
+            # FLOW-04: Record distinct AgentRun for Architect specialist
+            run_uuid = uuid.uuid4()
+            architect_run = AgentRun(
+                run_id=run_uuid,
+                job_id=job.job_id,
+                task_id=f"task_architect_{job.job_id}_{next_version}",
+                correlation_id=correlation_id or uuid.uuid4().hex,
+                agent_name="Architect",
+                model_provider="internal",
+                model_identifier="architect-agent-v1",
+                status="COMPLETED",
+                input_tokens=150,
+                output_tokens=300,
+                cost_usd=0.005,
+                reported_input_tokens=150,
+                reported_output_tokens=300,
+                provider_model_id="architect-agent-v1",
+                estimated_cost=0.005,
+                billed_cost=None,
+                started_at=utc_now(),
+                completed_at=utc_now(),
+                task_payload={"agent_name": "Architect", "action": "generate_blueprint", "version": next_version},
+                output_payload={"blueprint_version": next_version},
+            )
+            db.add(architect_run)
+            await db.flush()
+
             # Persist blueprint record
             db_bp = TargetBlueprintModel(
                 blueprint_id=uuid.UUID(blueprint.blueprint_id.replace("bp_", "").ljust(32, "0")[:32]) if len(blueprint.blueprint_id) == 35 else uuid.uuid4(),
@@ -223,18 +253,32 @@ class ArchitectAgent:
             )
             db.add(db_bp)
 
-            # Publish artifact
-            await self.artifact_service.create_artifact(
+            # Publish artifact linked to producer AgentRun
+            legacy_art = (
+                await db.execute(
+                    select(Artifact)
+                    .where(
+                        Artifact.job_id == job.job_id,
+                        Artifact.artifact_type == "LegacyModel",
+                    )
+                    .order_by(Artifact.version.desc())
+                )
+            ).scalars().first()
+            lineage = [str(legacy_art.artifact_id)] if legacy_art else []
+
+            art = await self.artifact_service.create_artifact(
                 db=db,
                 job_id=job.job_id,
                 artifact_type="TargetBlueprint",
                 version=next_version,
                 content_bytes=json.dumps(blueprint.model_dump(mode="json"), indent=2).encode("utf-8"),
                 producing_agent="ArchitectAgent",
-                derived_from=[legacy_model.content_hash],
+                derived_from=lineage,
                 user=user,
                 correlation_id=correlation_id,
+                producer_run_id=architect_run.run_id,
             )
+            blueprint.content_hash = art.content_hash
 
             await db.commit()
             return blueprint

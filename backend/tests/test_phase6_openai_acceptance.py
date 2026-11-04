@@ -27,32 +27,37 @@ from app.services import phase6_sandbox as sandbox
 from test_phase5 import isolated, captured  # noqa: F401
 from test_phase6 import ready  # noqa: F401
 
-
-@pytest.mark.asyncio
-async def test_openai_live_connectivity_and_accounting():
-    """Proves real OpenAI API credentials connect, respond, and meter usage and cost."""
-    api_key = settings.OPENAI_API_KEY
-    if not api_key:
-        pytest.skip("OPENAI_API_KEY is not configured in environment")
-
-    provider = OpenAIProvider(api_key=api_key)
-    res = await provider.complete(
-        model="gpt-4o-mini",
-        request={"prompt": "Respond with the word PONG only."},
-    )
-
-    assert res.action == "final"
-    assert "PONG" in res.output["content"].upper()
-    assert res.usage.input_tokens > 0
-    assert res.usage.output_tokens > 0
-    assert res.usage.cost_usd > 0
-    assert res.provider_request_id is not None
-    assert res.provider_request_id.startswith("chatcmpl-")
-    assert res.provider_metadata is not None
-    assert res.provider_metadata["cost_source"] == "estimated_not_provider_billed"
+# Live requests require an explicit invocation. Merely having a key in .env
+# must never make a regression-suite collection charge the provider account.
+live_provider = pytest.mark.skipif(
+    os.getenv('W09_RUN_LIVE_PROVIDER') != '1',
+    reason='Live provider acceptance requires W09_RUN_LIVE_PROVIDER=1 and a bounded persistent ledger',
+)
 
 
 @pytest.mark.asyncio
+@live_provider
+async def test_openai_live_connectivity_and_accounting(tmp_path):
+    """Explicit live gateway request: bounded output, persistent accounting and restart recovery."""
+    import sys
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[2]
+    evidence=tmp_path/'provider.json';ledger=tmp_path/'w09_test_provider.sqlite'
+    process=await asyncio.create_subprocess_exec(sys.executable,str(root/'tools/phase6_acceptance/verify_provider.py'),
+        '--output',str(evidence),'--ledger',str(ledger),stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE,cwd=str(root/'backend'))
+    stdout,stderr=await process.communicate()
+    assert process.returncode==0, 'Bounded provider acceptance blocked; inspect its sanitized evidence'
+    result=json.loads(evidence.read_text())
+    assert result['status']=='PASS' and result['ledger']['status']=='COMPLETED'
+    assert result['maximum_output_tokens']==256 and result['request_budget_usd']==.01
+    assert result['usage']['input_tokens']>0 and result['usage']['output_tokens']>0
+    assert result['ledger']['actual_model'] and result['ledger']['provider_request_id']
+    assert result['duplicate_dispatch_blocked'] and result['over_ceiling_reservation_blocked']
+    assert result['persistent_recovery']['status']=='COMPLETED'
+
+
+@pytest.mark.asyncio
+@live_provider
 async def test_openai_error_conditions():
     """Proves missing keys, invalid keys, and unallowlisted models fail closed."""
     # 1. Missing API key
@@ -141,6 +146,7 @@ def test_registration_privilege_escalation_blocked(client):
 
 
 @pytest.mark.asyncio
+@live_provider
 async def test_real_phase6_openai_docker_end_to_end_acceptance(ready, monkeypatch):
     """Genuine end-to-end acceptance:
 
@@ -240,7 +246,7 @@ async def test_real_phase6_openai_docker_end_to_end_acceptance(ready, monkeypatc
     converted_artifact = await db.scalar(
         select(Artifact).where(
             Artifact.job_id == job.job_id,
-            Artifact.artifact_type == "CONVERTED_MODULE",
+            Artifact.artifact_type == "CodeModule",
             Artifact.module_id == module.module_id,
         )
     )

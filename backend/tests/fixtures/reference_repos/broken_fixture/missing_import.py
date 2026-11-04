@@ -1,0 +1,2 @@
+# Intentional missing dependency import
+import non_existent_rebase_package_xyz_9999

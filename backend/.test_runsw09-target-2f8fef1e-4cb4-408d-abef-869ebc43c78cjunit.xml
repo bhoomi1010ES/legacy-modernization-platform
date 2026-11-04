@@ -1,0 +1,447 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="10" skipped="0" tests="34" time="56.861" timestamp="2026-11-02T17:16:55.990751+05:30" hostname="DESKTOP-I9N3GEL"><testcase classname="tests.test_phase6" name="test_real_fixture_generation_execution_review_and_history" time="4.421"><failure message="AssertionError: assert 'BLOCKED' == 'VERIFIED'&#10;  &#10;  - VERIFIED&#10;  + BLOCKED">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x000002D92A10A1E0&gt;, &lt;app.models.job.Job object at 0x000002D92...f-869ebc43c78c/tmp/test_real_fixture_generation_e0/authoritative_workspaces/job_e2c20fc3-82c6-406a-86ff-4d68f0ec873b'))
+trusted_executor = []
+
+    @pytest.mark.asyncio
+    async def test_real_fixture_generation_execution_review_and_history(
+        ready, trusted_executor
+    ):
+        db, job, _, storage, module, _ = ready
+        attempt = await queued(ready)
+        assert attempt.status == "QUEUED" and module.status == "LEASED"
+        gateway = build_fake_gateway(FakeModelProvider([generation()]))
+        await service.execute_attempt(db, attempt.attempt_id, gateway=gateway)
+&gt;       assert attempt.status == module.status == "VERIFIED"
+E       AssertionError: assert 'BLOCKED' == 'VERIFIED'
+E         
+E         - VERIFIED
+E         + BLOCKED
+
+tests\test_phase6.py:297: AssertionError</failure></testcase><testcase classname="tests.test_phase6" name="test_capture_idempotency_conflict_and_no_duplicate_attempt" time="3.067" /><testcase classname="tests.test_phase6" name="test_sandbox_unavailable_never_verified_or_integrated" time="3.780"><failure message="assert 'Docker daemon' in &quot;Conversion blocked: Git workspace operation failed: Preparing worktree (new branch 'job/79debdbd-c49a-48e9-8eaf-50b3f.../authoritative_workspaces/job_79debdbd-c49a-48e9-8eaf-50b3f88631b3/.git/worktrees/2c6697bd-cdeb-41f3-a0a2-8ebefdfba8ad&quot;&#10; +  where &quot;Conversion blocked: Git workspace operation failed: Preparing worktree (new branch 'job/79debdbd-c49a-48e9-8eaf-50b3f.../authoritative_workspaces/job_79debdbd-c49a-48e9-8eaf-50b3f88631b3/.git/worktrees/2c6697bd-cdeb-41f3-a0a2-8ebefdfba8ad&quot; = &lt;app.models.module.ModuleAttempt object at 0x000002D92C070290&gt;.failure_reason">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x000002D92BEE0740&gt;, &lt;app.models.job.Job object at 0x000002D92...f-869ebc43c78c/tmp/test_sandbox_unavailable_never0/authoritative_workspaces/job_79debdbd-c49a-48e9-8eaf-50b3f88631b3'))
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x000002D92C27B8C0&gt;
+
+    @pytest.mark.asyncio
+    async def test_sandbox_unavailable_never_verified_or_integrated(ready, monkeypatch):
+        db, job, _, _, module, _ = ready
+        monkeypatch.setattr(
+            sandbox,
+            "execute",
+            AsyncMock(
+                return_value={
+                    "available": False,
+                    "reason": "Docker daemon unavailable",
+                    "checks": [],
+                    "cases": [],
+                }
+            ),
+        )
+        attempt = await queued(ready)
+        await service.execute_attempt(
+            db,
+            attempt.attempt_id,
+            gateway=build_fake_gateway(FakeModelProvider([generation()])),
+        )
+        assert module.status == attempt.status == "BLOCKED"
+&gt;       assert "Docker daemon" in attempt.failure_reason
+E       assert 'Docker daemon' in "Conversion blocked: Git workspace operation failed: Preparing worktree (new branch 'job/79debdbd-c49a-48e9-8eaf-50b3f.../authoritative_workspaces/job_79debdbd-c49a-48e9-8eaf-50b3f88631b3/.git/worktrees/2c6697bd-cdeb-41f3-a0a2-8ebefdfba8ad"
+E        +  where "Conversion blocked: Git workspace operation failed: Preparing worktree (new branch 'job/79debdbd-c49a-48e9-8eaf-50b3f.../authoritative_workspaces/job_79debdbd-c49a-48e9-8eaf-50b3f88631b3/.git/worktrees/2c6697bd-cdeb-41f3-a0a2-8ebefdfba8ad" = &lt;app.models.module.ModuleAttempt object at 0x000002D92C070290&gt;.failure_reason
+
+tests\test_phase6.py:368: AssertionError</failure></testcase><testcase classname="tests.test_phase6" name="test_repair_resolved_reruns_frozen_suite_and_invalidates_old" time="4.038"><failure message="AssertionError: assert 'BLOCKED' == 'REPAIR_REQUIRED'&#10;  &#10;  - REPAIR_REQUIRED&#10;  + BLOCKED">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x000002D92C211FD0&gt;, &lt;app.models.job.Job object at 0x000002D92...f-869ebc43c78c/tmp/test_repair_resolved_reruns_fr0/authoritative_workspaces/job_ea802aa2-88cc-4f39-b48b-744220f1adee'))
+trusted_executor = []
+
+    @pytest.mark.asyncio
+    async def test_repair_resolved_reruns_frozen_suite_and_invalidates_old(
+        ready, trusted_executor
+    ):
+        db, _, _, _, module, _ = ready
+        first = await queued(ready)
+        gateway = build_fake_gateway(FakeModelProvider([generation(4), generation(3)]))
+        await service.execute_attempt(db, first.attempt_id, gateway=gateway)
+&gt;       assert first.status == "REPAIR_REQUIRED"
+E       AssertionError: assert 'BLOCKED' == 'REPAIR_REQUIRED'
+E         
+E         - REPAIR_REQUIRED
+E         + BLOCKED
+
+tests\test_phase6.py:384: AssertionError</failure></testcase><testcase classname="tests.test_phase6" name="test_repeated_failure_and_maximum_escalation" time="5.386"><failure message="AssertionError: assert 'BLOCKED' == 'WAITING_FOR_HUMAN'&#10;  &#10;  - WAITING_FOR_HUMAN&#10;  + BLOCKED">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x000002D92C4B7830&gt;, &lt;app.models.job.Job object at 0x000002D92...f-869ebc43c78c/tmp/test_repeated_failure_and_maxi0/authoritative_workspaces/job_e3d32779-edaf-4794-8490-812e2931c3cc'))
+trusted_executor = []
+
+    @pytest.mark.asyncio
+    async def test_repeated_failure_and_maximum_escalation(ready, trusted_executor):
+        db, job, *_ = ready
+        first = await queued(ready)
+        gateway = build_fake_gateway(FakeModelProvider([generation(4), generation(4)]))
+        await service.execute_attempt(db, first.attempt_id, gateway=gateway)
+        second = await queued(
+            ready,
+            "repair",
+            previous=first,
+            rationale="Repair exact failed frozen characterization case",
+        )
+        await service.execute_attempt(db, second.attempt_id, gateway=gateway)
+&gt;       assert second.status == "WAITING_FOR_HUMAN"
+E       AssertionError: assert 'BLOCKED' == 'WAITING_FOR_HUMAN'
+E         
+E         - WAITING_FOR_HUMAN
+E         + BLOCKED
+
+tests\test_phase6.py:418: AssertionError</failure></testcase><testcase classname="tests.test_phase6" name="test_pending_rejected_or_stale_gates_block_conversion[G1]" time="2.650" /><testcase classname="tests.test_phase6" name="test_pending_rejected_or_stale_gates_block_conversion[G2]" time="2.897" /><testcase classname="tests.test_phase6" name="test_pending_rejected_or_stale_gates_block_conversion[G3]" time="3.075" /><testcase classname="tests.test_phase6" name="test_dependency_order_target_conflicts_and_branch_isolation" time="3.757"><failure message="app.core.errors.ConflictException: Git workspace operation failed: Preparing worktree (new branch 'job/b81f2252-3724-4f2f-99fc-b5fc57d98e77/module/c0f2de4c-ba6c-4de0-801f-e1f57d15ce5b/attempt/1')&#10;fatal: not a git repository: C:/Users/lenovo/Desktop/rebase/backend/.test_runs/w09-target-2f8fef1e-4cb4-408d-abef-869ebc43c78c/tmp/test_dependency_order_target_c0/authoritative_workspaces/job_b81f2252-3724-4f2f-99fc-b5fc57d98e77/.git/worktrees/26ef13e7-e5a8-41f7-ae58-95bdc5e1d535">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x000002D92C69BD10&gt;, &lt;app.models.job.Job object at 0x000002D92...f-869ebc43c78c/tmp/test_dependency_order_target_c0/authoritative_workspaces/job_b81f2252-3724-4f2f-99fc-b5fc57d98e77'))
+
+    @pytest.mark.asyncio
+    async def test_dependency_order_target_conflicts_and_branch_isolation(ready):
+        db, job, _, _, module, repo = ready
+        child = Module(
+            job_id=job.job_id,
+            name="child",
+            legacy_path="legacy",
+            target_path="child",
+            dependency_module_ids=[str(module.module_id)],
+        )
+        db.add(child)
+        await db.commit()
+        with pytest.raises(ConflictException):
+            await supervisor.queue_module_conversion(
+                db, job, child, "blocked", "Supervisor"
+            )
+        first = await queued(ready)
+&gt;       path1, branch1 = await ws.prepare(
+            repo,
+            str(job.job_id),
+            str(module.module_id),
+            str(first.attempt_id),
+            1,
+            await ws.git(repo, "rev-parse", "HEAD"),
+        )
+
+tests\test_phase6.py:468: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+app\services\phase6_workspace.py:218: in prepare
+    await git(repository, "worktree", "add", "-B", branch, str(path), commit)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+repository = WindowsPath('C:/Users/lenovo/Desktop/rebase/backend/.test_runs/w09-target-2f8fef1e-4cb4-408d-abef-869ebc43c78c/tmp/test_dependency_order_target_c0/authoritative_workspaces/job_b81f2252-3724-4f2f-99fc-b5fc57d98e77')
+args = ('worktree', 'add', '-B', 'job/b81f2252-3724-4f2f-99fc-b5fc57d98e77/module/c0f2de4c-ba6c-4de0-801f-e1f57d15ce5b/attemp...pendency_order_target_c0\\worktrees\\26ef13e7-e5a8-41f7-ae58-95bdc5e1d535', '00543959ea830707abbf69356b4256de0b32fe5f')
+
+    async def git(repository: Path, *args: str) -&gt; str:
+        try:
+            # No provider/cloud credentials or repository-configured host executables.
+            env = {
+                k: v
+                for k, v in os.environ.items()
+                if k.upper()
+                in {"PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP"}
+            }
+            gitdir = repository / ".git"
+            if gitdir.is_file():
+                pointer = gitdir.read_text(encoding="utf-8").strip()
+                gitdir = Path(pointer.removeprefix("gitdir: "))
+            config = (
+                gitdir / "config"
+                if (gitdir / "config").is_file()
+                else gitdir.parent.parent / "config"
+            )
+            if config.is_file() and re.search(
+                r"(?im)^\s*\[\s*(filter|include|includeIf|merge|diff)\b",
+                config.read_text(encoding="utf-8"),
+            ):
+                raise ValueError(
+                    "Local Git filters/includes are prohibited in isolated workspaces"
+                )
+            env.update(
+                GIT_CONFIG_GLOBAL=os.devnull,
+                GIT_CONFIG_NOSYSTEM="1",
+                GIT_TERMINAL_PROMPT="0",
+                GIT_AUTHOR_NAME="Rebase",
+                GIT_AUTHOR_EMAIL="rebase@example.invalid",
+                GIT_COMMITTER_NAME="Rebase",
+                GIT_COMMITTER_EMAIL="rebase@example.invalid",
+            )
+            cmd = [
+                "git",
+                "-c",
+                "safe.directory=*",
+                "-c",
+                f"core.hooksPath={os.devnull}",
+                "-c",
+                "core.longpaths=true",
+                "-c",
+                "core.fsmonitor=false",
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "submodule.recurse=false",
+                "-C",
+                str(repository),
+                *args,
+            ]
+            from app.core.subprocesses import run_subprocess_async
+    
+            try:
+                res = await run_subprocess_async(cmd, env=env, timeout=30.0)
+            except asyncio.TimeoutError:
+                raise ConflictException("Git workspace operation timed out")
+            if res.returncode:
+                err_msg = res.stderr.decode("utf-8", errors="replace").strip() if res.stderr else ""
+                logger.error("Git workspace operation failed with rc %s: %s", res.returncode, err_msg)
+&gt;               raise ConflictException(
+                    f"Git workspace operation failed: {err_msg or 'ensure a pinned, staged Git repository is available'}"
+                )
+E               app.core.errors.ConflictException: Git workspace operation failed: Preparing worktree (new branch 'job/b81f2252-3724-4f2f-99fc-b5fc57d98e77/module/c0f2de4c-ba6c-4de0-801f-e1f57d15ce5b/attempt/1')
+E               fatal: not a git repository: C:/Users/lenovo/Desktop/rebase/backend/.test_runs/w09-target-2f8fef1e-4cb4-408d-abef-869ebc43c78c/tmp/test_dependency_order_target_c0/authoritative_workspaces/job_b81f2252-3724-4f2f-99fc-b5fc57d98e77/.git/worktrees/26ef13e7-e5a8-41f7-ae58-95bdc5e1d535
+
+app\services\phase6_workspace.py:148: ConflictException</failure></testcase><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[../escape.py]" time="0.008" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[/etc/passwd]" time="0.009" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[modern/../../outside]" time="0.008" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[modern/tests/test_calc.py]" time="0.009" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[modern/.env]" time="0.009" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[another/calc.py]" time="0.009" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[modern\\calc.py]" time="0.010" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[modern/.git/hooks/x]" time="0.008" /><testcase classname="tests.test_phase6" name="test_codewriter_scope_rejects_unsafe_paths[modern/a.spec.ts]" time="0.019" /><testcase classname="tests.test_phase6" name="test_reviewer_security_severity_contract_and_evidence" time="0.008" /><testcase classname="tests.test_phase6" name="test_unsafe_command_blocking[command0]" time="0.007" /><testcase classname="tests.test_phase6" name="test_unsafe_command_blocking[command1]" time="0.005" /><testcase classname="tests.test_phase6" name="test_unsafe_command_blocking[command2]" time="0.006" /><testcase classname="tests.test_phase6" name="test_unsafe_command_blocking[command3]" time="0.006" /><testcase classname="tests.test_phase6" name="test_unsafe_command_blocking[command4]" time="0.006" /><testcase classname="tests.test_phase6" name="test_codewriter_cannot_supply_verdict_or_arbitrary_api_commands" time="0.006" /><testcase classname="tests.test_phase6" name="test_stale_baseline_after_queue_fails_closed" time="3.180" /><testcase classname="tests.test_phase6" name="test_missing_model_configuration_is_blocked" time="4.742"><failure message="assert 'not configured' in &quot;Conversion blocked: Git workspace operation failed: Preparing worktree (new branch 'job/b74d58a3-5c50-4535-873d-47559.../authoritative_workspaces/job_b74d58a3-5c50-4535-873d-47559747e63f/.git/worktrees/8e3adaa4-ff81-475e-acfc-7a53c84294af&quot;&#10; +  where &quot;Conversion blocked: Git workspace operation failed: Preparing worktree (new branch 'job/b74d58a3-5c50-4535-873d-47559.../authoritative_workspaces/job_b74d58a3-5c50-4535-873d-47559747e63f/.git/worktrees/8e3adaa4-ff81-475e-acfc-7a53c84294af&quot; = &lt;app.models.module.ModuleAttempt object at 0x000002D92CBF4D10&gt;.failure_reason">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x000002D92CB8A120&gt;, &lt;app.models.job.Job object at 0x000002D92...f-869ebc43c78c/tmp/test_missing_model_configurati0/authoritative_workspaces/job_b74d58a3-5c50-4535-873d-47559747e63f'))
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x000002D92C317200&gt;
+
+    @pytest.mark.asyncio
+    async def test_missing_model_configuration_is_blocked(ready, monkeypatch):
+        db, *_ = ready
+        monkeypatch.setattr(settings, "PHASE6_MODEL_PROVIDER", "")
+        attempt = await queued(ready)
+        await service.execute_attempt(db, attempt.attempt_id)
+        assert attempt.status == "BLOCKED"
+&gt;       assert "not configured" in attempt.failure_reason
+E       assert 'not configured' in "Conversion blocked: Git workspace operation failed: Preparing worktree (new branch 'job/b74d58a3-5c50-4535-873d-47559.../authoritative_workspaces/job_b74d58a3-5c50-4535-873d-47559747e63f/.git/worktrees/8e3adaa4-ff81-475e-acfc-7a53c84294af"
+E        +  where "Conversion blocked: Git workspace operation failed: Preparing worktree (new branch 'job/b74d58a3-5c50-4535-873d-47559.../authoritative_workspaces/job_b74d58a3-5c50-4535-873d-47559747e63f/.git/worktrees/8e3adaa4-ff81-475e-acfc-7a53c84294af" = &lt;app.models.module.ModuleAttempt object at 0x000002D92CBF4D10&gt;.failure_reason
+
+tests\test_phase6.py:572: AssertionError</failure></testcase><testcase classname="tests.test_phase6" name="test_api_auth_idor_read_repair_and_waiver_permissions" time="3.069" /><testcase classname="tests.test_phase6" name="test_sandbox_flags_timeout_cleanup_and_output_bounds" time="0.038" /><testcase classname="tests.test_phase6" name="test_supervisor_pool_exits_only_after_independent_execution" time="4.212"><failure message="AssertionError: assert 'CONVERTING' == 'INTEGRATING'&#10;  &#10;  - INTEGRATING&#10;  + CONVERTING">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x000002D92C881EB0&gt;, &lt;app.models.job.Job object at 0x000002D92...f-869ebc43c78c/tmp/test_supervisor_pool_exits_onl0/authoritative_workspaces/job_5843d7d4-e2aa-411e-a6a2-c0a721944911'))
+trusted_executor = []
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x000002D92C868E90&gt;
+
+    @pytest.mark.asyncio
+    async def test_supervisor_pool_exits_only_after_independent_execution(
+        ready, trusted_executor, monkeypatch
+    ):
+        from app.services.code_writer import code_writer_service
+    
+        db, job, *_ = ready
+        job.max_parallel_tasks = 1
+        await db.commit()
+        original = code_writer_service.generate
+        gateway = build_fake_gateway(FakeModelProvider([generation()]))
+    
+        async def scripted(context, sources, **kwargs):
+            return await original(context, sources, gateway=gateway)
+    
+        monkeypatch.setattr(code_writer_service, "generate", scripted)
+        await supervisor.run_phase6_pool(db, job)
+        await db.refresh(job)
+&gt;       assert job.status == "INTEGRATING"
+E       AssertionError: assert 'CONVERTING' == 'INTEGRATING'
+E         
+E         - INTEGRATING
+E         + CONVERTING
+
+tests\test_phase6.py:708: AssertionError</failure></testcase><testcase classname="tests.test_phase6" name="test_all_post_apis_use_backend_authority_and_waiver_never_self_verifies" time="4.442"><failure message="AssertionError: assert 'BLOCKED' == 'REPAIR_REQUIRED'&#10;  &#10;  - REPAIR_REQUIRED&#10;  + BLOCKED">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x000002D92BB0C260&gt;, &lt;app.models.job.Job object at 0x000002D92...f-869ebc43c78c/tmp/test_all_post_apis_use_backend0/authoritative_workspaces/job_ae38a0e7-63c7-4f79-8794-066af82ec441'))
+trusted_executor = []
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x000002D92C0ABB00&gt;
+
+    @pytest.mark.asyncio
+    async def test_all_post_apis_use_backend_authority_and_waiver_never_self_verifies(
+        ready, trusted_executor, monkeypatch
+    ):
+        from app.api.v1.phase6 import router
+        from app.api.deps import get_current_user_and_permissions
+        from app.core.database import get_db
+    
+        db, job, owner, _, module, _ = ready
+        monkeypatch.setattr("app.api.v1.phase6.resume_pool", AsyncMock())
+        app = FastAPI()
+        app.include_router(router, prefix="/api/v1")
+    
+        async def override_db():
+            yield db
+    
+        app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[get_current_user_and_permissions] = lambda: (owner, [])
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
+            url = f"/api/v1/jobs/{job.job_id}/modules/{module.module_id}/conversion-runs"
+            response = await client.post(url, json={"idempotency_key": "api-queue"})
+            assert response.status_code == 202
+            attempt_id = response.json()["attempt_id"]
+            assert (await client.post(url, json={"idempotency_key": "api-queue"})).json()[
+                "attempt_id"
+            ] == attempt_id
+            output = generation()
+            output["output"]["files"]["modern/calc.py"] += "# TODO manual review needed\n"
+            await service.execute_attempt(
+                db,
+                uuid.UUID(attempt_id),
+                gateway=build_fake_gateway(FakeModelProvider([output])),
+            )
+            attempt = await db.get(ModuleAttempt, uuid.UUID(attempt_id))
+&gt;           assert attempt.status == "REPAIR_REQUIRED"
+E           AssertionError: assert 'BLOCKED' == 'REPAIR_REQUIRED'
+E             
+E             - REPAIR_REQUIRED
+E             + BLOCKED
+
+tests\test_phase6.py:748: AssertionError</failure></testcase><testcase classname="tests.test_phase6" name="test_deadline_and_output_overflow_remove_the_actual_named_container" time="0.007" /><testcase classname="tests.test_phase6" name="test_real_docker_acceptance_when_explicitly_configured" time="0.007"><failure message="ValueError: Configure real build, unit, integration, static, security, dependency, license, runtime and required schema checks">@pytest.mark.asyncio
+    async def test_real_docker_acceptance_when_explicitly_configured():
+        if os.getenv("PHASE6_RUN_REAL_ACCEPTANCE") != "1":
+            pytest.skip(
+                "Real Docker/model/target adapter acceptance requires explicit configured fixture"
+            )
+&gt;       sandbox.configuration()
+
+tests\test_phase6.py:805: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    def configuration():
+        image=settings.PHASE6_SANDBOX_IMAGE
+        checks=[CheckSpec.model_validate(c).model_dump() for c in json.loads(settings.PHASE6_CHECK_COMMANDS_JSON)]
+        adapter=json.loads(settings.PHASE6_TARGET_COMMAND_JSON)
+        if not re.fullmatch(r"sha256:[a-f0-9]{64}",image):
+            raise ValueError("Configure an immutable local image digest")
+        if not validate_check_profile(checks, system=False, schema_required=any(c['category']=='schema' for c in checks)):
+&gt;           raise ValueError("Configure real build, unit, integration, static, security, dependency, license, runtime and required schema checks")
+E           ValueError: Configure real build, unit, integration, static, security, dependency, license, runtime and required schema checks
+
+app\services\phase6_sandbox.py:25: ValueError</failure></testcase><testcase classname="tests.test_phase6" name="test_transitive_dependency_changes_are_hydrated_and_stale_plans_rejected" time="2.699"><failure message="app.core.errors.ConflictException: Git workspace operation failed: Preparing worktree (new branch 'job/88ba9d64-51e0-49da-b41c-b4fffcab443e/module/e82788eb-6f69-4ce1-948d-42f6822b4555/attempt/1')&#10;fatal: not a git repository: C:/Users/lenovo/Desktop/rebase/backend/.test_runs/w09-target-2f8fef1e-4cb4-408d-abef-869ebc43c78c/tmp/test_transitive_dependency_cha0/authoritative_workspaces/job_88ba9d64-51e0-49da-b41c-b4fffcab443e/.git/worktrees/91d5fe36-7d7a-44a5-b77d-136495edb185">ready = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x000002D92C4B5700&gt;, &lt;app.models.job.Job object at 0x000002D92...f-869ebc43c78c/tmp/test_transitive_dependency_cha0/authoritative_workspaces/job_88ba9d64-51e0-49da-b41c-b4fffcab443e'))
+
+    @pytest.mark.asyncio
+    async def test_transitive_dependency_changes_are_hydrated_and_stale_plans_rejected(
+        ready,
+    ):
+        db, job, _, storage, module, repo = ready
+        current = await supervisor.require_conversion_eligibility(db, job)
+        child = Module(
+            job_id=job.job_id,
+            name="dependency-child",
+            legacy_path="legacy",
+            target_path="dependency_b",
+        )
+        db.add(child)
+        await db.commit()
+        base = {
+            "baseline_hash": current["baseline_hash"],
+            "plan_hash": current["plan_hash"],
+        }
+        first = await ArtifactService(storage).create_artifact(
+            db,
+            job.job_id,
+            "CONVERTED_MODULE",
+            1,
+            p5.canonical(
+                {
+                    **base,
+                    "files": {"dependency_a/a.py": "value = 1\n"},
+                    "allowed_target": "dependency_a",
+                    "dependency_evidence": [],
+                }
+            ),
+            "CodeWriter",
+            module_id=module.module_id,
+        )
+        first_ref = {
+            "artifact_id": str(first.artifact_id),
+            "content_hash": first.content_hash,
+            "module_id": str(module.module_id),
+        }
+        second = await ArtifactService(storage).create_artifact(
+            db,
+            job.job_id,
+            "CONVERTED_MODULE",
+            2,
+            p5.canonical(
+                {
+                    **base,
+                    "files": {"dependency_b/b.py": "value = 2\n"},
+                    "allowed_target": "dependency_b",
+                    "dependency_evidence": [first_ref],
+                }
+            ),
+            "CodeWriter",
+            module_id=child.module_id,
+        )
+        second_ref = {
+            "artifact_id": str(second.artifact_id),
+            "content_hash": second.content_hash,
+            "module_id": str(child.module_id),
+        }
+&gt;       worktree, _ = await ws.prepare(
+            repo,
+            str(job.job_id),
+            str(uuid.uuid4()),
+            str(uuid.uuid4()),
+            1,
+            await ws.git(repo, "rev-parse", "HEAD"),
+        )
+
+tests\test_phase6.py:883: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+app\services\phase6_workspace.py:218: in prepare
+    await git(repository, "worktree", "add", "-B", branch, str(path), commit)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+repository = WindowsPath('C:/Users/lenovo/Desktop/rebase/backend/.test_runs/w09-target-2f8fef1e-4cb4-408d-abef-869ebc43c78c/tmp/test_transitive_dependency_cha0/authoritative_workspaces/job_88ba9d64-51e0-49da-b41c-b4fffcab443e')
+args = ('worktree', 'add', '-B', 'job/88ba9d64-51e0-49da-b41c-b4fffcab443e/module/e82788eb-6f69-4ce1-948d-42f6822b4555/attemp...ansitive_dependency_cha0\\worktrees\\91d5fe36-7d7a-44a5-b77d-136495edb185', '0953fc0d2e526473ae6c49e59ade806ac72e8262')
+
+    async def git(repository: Path, *args: str) -&gt; str:
+        try:
+            # No provider/cloud credentials or repository-configured host executables.
+            env = {
+                k: v
+                for k, v in os.environ.items()
+                if k.upper()
+                in {"PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP"}
+            }
+            gitdir = repository / ".git"
+            if gitdir.is_file():
+                pointer = gitdir.read_text(encoding="utf-8").strip()
+                gitdir = Path(pointer.removeprefix("gitdir: "))
+            config = (
+                gitdir / "config"
+                if (gitdir / "config").is_file()
+                else gitdir.parent.parent / "config"
+            )
+            if config.is_file() and re.search(
+                r"(?im)^\s*\[\s*(filter|include|includeIf|merge|diff)\b",
+                config.read_text(encoding="utf-8"),
+            ):
+                raise ValueError(
+                    "Local Git filters/includes are prohibited in isolated workspaces"
+                )
+            env.update(
+                GIT_CONFIG_GLOBAL=os.devnull,
+                GIT_CONFIG_NOSYSTEM="1",
+                GIT_TERMINAL_PROMPT="0",
+                GIT_AUTHOR_NAME="Rebase",
+                GIT_AUTHOR_EMAIL="rebase@example.invalid",
+                GIT_COMMITTER_NAME="Rebase",
+                GIT_COMMITTER_EMAIL="rebase@example.invalid",
+            )
+            cmd = [
+                "git",
+                "-c",
+                "safe.directory=*",
+                "-c",
+                f"core.hooksPath={os.devnull}",
+                "-c",
+                "core.longpaths=true",
+                "-c",
+                "core.fsmonitor=false",
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "submodule.recurse=false",
+                "-C",
+                str(repository),
+                *args,
+            ]
+            from app.core.subprocesses import run_subprocess_async
+    
+            try:
+                res = await run_subprocess_async(cmd, env=env, timeout=30.0)
+            except asyncio.TimeoutError:
+                raise ConflictException("Git workspace operation timed out")
+            if res.returncode:
+                err_msg = res.stderr.decode("utf-8", errors="replace").strip() if res.stderr else ""
+                logger.error("Git workspace operation failed with rc %s: %s", res.returncode, err_msg)
+&gt;               raise ConflictException(
+                    f"Git workspace operation failed: {err_msg or 'ensure a pinned, staged Git repository is available'}"
+                )
+E               app.core.errors.ConflictException: Git workspace operation failed: Preparing worktree (new branch 'job/88ba9d64-51e0-49da-b41c-b4fffcab443e/module/e82788eb-6f69-4ce1-948d-42f6822b4555/attempt/1')
+E               fatal: not a git repository: C:/Users/lenovo/Desktop/rebase/backend/.test_runs/w09-target-2f8fef1e-4cb4-408d-abef-869ebc43c78c/tmp/test_transitive_dependency_cha0/authoritative_workspaces/job_88ba9d64-51e0-49da-b41c-b4fffcab443e/.git/worktrees/91d5fe36-7d7a-44a5-b77d-136495edb185
+
+app\services\phase6_workspace.py:148: ConflictException</failure></testcase></testsuite></testsuites>

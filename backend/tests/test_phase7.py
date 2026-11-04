@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.errors import ConflictException, ForbiddenException
-from app.models.artifact import Artifact
+from app.models.artifact import Artifact, normalize_artifact_type
 from app.models.agent import AgentRun
 from app.models.test_case import TestResult as Result
 from app.models.workflow import WorkflowGate
@@ -43,13 +43,23 @@ async def verified(ready, trusted_executor, monkeypatch, tmp_path):  # noqa: F81
     monkeypatch.setattr(settings, "PHASE7_SBOM_TOOL", "syft")
     monkeypatch.setattr(settings, "PHASE7_PR_PROVIDER", "")
     specs = [
-        {"category": category, "command": ["python", "-m", "compileall", "-q", "."]}
-        for category in ("build", "unit", "integration", "static", "security", "schema")
+        {"category":"build","command":["python","-m","compileall","-q","."]},
+        {"category":"unit","command":["python","-m","pytest","-q","tests/unit"]},
+        {"category":"integration","command":["python","-m","pytest","-q","tests/integration"]},
+        {"category":"static","command":["python","-m","mypy","app"]},
+        {"category":"security","command":["python","-m","bandit","-r","app"]},
+        {"category":"dependency","command":["pip-audit","--strict"]},
+        {"category":"license","command":["licensecheck","--fail-on","GPL"]},
+        {"category":"runtime","command":["python","-m","pytest","-q","tests/runtime"]},
+        {"category":"api_compatibility","command":["python","-m","pytest","-q","tests/api_compatibility"]},
+        {"category":"schema","command":["python","-m","pytest","-q","tests/schema"]},
     ]
-    monkeypatch.setattr(settings, "PHASE7_CHECK_COMMANDS_JSON", json.dumps(specs))
+    profiles=json.loads(settings.PHASE6_TARGET_PROFILES_JSON)
+    profiles["TypeScript / NestJS"]["system_checks"]=specs
+    monkeypatch.setattr(settings, "PHASE6_TARGET_PROFILES_JSON", json.dumps(profiles))
     calls = []
 
-    async def system_double(files, cases, baseline_hash, *, system_checks=None):
+    async def system_double(files, cases, baseline_hash, *, system_checks=None,binding=None,frozen_profile=None):
         """Labeled container double: no real-system or real-model acceptance claim."""
         calls.append((files, cases, system_checks))
         checks = [
@@ -74,10 +84,14 @@ async def verified(ready, trusted_executor, monkeypatch, tmp_path):  # noqa: F81
                         "artifacts": [{"name": "unit-fixture", "version": "1"}],
                     }
                 )
-        return {
+        observations=[{'test_case_id':case['test_case_id'],'command':['python','/adapter.py'],'exit_code':0,
+            'duration_ms':1.0,'stdout':json.dumps({'output':case['expected'],'side_effects':case['side_effects']})} for case in cases]
+        from tests.fixtures.sandbox_evidence import synthetic_result
+        result=synthetic_result(files,cases,checks,binding,frozen_profile,observations)
+        return {**result,
             "available": True,
             "passed": True,
-            "checks": checks,
+            "checks": result['checks'],
             "cases": [
                 {
                     "test_case_id": case["test_case_id"],
@@ -114,7 +128,7 @@ async def integrated(verified):
 
 
 @pytest.mark.asyncio
-async def test_integration_real_git_exact_commit_report_counts_and_history(verified):
+async def test_integration_verified_changesets_zip_report_counts_and_history(verified):
     db, job, owner, storage, module, repo, attempt, calls = verified
     run, output = await integrated(verified)
     assert len(calls) == 1 and {check["category"] for check in calls[0][2]} >= {
@@ -126,18 +140,19 @@ async def test_integration_real_git_exact_commit_report_counts_and_history(verif
         "schema",
         "sbom",
     }
-    assert (
-        await workspace.git(
-            repo,
-            "merge-base",
-            "--is-ancestor",
-            (await p6.detail(db, attempt))["evidence"]["commit"],
-            output["commit"],
-        )
-        == ""
+    evidence = (await p6.detail(db, attempt))["evidence"]
+    assert "commit" not in evidence
+    assert evidence["base_sha"] == evidence["source_commit"]
+    assert output["zip_artifact_id"] and output["zip_sha256"]
+    assert output["manifest_artifact_id"]
+    zip_artifact, zip_bytes = await service.ArtifactService().get_artifact_content(
+        db, job.job_id, uuid.UUID(output["zip_artifact_id"])
     )
+    assert zip_artifact.content_hash == output["zip_sha256"]
+    assert zip_bytes[:2] == b"PK"
     report = await service.artifact_view(db, job.job_id, "JOB_REPORT")
-    assert report["content"]["integrated_commit"] == output["commit"]
+    assert report["content"]["integrated_commit"] is None
+    assert report["content"]["candidate_hash"] == output["candidate_hash"]
     assert report["content"]["counts"] == {
         "total": 1,
         "executed": 1,
@@ -175,33 +190,27 @@ async def test_g4_exact_human_approval_and_immutable_delivery(verified):
         gate.status == "PENDING"
         and not (await service.delivery(db, job))["delivery_ready"]
     )
-    with pytest.raises(ForbiddenException):
-        await GateService().decide(
-            db,
-            gate.gate_id,
-            GateDecisionRequest(
-                decision=DecisionOutcome.APPROVED,
-                rationale="Developer cannot approve delivery",
-                artifact_hashes=gate.artifact_hashes,
-            ),
-            actor_id=owner.user_id,
-            actor_role="DEVELOPER",
-        )
+    from app.domain.state_machine import GatePolicy
+    from app.schemas.gates import GateType
+    from app.core.errors import GatePolicyException
+    with pytest.raises(GatePolicyException):
+        GatePolicy.validate_decision(GateType.G4,DecisionOutcome.APPROVED,
+            'An autonomous agent cannot authorize delivery','DEVELOPER',is_human=False)
     decision, _, _, _ = await GateService().decide(
         db,
         gate.gate_id,
         GateDecisionRequest(
             decision=DecisionOutcome.APPROVED,
-            rationale="Human reviewed exact commit, real evidence in unit fixture and SBOM limitations",
+            rationale="Human reviewed exact ZIP, real evidence in unit fixture and SBOM limitations",
             artifact_hashes=gate.artifact_hashes,
             idempotency_key="unit-approved-g4",
         ),
         actor_id=owner.user_id,
-        actor_role="SUPER_ADMIN",
+        actor_role="DEVELOPER",
     )
     delivery = await service.delivery(db, job)
     assert job.status == "COMPLETED" and delivery["delivery_ready"]
-    assert delivery["delivery_record"]["content"]["commit"] == output["commit"]
+    assert delivery["delivery_record"]["content"]["zip_sha256"] == output["zip_sha256"]
     assert (
         delivery["delivery_record"]["content"]["delivered_at"]
         == decision.decided_at.isoformat()
@@ -240,14 +249,14 @@ async def test_rejection_invalidates_system_results_requires_fresh_version(verif
     ] == output["report_hash"]
 
 
-@pytest.mark.parametrize("kind", ["JOB_REPORT", "SBOM", "SYSTEM_VERIFICATION"])
+@pytest.mark.parametrize("kind", ["JOB_REPORT", "SBOM", "SYSTEM_VERIFICATION", "DeliveryPackage", "ModernizationManifest"])
 @pytest.mark.asyncio
 async def test_final_package_tamper_blocks_g4(verified, kind):
     db, job, owner, storage, *_ = verified
     _, output = await integrated(verified)
     artifact = await db.scalar(
         select(Artifact).where(
-            Artifact.job_id == job.job_id, Artifact.artifact_type == kind
+            Artifact.job_id == job.job_id, Artifact.artifact_type == normalize_artifact_type(kind)
         )
     )
     storage.objects[artifact.storage_path] = b"tampered"
@@ -258,15 +267,13 @@ async def test_final_package_tamper_blocks_g4(verified, kind):
 
 
 @pytest.mark.asyncio
-async def test_moved_integration_branch_and_stale_report_blocked(verified):
-    db, job, owner, _, _, repo, *_ = verified
+async def test_stale_report_and_tampered_zip_are_blocked(verified):
+    db, job, owner, storage, *_ = verified
     _, output = await integrated(verified)
     with pytest.raises(ConflictException):
         await supervisor.submit_final_review(db, job, "0" * 64, str(owner.user_id))
-    base = (await service.artifact_view(db, job.job_id, "JOB_REPORT"))["content"][
-        "source_commit"
-    ]
-    await workspace.git(repo, "update-ref", "refs/heads/" + output["branch"], base)
+    zip_artifact = await db.get(Artifact, uuid.UUID(output["zip_artifact_id"]))
+    storage.objects[zip_artifact.storage_path] = b"tampered"
     with pytest.raises(ConflictException):
         await service.validate_package(db, job, output["report_hash"])
 
@@ -308,7 +315,7 @@ async def test_manual_handoff_not_fake_pr_and_idempotent(verified):
         idempotency_key="unit-manual-pr", report_hash=output["report_hash"]
     )
     result = await service.pull_request(db, job, request, str(owner.user_id))
-    assert result["status"] == "MANUAL_REQUIRED" and not result.get("url")
+    assert result["status"] == "ZIP_DELIVERY" and result["sha256"] == output["zip_sha256"]
     assert await service.pull_request(db, job, request, str(owner.user_id)) == result
 
 
@@ -333,7 +340,7 @@ def test_dependency_order_rejects_missing_and_cyclic_contracts():
 
 @pytest.mark.parametrize(
     "tool,status",
-    [("", "UNAVAILABLE"), ("unknown", "UNSUPPORTED"), ("syft", "UNAVAILABLE")],
+    [("", "BLOCKED"), ("unknown", "NOT_RUN"), ("syft", "BLOCKED")],
 )
 def test_sbom_unavailable_or_unsupported_never_claims_standard(
     monkeypatch, tool, status

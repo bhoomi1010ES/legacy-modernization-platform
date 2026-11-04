@@ -9,7 +9,7 @@ def _admin_token(client: TestClient) -> str:
     client.cookies.clear()
     response = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     assert response.status_code == 200
     return response.cookies[settings.SESSION_COOKIE_NAME]

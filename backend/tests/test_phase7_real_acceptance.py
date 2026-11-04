@@ -15,7 +15,7 @@ Proves the complete final path:
           ↓
   Real Syft SBOM generation (syft 1.55.0, format syft-json)
           ↓
-  Four immutable package artifacts (INTEGRATION_REPORT, SYSTEM_VERIFICATION, SBOM, JOB_REPORT)
+  Immutable verification/report artifacts plus ZIP and modernization manifest
           ↓
   Package cross-hash verification
           ↓
@@ -25,12 +25,15 @@ Proves the complete final path:
           ↓
   Immutable DELIVERY_RECORD creation
           ↓
-  Deterministic manual handoff / PR
+  Authorized ZIP-delivery compatibility response
 """
 
 import json
 import os
 import uuid
+import hashlib
+import zipfile
+from io import BytesIO
 import pytest
 import pytest_asyncio
 from sqlalchemy import select
@@ -64,15 +67,15 @@ async def test_phase7_real_environment_e2e_acceptance(ready, monkeypatch, tmp_pa
 
     Uses:
     - Real G3-approved Phase 6 converted module
-    - Real Git integration on branch job/{job_id}/integration/{run_id}
+    - Source remains untouched; verified ChangeSets populate an isolated output candidate
     - Real pre-baked Docker container image (phase7-acceptance:local-v1)
     - Real hardened sandbox (--network=none, readonly, dropped caps)
     - Full G2 Golden Master regression replay
     - Real Syft 1.55.0 SBOM generation (syft-json)
-    - Four immutable package artifacts
+    - Immutable report/verification artifacts, ZIP and modernization manifest
     - G4 human approval governance (Developer rejected, Super Admin approved)
     - Immutable DELIVERY_RECORD
-    - Idempotent manual handoff
+    - Idempotent ZIP-delivery response (legacy endpoint compatibility)
     """
     db, job, owner, storage, module, repo = ready
     job.source_stack = "Python"
@@ -120,7 +123,11 @@ async def test_phase7_real_environment_e2e_acceptance(ready, monkeypatch, tmp_pa
     assert "modern/calc.py" in p6_evidence["files"]
     changeset_hash = p6_evidence["code_hash"]
     golden_master_hash = p6_evidence["baseline_hash"]
-    p6_commit = p6_evidence["commit"]
+    source_base_sha = p6_evidence["base_sha"]
+    assert p6_evidence["base_sha"] == p6_evidence["source_commit"]
+    assert "commit" not in p6_evidence
+    assert await ws.git(repo, "rev-parse", "HEAD") == source_base_sha
+    assert not await ws.git(repo, "status", "--porcelain")
 
     # Verify G3 approval gate is present and APPROVED
     g3_gate = await db.scalar(
@@ -155,27 +162,37 @@ async def test_phase7_real_environment_e2e_acceptance(ready, monkeypatch, tmp_pa
 
     # 4. Execute Real Phase 7 Integration
     # This invokes:
-    # - Real Git worktree creation and merge on branch job/{job_id}/integration/{run_id}
+    # - Isolated output-candidate composition; no Git commit is created
     # - Real hardened Docker sandbox execution (phase7-acceptance:local-v1)
     # - Real System Verification checks (build, unit, integration, static, security x2, schema)
     # - Full G2 Golden Master replay (100% match, 0 regressions)
     # - Real Syft 1.55.0 execution producing genuine syft-json SBOM
-    # - Publishing 4 immutable package artifacts: INTEGRATION_REPORT, SYSTEM_VERIFICATION, SBOM, JOB_REPORT
+    # - Publishing immutable report/verification artifacts, ZIP and modernization manifest
     output = await service.execute_integration(db, run.run_id)
     assert output["status"] == "READY_FOR_REVIEW", f"Integration not ready: {output}"
     assert run.status == "SUCCEEDED"
 
-    integration_commit = output["commit"]
-    integration_branch = output["branch"]
+    candidate_hash = output["candidate_hash"]
     report_hash = output["report_hash"]
-    assert integration_branch == f"job/{job.job_id}/integration/{run.run_id}"
-    assert integration_commit is not None and len(integration_commit) == 40
+    assert candidate_hash and len(candidate_hash) == 64
+    assert output["zip_artifact_id"] and output["manifest_artifact_id"]
+    assert await ws.git(repo, "rev-parse", "HEAD") == source_base_sha
+    assert not await ws.git(repo, "status", "--porcelain")
 
-    # 5. Verify the 4 Immutable Package Artifacts
+    # 5. Verify immutable evidence artifacts and the complete ZIP delivery
     integration_art = await service.artifact_view(db, job.job_id, "INTEGRATION_REPORT")
     verification_art = await service.artifact_view(db, job.job_id, "SYSTEM_VERIFICATION")
     sbom_art = await service.artifact_view(db, job.job_id, "SBOM")
     job_report_art = await service.artifact_view(db, job.job_id, "JOB_REPORT")
+    zip_artifact, zip_bytes = await service.ArtifactService().get_artifact_content(
+        db, job.job_id, uuid.UUID(output["zip_artifact_id"])
+    )
+    manifest_art = await service.artifact_view(db, job.job_id, "ModernizationManifest")
+    assert zip_artifact.content_hash == output["zip_sha256"]
+    assert hashlib.sha256(zip_bytes).hexdigest() == output["zip_sha256"]
+    with zipfile.ZipFile(BytesIO(zip_bytes)) as zipped:
+        assert zipped.testzip() is None
+        assert not any(name == ".git" or name.startswith(".git/") for name in zipped.namelist())
 
     assert integration_art["content_hash"] is not None
     assert verification_art["content_hash"] is not None
@@ -184,7 +201,10 @@ async def test_phase7_real_environment_e2e_acceptance(ready, monkeypatch, tmp_pa
 
     # Verify cross-artifact SHA-256 references in JOB_REPORT
     job_report = job_report_art["content"]
-    assert job_report["integrated_commit"] == integration_commit
+    assert job_report["integrated_commit"] is None
+    assert job_report["candidate_hash"] == candidate_hash
+    assert job_report["evidence"]["delivery_zip"]["sha256"] == output["zip_sha256"]
+    assert job_report["evidence"]["manifest"]["hash"] == manifest_art["content_hash"]
     assert job_report["evidence"]["integration"]["hash"] == integration_art["content_hash"]
     assert job_report["evidence"]["verification"]["hash"] == verification_art["content_hash"]
     assert job_report["evidence"]["sbom"]["hash"] == sbom_art["content_hash"]
@@ -251,7 +271,7 @@ async def test_phase7_real_environment_e2e_acceptance(ready, monkeypatch, tmp_pa
         g4_gate.gate_id,
         GateDecisionRequest(
             decision=DecisionOutcome.APPROVED,
-            rationale="Human verified full system checks, G2 replay, real Syft SBOM, and git integration commit.",
+            rationale="Human verified the exact ZIP, manifest, full system checks, G2 replay and real Syft SBOM.",
             artifact_hashes=g4_gate.artifact_hashes,
             idempotency_key="real-g4-accept-1",
         ),
@@ -266,7 +286,8 @@ async def test_phase7_real_environment_e2e_acceptance(ready, monkeypatch, tmp_pa
     assert delivery_art is not None
     delivery_record = delivery_art["content"]
     assert delivery_record["job_id"] == str(job.job_id)
-    assert delivery_record["commit"] == integration_commit
+    assert delivery_record["candidate_hash"] == candidate_hash
+    assert delivery_record["zip_sha256"] == output["zip_sha256"]
     assert delivery_record["report_hash"] == report_hash
     assert delivery_record["sbom_hash"] == sbom_art["content_hash"]
     assert delivery_record["gate_id"] == str(g4_gate.gate_id)
@@ -277,17 +298,17 @@ async def test_phase7_real_environment_e2e_acceptance(ready, monkeypatch, tmp_pa
     assert delivery_state["delivery_ready"] is True
     assert delivery_state["package_current"] is True
 
-    # 11. Verify Deterministic Manual Handoff / PR
+    # 11. Verify the legacy delivery endpoint returns the exact ZIP and is idempotent.
+    # The endpoint must not create a Git branch or external pull request.
     pr_res = await service.pull_request(
         db, job, PackageRequest(report_hash=report_hash, idempotency_key="pr-accept-1"), str(owner.user_id)
     )
-    assert pr_res["status"] == "MANUAL_REQUIRED"
-    assert pr_res["branch"] == integration_branch
-    assert pr_res["commit"] == integration_commit
+    assert pr_res["status"] == "ZIP_DELIVERY"
+    assert pr_res["artifact_id"] == output["zip_artifact_id"]
+    assert pr_res["sha256"] == output["zip_sha256"]
     assert pr_res["report_hash"] == report_hash
-    assert len(pr_res["instructions"]) >= 3
 
-    # Verify PR Idempotency
+    # Verify ZIP delivery response idempotency
     pr_repeat = await service.pull_request(
         db, job, PackageRequest(report_hash=report_hash, idempotency_key="pr-accept-1"), str(owner.user_id)
     )
@@ -297,8 +318,10 @@ async def test_phase7_real_environment_e2e_acceptance(ready, monkeypatch, tmp_pa
     print("PHASE 7 REAL ACCEPTANCE EVIDENCE")
     print(f"Job ID: {job.job_id}")
     print(f"Integration Run ID: {run.run_id}")
-    print(f"Integration Branch: {integration_branch}")
-    print(f"Integration Commit SHA: {integration_commit}")
+    print(f"Candidate Tree SHA-256: {candidate_hash}")
+    print(f"ZIP Artifact ID: {zip_artifact.artifact_id}")
+    print(f"ZIP SHA-256: {output['zip_sha256']}")
+    print(f"Manifest SHA-256: {manifest_art['content_hash']}")
     print(f"ChangeSet SHA-256: {changeset_hash}")
     print(f"Golden Master SHA-256: {golden_master_hash}")
     print(f"Docker Image Digest: {image_digest}")
@@ -324,7 +347,7 @@ async def test_phase7_failure_paths_and_governance_invariants(ready, monkeypatch
     2. Stale attempt / invalid ChangeSet blocks integration
     3. Missing dependencies or cyclic DAG blocks integration
     4. G4 rejection invalidates test results and blocks delivery
-    5. Artifact tampering / modified integration branch blocks G4 approval
+    5. ZIP/manifest tampering blocks G4 approval
     """
     db, job, owner, storage, module, repo = ready
     monkeypatch.setattr(ws, "repository_for", lambda j_id: repo)

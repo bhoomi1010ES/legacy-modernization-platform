@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictException, NotFoundException
 from app.domain.state_machine import GatePolicy
-from app.models.artifact import Artifact
+from app.models.artifact import Artifact, ArtifactType
 from app.models.audit import AuditEvent
 from app.models.gate import GateDecision
 from app.models.job import Job
@@ -110,7 +110,7 @@ class GateService:
                     if gate.status != "APPROVED":
                         raise ConflictException("Stale G4 approval cannot be replayed")
                     from app.services.phase7_service import validate_package
-                    report = await db.scalar(select(Artifact).where(Artifact.job_id == job.job_id, Artifact.artifact_type == "JOB_REPORT").order_by(Artifact.version.desc()).limit(1))
+                    report = await db.scalar(select(Artifact).where(Artifact.job_id == job.job_id, Artifact.artifact_type == ArtifactType.JOB_REPORT.value).order_by(Artifact.version.desc()).limit(1))
                     await validate_package(db, job, report.content_hash if report else "", gate=gate)
                 return existing, gate, job, True
 
@@ -118,6 +118,9 @@ class GateService:
         if not gate:
             raise NotFoundException("Gate", str(gate_id))
         job = await db.scalar(select(Job).where(Job.job_id == gate.job_id).with_for_update())
+        if not job:
+            raise NotFoundException("Job", str(gate.job_id))
+
         if gate.status != "PENDING":
             raise ConflictException(f"Gate already has terminal status {gate.status}.")
         gate_type = GateType(gate.gate_type)

@@ -100,29 +100,50 @@ class ControlledGitAdapter:
         if not hostname:
             raise GitSecurityException("Repository URL must specify a valid hostname.")
 
-        # SSRF Protection: Resolve hostname to IP and check against forbidden ranges
-        if not self.allow_local_repos_for_test:
-            try:
-                ip_addresses = socket.getaddrinfo(hostname, None)
-                for addr in ip_addresses:
-                    ip_str = addr[4][0]
-                    ip_obj = ipaddress.ip_address(ip_str)
-                    # Handle IPv4-mapped IPv6 addresses (e.g. ::ffff:127.0.0.1)
-                    if ip_obj.version == 6 and ip_obj.ipv4_mapped:
-                        ip_obj = ip_obj.ipv4_mapped
-                    if (
-                        ip_obj.is_loopback
-                        or ip_obj.is_private
-                        or ip_obj.is_link_local
-                        or ip_obj.is_unspecified
-                        or ip_obj.is_multicast
-                        or ip_obj.is_reserved
-                    ):
-                        raise GitSecurityException(
-                            f"SSRF violation: Host '{hostname}' resolves to private/prohibited IP '{ip_str}'."
-                        )
-            except socket.gaierror:
-                raise GitSecurityException(f"Unable to resolve hostname: '{hostname}'.")
+        # SSRF Protection: Loopback, private IP, link-local, and cloud metadata defense
+        if hostname.lower() in ("localhost", "localhost.localdomain"):
+            raise GitSecurityException(
+                f"SSRF violation: Host '{hostname}' is a prohibited loopback target."
+            )
+
+        try:
+            ip_obj = ipaddress.ip_address(hostname)
+            if ip_obj.version == 6 and ip_obj.ipv4_mapped:
+                ip_obj = ip_obj.ipv4_mapped
+            if (
+                ip_obj.is_loopback
+                or ip_obj.is_private
+                or ip_obj.is_link_local
+                or ip_obj.is_unspecified
+                or ip_obj.is_multicast
+                or ip_obj.is_reserved
+            ):
+                raise GitSecurityException(
+                    f"SSRF violation: Host '{hostname}' resolves to private/prohibited IP '{hostname}'."
+                )
+        except ValueError:
+            # Domain name: resolve and inspect all target addresses
+            if not self.allow_local_repos_for_test:
+                try:
+                    ip_addresses = socket.getaddrinfo(hostname, None)
+                    for addr in ip_addresses:
+                        ip_str = addr[4][0]
+                        ip_obj = ipaddress.ip_address(ip_str)
+                        if ip_obj.version == 6 and ip_obj.ipv4_mapped:
+                            ip_obj = ip_obj.ipv4_mapped
+                        if (
+                            ip_obj.is_loopback
+                            or ip_obj.is_private
+                            or ip_obj.is_link_local
+                            or ip_obj.is_unspecified
+                            or ip_obj.is_multicast
+                            or ip_obj.is_reserved
+                        ):
+                            raise GitSecurityException(
+                                f"SSRF violation: Host '{hostname}' resolves to private/prohibited IP '{ip_str}'."
+                            )
+                except socket.gaierror:
+                    raise GitSecurityException(f"Unable to resolve hostname: '{hostname}'.")
 
     def get_job_workspace(self, job_id: str) -> Path:
         """Returns safe, isolated filesystem path for job repository."""

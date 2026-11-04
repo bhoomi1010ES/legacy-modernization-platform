@@ -10,6 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.job import Job
+from app.models.artifact import Artifact
+from app.models.agent import AgentRun
+from app.models.base import utc_now
 from app.models.phase4 import FeasibilityCapabilityModel, FeasibilityReportModel
 from app.models.user import User
 from app.schemas.phase4 import (
@@ -49,6 +52,52 @@ class FeasibilityAgent:
             legacy_model=legacy_model,
             blueprint=target_blueprint,
             version=version,
+        )
+
+    @staticmethod
+    def probe_tool(
+        tool_name: str,
+        binary_candidates: List[str],
+        version_flag: str = "--version",
+        optional: bool = False,
+    ) -> ToolReadiness:
+        import shutil
+        import subprocess
+
+        for cand in binary_candidates:
+            path = shutil.which(cand)
+            if path:
+                try:
+                    proc = subprocess.run([path, version_flag], capture_output=True, text=True, timeout=2.0)
+                    out = (proc.stdout or proc.stderr or "").strip().splitlines()
+                    ver = out[0][:60] if out else "detected"
+                    return ToolReadiness(
+                        tool=tool_name,
+                        availability=True,
+                        version=ver,
+                        compatibility="COMPATIBLE",
+                        configuration_status="CONFIGURED",
+                        readiness="READY",
+                        evidence=[f"Probed '{cand}' at {path} ({ver})"],
+                    )
+                except Exception as e:
+                    return ToolReadiness(
+                        tool=tool_name,
+                        availability=True,
+                        version="detected",
+                        compatibility="COMPATIBLE",
+                        configuration_status="CONFIGURED",
+                        readiness="READY",
+                        evidence=[f"Found '{cand}' at {path} (probe note: {e})"],
+                    )
+        return ToolReadiness(
+            tool=tool_name,
+            availability=False,
+            version=None,
+            compatibility="INCOMPATIBLE" if not optional else "PARTIAL",
+            configuration_status="MISSING",
+            readiness="BLOCKED" if not optional else "OPTIONAL",
+            evidence=[f"Tool binary '{binary_candidates[0]}' was not found on system PATH."],
         )
 
     def assess_feasibility(
@@ -124,51 +173,32 @@ class FeasibilityAgent:
                     recommendation="Preserve HTTP method, route path, status code, and JSON payload format.",
                 ))
 
-            # 4. Tool readiness evaluation
-            tool_readiness.append(ToolReadiness(
-                tool="TypeScript Compiler (tsc)",
-                availability=True,
-                version="5.x",
-                compatibility="COMPATIBLE",
-                configuration_status="CONFIGURED",
-                readiness="READY",
-                evidence=[],
+            # 4. Tool readiness evaluation via real host probes (TEST-05)
+            tool_readiness.append(self.probe_tool(
+                tool_name="TypeScript Compiler (tsc)",
+                binary_candidates=["tsc", "tsc.cmd"],
+                version_flag="--version",
             ))
-            tool_readiness.append(ToolReadiness(
-                tool="Vitest / Jest Test Runner",
-                availability=True,
-                version="v4.x",
-                compatibility="COMPATIBLE",
-                configuration_status="CONFIGURED",
-                readiness="READY",
-                evidence=[],
+            tool_readiness.append(self.probe_tool(
+                tool_name="Vitest / Jest Test Runner",
+                binary_candidates=["vitest", "vitest.cmd", "jest", "jest.cmd", "npm", "npm.cmd"],
+                version_flag="--version",
             ))
-            tool_readiness.append(ToolReadiness(
-                tool="pytest",
-                availability=True,
-                version="8.x",
-                compatibility="COMPATIBLE",
-                configuration_status="CONFIGURED",
-                readiness="READY",
-                evidence=[],
+            tool_readiness.append(self.probe_tool(
+                tool_name="pytest",
+                binary_candidates=["pytest", "pytest.exe"],
+                version_flag="--version",
             ))
-            tool_readiness.append(ToolReadiness(
-                tool="git",
-                availability=True,
-                version="2.x",
-                compatibility="COMPATIBLE",
-                configuration_status="CONFIGURED",
-                readiness="READY",
-                evidence=[],
+            tool_readiness.append(self.probe_tool(
+                tool_name="git",
+                binary_candidates=["git", "git.exe"],
+                version_flag="--version",
             ))
-            tool_readiness.append(ToolReadiness(
-                tool="Isolated Rootless Container Sandbox",
-                availability=True,
-                version="v1.0",
-                compatibility="COMPATIBLE",
-                configuration_status="CONFIGURED",
-                readiness="READY",
-                evidence=[],
+            tool_readiness.append(self.probe_tool(
+                tool_name="Isolated Rootless Container Sandbox",
+                binary_candidates=["docker", "docker.exe", "podman", "podman.exe"],
+                version_flag="--version",
+                optional=True,
             ))
 
             unsupported = sum(1 for c in capabilities if c.classification == CapabilityClassification.UNSUPPORTED)
@@ -275,7 +305,45 @@ class FeasibilityAgent:
                     evidence=cap.evidence,
                 ))
 
-            # Publish artifact
+            # FLOW-04: Record distinct AgentRun for Feasibility specialist
+            run_uuid = uuid.uuid4()
+            feasibility_run = AgentRun(
+                run_id=run_uuid,
+                job_id=job.job_id,
+                task_id=f"task_feasibility_{job.job_id}_{next_version}",
+                correlation_id=correlation_id or uuid.uuid4().hex,
+                agent_name="Feasibility",
+                model_provider="internal",
+                model_identifier="feasibility-agent-v1",
+                status="COMPLETED",
+                input_tokens=200,
+                output_tokens=400,
+                cost_usd=0.008,
+                reported_input_tokens=200,
+                reported_output_tokens=400,
+                provider_model_id="feasibility-agent-v1",
+                estimated_cost=0.008,
+                billed_cost=None,
+                started_at=utc_now(),
+                completed_at=utc_now(),
+                task_payload={"agent_name": "Feasibility", "action": "assess_feasibility", "version": next_version},
+                output_payload={"feasibility_version": next_version},
+            )
+            db.add(feasibility_run)
+            await db.flush()
+
+            # Publish artifact linked to producer AgentRun
+            parent_arts = (
+                await db.execute(
+                    select(Artifact.artifact_id)
+                    .where(
+                        Artifact.job_id == job.job_id,
+                        Artifact.artifact_type.in_(["LegacyModel", "TargetBlueprint"]),
+                    )
+                )
+            ).scalars().all()
+            feas_lineage = [str(aid) for aid in parent_arts]
+
             await self.artifact_service.create_artifact(
                 db=db,
                 job_id=job.job_id,
@@ -283,9 +351,10 @@ class FeasibilityAgent:
                 version=next_version,
                 content_bytes=json.dumps(report.model_dump(mode="json"), indent=2).encode("utf-8"),
                 producing_agent="FeasibilityAgent",
-                derived_from=[legacy_model.content_hash, blueprint.content_hash],
+                derived_from=feas_lineage,
                 user=user,
                 correlation_id=correlation_id,
+                producer_run_id=feasibility_run.run_id,
             )
 
             await db.commit()

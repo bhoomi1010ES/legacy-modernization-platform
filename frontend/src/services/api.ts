@@ -181,15 +181,14 @@ export const api = {
   async register(
     fullName: string,
     email: string,
-    password: string,
-    role: 'SUPER_ADMIN' | 'ADMIN' | 'REVIEWER' | 'DEVELOPER' | 'VIEWER' = 'DEVELOPER'
+    password: string
   ): Promise<User> {
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = fullName.trim();
     const res = await fetch(`${API_BASE}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ full_name: cleanName, email: cleanEmail, password, role }),
+      body: JSON.stringify({ full_name: cleanName, email: cleanEmail, password }),
       credentials: 'include',
     });
 

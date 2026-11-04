@@ -35,7 +35,6 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
-  const [regRole, setRegRole] = useState<'DEVELOPER' | 'REVIEWER' | 'ADMIN'>('DEVELOPER');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +93,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
 
     try {
       setLoading(true);
-      const user = await api.register(cleanName, cleanEmail, regPassword, regRole);
+      const user = await api.register(cleanName, cleanEmail, regPassword);
       localStorage.setItem('rebase_last_email', cleanEmail);
       setEmail(cleanEmail);
       setPassword('');
@@ -374,20 +373,6 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
                   autoComplete="email"
                   required
                 />
-              </div>
-
-              <div className="form-field">
-                <label>Target Workspace Role</label>
-                <select
-                  className="field"
-                  value={regRole}
-                  onChange={(e) => setRegRole(e.target.value as any)}
-                  style={{ width: '100%', backgroundColor: 'var(--card-surface)' }}
-                >
-                  <option value="DEVELOPER">Modernization Engineer (Developer)</option>
-                  <option value="REVIEWER">Security & Gate Reviewer (Reviewer)</option>
-                  <option value="ADMIN">Lead System Architect (Admin)</option>
-                </select>
               </div>
 
               <div className="form-field">

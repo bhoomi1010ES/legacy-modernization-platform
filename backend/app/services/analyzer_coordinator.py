@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.job import Job
+from app.models.artifact import Artifact
 from app.models.phase4 import (
     AnalysisConflictRecord,
     AnalysisEvidenceRecord,
@@ -437,6 +438,18 @@ class AnalyzerCoordinator:
             db_run.completed_at = legacy_model.created_at
 
             # Publish LegacyModel artifact
+            snapshot_art = (
+                await db.execute(
+                    select(Artifact)
+                    .where(
+                        Artifact.job_id == job.job_id,
+                        Artifact.artifact_type == "RepositorySnapshot",
+                    )
+                    .order_by(Artifact.version.desc())
+                )
+            ).scalars().first()
+            lineage = [str(snapshot_art.artifact_id)] if snapshot_art else []
+
             await self.artifact_service.create_artifact(
                 db=db,
                 job_id=job.job_id,
@@ -444,7 +457,7 @@ class AnalyzerCoordinator:
                 version=next_version,
                 content_bytes=json.dumps(legacy_model.model_dump(mode="json"), indent=2).encode("utf-8"),
                 producing_agent="LegacyAnalyzerCoordinator",
-                derived_from=[snapshot.content_hash],
+                derived_from=lineage,
                 user=user,
                 correlation_id=correlation_id,
             )

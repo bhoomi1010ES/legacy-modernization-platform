@@ -3,7 +3,7 @@
 import json
 import os
 from pathlib import Path
-from typing import Any, List
+from typing import Any, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
@@ -35,8 +35,12 @@ try:
         PHASE6_SANDBOX_IMAGE: str = ""
         PHASE6_CHECK_COMMANDS_JSON: str = "[]"
         PHASE6_TARGET_COMMAND_JSON: str = "[]"
+        PHASE6_TARGET_PROFILES_JSON: str = "{}"
         PHASE6_SANDBOX_PYTHON: str = "/usr/local/bin/python"
         PHASE6_SANDBOX_TIMEOUT: int = Field(default=180, ge=1, le=600)
+        SANDBOX_CONTROLLER_URL: str = ""
+        SANDBOX_DISPATCH_KEY: str = ""
+        SANDBOX_ATTESTATION_KEY: str = ""
         PHASE6_MODEL_PROVIDER: str = ""
         PHASE6_MODEL_IDENTIFIER: str = ""
         PHASE6_MAX_OUTPUT_TOKENS: int = Field(default=16384, ge=128, le=32768)
@@ -82,6 +86,10 @@ try:
             default=["localhost", "127.0.0.1", "testserver"],
             description="Allowed HTTP host header domains"
         )
+        ENABLE_LEGACY_CONTINUOUS_PIPELINE: bool = Field(
+            default=False,
+            description="Feature flag controlling deprecated legacy ContinuousPipelineService direct invocation"
+        )
 
         # Database & Cache (PostgreSQL & Redis for Phase 1 persistence)
         DATABASE_URL: str = Field(
@@ -106,11 +114,26 @@ try:
         MAX_REPAIR_ATTEMPTS: int = Field(default=3, description="Max inner-loop compile/test repair attempts")
         TOKEN_VELOCITY_LIMIT_PER_MINUTE: int = Field(default=100000, description="Token consumption rate limit")
 
+        # Testing & Isolation Infrastructure (W02)
+        TEST_ISOLATION_TOKEN: Optional[str] = Field(default=None, description="Cryptographic token issued only by disposable test fixtures")
+        REAL_MODEL_SANDBOX_ENABLED: bool = Field(default=False, description="Explicit approval flag required for real LLM model acceptance lane")
+        MAX_BUDGET_USD: float = Field(default=5.0, description="Strict budget ceiling for real model sandbox lane")
+
         # Sandboxing & Governance
-        SANDBOX_RUNTIME: str = Field(default="gVisor-rootless", description="Sandbox runtime: gVisor-rootless or docker-rootless")
+        E2B_API_KEY: str = Field(default="", description="E2B Sandbox API Key for isolated MicroVM execution")
+        SANDBOX_RUNTIME: str = Field(default="docker-unverified", description="Configured sandbox runtime claim; docker-unverified, gVisor-rootless, or e2b-microvm")
         SANDBOX_NETWORK_EGRESS: str = Field(default="air-gapped", description="Container egress: air-gapped or package-whitelist")
         ENFORCE_SECRET_REDACTION: bool = Field(default=True, description="Automatically mask credentials before storage")
         MIN_RATIONALE_LENGTH: int = Field(default=10, description="Minimum characters required for gate approval rationales")
+
+        @field_validator("DATABASE_URL")
+        @classmethod
+        def validate_database_isolation(cls, v: str) -> str:
+            env = os.getenv("ENVIRONMENT", "development").lower()
+            if env == "testing":
+                from app.core.testing_infrastructure import IsolationGuard
+                IsolationGuard.verify_database_url(v, os.getenv("TEST_ISOLATION_TOKEN"))
+            return v
 
         @field_validator("DEBUG", mode="before")
         @classmethod
@@ -151,6 +174,29 @@ try:
                     )
             return v
 
+        @field_validator("SESSION_COOKIE_SECURE", mode="before")
+        @classmethod
+        def validate_cookie_secure(cls, v: Any) -> bool:
+            env = os.getenv("ENVIRONMENT", "development").lower()
+            if env == "production":
+                return True
+            if isinstance(v, bool):
+                return v
+            if isinstance(v, str):
+                return v.strip().lower() in ("true", "1", "t", "yes", "y")
+            return bool(v)
+
+        @field_validator("ALLOWED_HOSTS")
+        @classmethod
+        def validate_allowed_hosts(cls, v: Any) -> List[str]:
+            hosts = v if isinstance(v, list) else [str(v)]
+            env = os.getenv("ENVIRONMENT", "development").lower()
+            if env == "production":
+                hosts = [h for h in hosts if h != "*"]
+                if not hosts:
+                    raise ValueError("ALLOWED_HOSTS cannot be empty or wildcard in production.")
+            return hosts
+
         model_config = SettingsConfigDict(
             env_file=(
                 str(BACKEND_DIR / ".env"),
@@ -171,8 +217,12 @@ except ImportError:
         PHASE6_SANDBOX_IMAGE: str = os.getenv("PHASE6_SANDBOX_IMAGE", "")
         PHASE6_CHECK_COMMANDS_JSON: str = os.getenv("PHASE6_CHECK_COMMANDS_JSON", "[]")
         PHASE6_TARGET_COMMAND_JSON: str = os.getenv("PHASE6_TARGET_COMMAND_JSON", "[]")
+        PHASE6_TARGET_PROFILES_JSON: str = os.getenv("PHASE6_TARGET_PROFILES_JSON", "{}")
         PHASE6_SANDBOX_PYTHON: str = "/usr/local/bin/python"
         PHASE6_SANDBOX_TIMEOUT: int = 180
+        SANDBOX_CONTROLLER_URL: str = os.getenv("SANDBOX_CONTROLLER_URL", "")
+        SANDBOX_DISPATCH_KEY: str = os.getenv("SANDBOX_DISPATCH_KEY", "")
+        SANDBOX_ATTESTATION_KEY: str = os.getenv("SANDBOX_ATTESTATION_KEY", "")
         PHASE6_MODEL_PROVIDER: str = os.getenv("PHASE6_MODEL_PROVIDER", "")
         PHASE6_MODEL_IDENTIFIER: str = os.getenv("PHASE6_MODEL_IDENTIFIER", "")
         PHASE6_MAX_OUTPUT_TOKENS: int = int(os.getenv("PHASE6_MAX_OUTPUT_TOKENS", "16384"))
@@ -214,7 +264,11 @@ except ImportError:
         DEFAULT_JOB_BUDGET_USD: float = float(os.getenv("DEFAULT_JOB_BUDGET_USD", "15000.0"))
         MAX_REPAIR_ATTEMPTS: int = int(os.getenv("MAX_REPAIR_ATTEMPTS", "3"))
         TOKEN_VELOCITY_LIMIT_PER_MINUTE: int = int(os.getenv("TOKEN_VELOCITY_LIMIT_PER_MINUTE", "100000"))
-        SANDBOX_RUNTIME: str = os.getenv("SANDBOX_RUNTIME", "gVisor-rootless")
+        TEST_ISOLATION_TOKEN: Optional[str] = os.getenv("TEST_ISOLATION_TOKEN", None)
+        REAL_MODEL_SANDBOX_ENABLED: bool = os.getenv("REAL_MODEL_SANDBOX_ENABLED", "false").lower() in ("true", "1")
+        MAX_BUDGET_USD: float = float(os.getenv("MAX_BUDGET_USD", "5.0"))
+        E2B_API_KEY: str = os.getenv("E2B_API_KEY", "")
+        SANDBOX_RUNTIME: str = os.getenv("SANDBOX_RUNTIME", "docker-unverified")
         SANDBOX_NETWORK_EGRESS: str = os.getenv("SANDBOX_NETWORK_EGRESS", "air-gapped")
         ENFORCE_SECRET_REDACTION: bool = True
         MIN_RATIONALE_LENGTH: int = 10

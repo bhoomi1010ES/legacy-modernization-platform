@@ -194,7 +194,7 @@ const FALLBACK_VERIFICATION_GUIDES: Record<string, GateVerificationGuide> = {
       {
         id: 'g4_chk_2',
         title: 'Inspect & Sign Difference Waivers',
-        description: 'Review the 4 intentional differences (e.g. ISO-8601 datetime strings, empty array return) and sign approval waivers.',
+        description: 'Review intentional differences (e.g. ISO-8601 datetime strings, empty array return) and sign approval waivers.',
       },
       {
         id: 'g4_chk_3',
@@ -235,7 +235,21 @@ export const GateReviewModal: React.FC<GateReviewModalProps> = ({
     }
   }, [gate.gate_type, gate.job_id, propCharReport]);
 
+  const isStale = gate.status === 'INVALIDATED' || Boolean(gate.blocking_reason && gate.blocking_reason.toLowerCase().includes('stale'));
+  const hasArtifactEvidence = Boolean(
+    gate.artifact ||
+    gate.artifact_hash ||
+    (gate.artifact_hashes && Object.keys(gate.artifact_hashes).length > 0)
+  );
+
   const g2Blockers: string[] = [];
+  if (isStale) {
+    g2Blockers.push('Gate evidence is STALE because upstream dependencies have drifted. Re-verification required.');
+  }
+  if (!hasArtifactEvidence && gate.status === 'PENDING') {
+    g2Blockers.push('EVIDENCE_UNAVAILABLE: Gate cannot be approved because required deliverable evidence is missing.');
+  }
+
   if (gate.gate_type === 'G2') {
     if (charReport) {
       if (charReport.schema_status === 'REVIEW_REQUIRED') {
@@ -646,10 +660,10 @@ export const GateReviewModal: React.FC<GateReviewModalProps> = ({
               <small>Signed with your corporate identity {activeJob?.owner || 'Authorized Lead Reviewer'}.</small>
             </div>
 
-            {gate.gate_type === 'G2' && g2Blockers.length > 0 && (
+            {g2Blockers.length > 0 && (
               <div role="alert" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--destructive)', borderRadius: '6px', padding: '12px', marginBottom: '16px' }}>
                 <strong style={{ color: 'var(--destructive)', display: 'block', fontSize: '12px', marginBottom: '4px' }}>
-                  G2 Approval Blocked (Unmet Invariant Prerequisites):
+                  Approval Blocked (Unmet Invariant Prerequisites):
                 </strong>
                 <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '11px', color: 'var(--foreground)' }}>
                   {g2Blockers.map((b, idx) => (
@@ -679,8 +693,8 @@ export const GateReviewModal: React.FC<GateReviewModalProps> = ({
               <button
                 className="button button-primary"
                 onClick={() => handleDecision('APPROVED')}
-                disabled={loading || (gate.gate_type === 'G2' && g2Blockers.length > 0)}
-                title={gate.gate_type === 'G2' && g2Blockers.length > 0 ? g2Blockers[0] : undefined}
+                disabled={loading || g2Blockers.length > 0}
+                title={g2Blockers.length > 0 ? g2Blockers[0] : undefined}
               >
                 <CheckCircle2 size={14} />
                 {loading ? 'Submitting...' : 'Approve Gate & Continue'}

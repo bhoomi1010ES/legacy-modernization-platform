@@ -255,8 +255,8 @@ export const Artifacts: React.FC<ArtifactsProps> = ({ artifacts, jobs = [] }) =>
                 <code style={{ fontFamily: 'var(--font-mono)' }}>{selectedArtifact.job_id}</code>
               </div>
               <div>
-                <span style={{ color: 'var(--muted-foreground)' }}>Storage Path: </span>
-                <code style={{ fontFamily: 'var(--font-mono)' }}>{selectedArtifact.storage_path}</code>
+                <span style={{ color: 'var(--muted-foreground)' }}>Artifact ID: </span>
+                <code style={{ fontFamily: 'var(--font-mono)' }}>{selectedArtifact.artifact_id}</code>
               </div>
               <div>
                 <span style={{ color: 'var(--muted-foreground)' }}>Cryptographic Hash: </span>

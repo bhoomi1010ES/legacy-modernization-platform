@@ -15,7 +15,7 @@ def test_auth_login_valid_and_cookie_attributes(client: TestClient):
     client.cookies.clear()
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     assert login_resp.status_code == 200
     user_data = login_resp.json()
@@ -77,7 +77,7 @@ def test_auth_session_invalidation_and_replay_rejection(client: TestClient):
     # 1. Login
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     assert login_resp.status_code == 200
     token = login_resp.cookies[settings.SESSION_COOKIE_NAME]
@@ -103,7 +103,7 @@ def test_auth_me_safe_profile_fields(client: TestClient):
     client.cookies.clear()
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     token = login_resp.cookies[settings.SESSION_COOKIE_NAME]
 
@@ -141,14 +141,14 @@ def test_auth_session_rotation(client: TestClient):
     # First login
     resp1 = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     token1 = resp1.cookies[settings.SESSION_COOKIE_NAME]
 
     # Second login
     resp2 = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     token2 = resp2.cookies[settings.SESSION_COOKIE_NAME]
     assert token1 != token2
@@ -175,7 +175,7 @@ async def test_auth_session_absolute_expiry(client: TestClient):
     client.cookies.clear()
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     token = login_resp.cookies[settings.SESSION_COOKIE_NAME]
     t_hash = hash_session_token(token)
@@ -207,7 +207,7 @@ async def test_auth_session_idle_expiry(client: TestClient):
     client.cookies.clear()
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     token = login_resp.cookies[settings.SESSION_COOKIE_NAME]
     t_hash = hash_session_token(token)
@@ -233,7 +233,7 @@ def test_csrf_cookie_mutation_untrusted_origin_rejected(client: TestClient):
     client.cookies.clear()
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     token = login_resp.cookies[settings.SESSION_COOKIE_NAME]
 
@@ -259,7 +259,7 @@ def test_csrf_cookie_mutation_trusted_origin_accepted(client: TestClient):
     client.cookies.clear()
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     token = login_resp.cookies[settings.SESSION_COOKIE_NAME]
 

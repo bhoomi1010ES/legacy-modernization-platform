@@ -56,7 +56,6 @@ export interface Artifact {
   artifact_type: string;
   version: number;
   content_hash: string;
-  storage_path: string;
   producing_agent: string;
   derived_from: string[];
   size_bytes: number;
@@ -111,6 +110,7 @@ export interface GateDetail {
   artifact_hashes?: Record<string, string>;
   allowed_actions?: string[];
   verification_guide?: GateVerificationGuide;
+  blocking_reason?: string;
 }
 
 export interface WorkflowPhase {
@@ -200,6 +200,7 @@ export interface AgentRun {
   failure_classification?: string;
   error_message?: string;
   evidence_artifact_ids?: string[];
+  output_payload?: any;
 }
 
 export interface AgentTraceStep {

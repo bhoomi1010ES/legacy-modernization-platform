@@ -50,6 +50,10 @@ class AgentRuntime:
                 if monotonic() - started >= task.timeout_seconds:
                     failure, error = FailureClassification.TIMEOUT, "Agent wall-clock timeout exceeded"
                     break
+                remaining_cost = task.cost_budget_usd - context.cost_spent_usd
+                if remaining_cost <= 0:
+                    failure, error = FailureClassification.BUDGET_EXHAUSTION, "Agent cost budget exhausted before provider dispatch"
+                    break
                 context.iteration = iteration
                 request = self.redactor.redact_object({
                     "task": task.model_dump(mode="json"),
@@ -60,10 +64,13 @@ class AgentRuntime:
                 })
                 try:
                     remaining = max(0.001, task.timeout_seconds - (monotonic() - started))
+                    from app.core.config import settings
+
                     gateway_result = await asyncio.wait_for(
                         self.gateway.complete(
                             provider=task.model_provider, model=task.model_identifier,
                             request=request, max_retries=task.model_retries,
+                            max_cost_usd=min(remaining_cost, settings.MAX_BUDGET_USD),
                         ), timeout=remaining,
                     )
                 except asyncio.TimeoutError:

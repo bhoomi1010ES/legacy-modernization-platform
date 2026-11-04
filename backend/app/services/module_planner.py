@@ -110,37 +110,38 @@ class ModulePlanner:
 
             tasks: List[PlanningTask] = []
 
-            # Task 1: Module Scaffolding & Domain Contracts
+            # Task 1: Module Structure & Contract Definition (evidence-driven, technology-agnostic)
             task1_id = f"task_{effective_module_id}_scaffold"
+            resp_summary = ", ".join(comp.responsibilities[:2]) if comp.responsibilities else comp.name
             tasks.append(PlanningTask(
                 task_id=task1_id,
                 module_id=effective_module_id,
-                title=f"Scaffold domain contracts and interfaces for {comp.name}",
-                description=f"Create folder {comp.target_path} and declare interfaces, types, and DTOs.",
+                title=f"Scaffold structure and contracts for {comp.name}",
+                description=f"Create target component location {comp.target_path} and declare interfaces/types for {resp_summary}.",
                 dependencies=[],
                 interfaces=comp.interfaces,
                 migration_steps=[
-                    f"Create target directory {comp.target_path}",
-                    "Declare domain model interfaces and validation contracts",
+                    f"Establish target directory/structure at {comp.target_path}",
+                    f"Declare module contracts, interfaces, and specifications based on observed legacy capabilities",
                 ],
-                required_tests=["Unit contract type checking"],
+                required_tests=["Contract syntax and type checking"],
                 acceptance_criteria=[
-                    f"Directory {comp.target_path} exists with valid package declaration",
-                    "All public domain interfaces compile with zero syntax errors",
+                    f"Target path {comp.target_path} exists with valid structure declaration",
+                    "Module contract declarations parse and typecheck with zero errors",
                 ],
                 estimate_hours=1.5,
                 risk="LOW",
                 required_tools=["linter", "type_checker"],
-                environment_requirements=["Target runtime SDK"],
+                environment_requirements=["Target runtime environment"],
             ))
 
-            # Task 2: Service Implementation (adapted by G1 decisions, characterization, schema)
+            # Task 2: Core Capability Implementation (adapted dynamically by G1 decisions, characterization, schema)
             task2_id = f"task_{effective_module_id}_service"
             task2_deps = [task1_id]
 
             if is_wrap_service:
                 task2_title = f"Implement wrapper facade adapter for {comp.name}"
-                task2_desc = f"Encapsulate legacy {comp.name} behind modern service facade per G1 WRAP_SERVICE decision: {g1_reason}"
+                task2_desc = f"Encapsulate legacy {comp.name} behind modern facade per G1 WRAP_SERVICE decision: {g1_reason}"
                 task2_risk = "LOW"
                 task2_est = 1.5
                 task2_ac = [
@@ -153,17 +154,17 @@ class ModulePlanner:
                 task2_risk = "HIGH"
                 task2_est = 5.0
                 task2_ac = [
-                    "Custom business logic implementation verified against legacy behavioral contract",
+                    "Custom implementation verified against legacy behavioral contract",
                     "Zero functional regressions against characterization baseline",
                 ]
             else:
-                task2_title = f"Implement business logic service for {comp.name}"
-                task2_desc = f"Implement core logic for {comp.name} preserving legacy business behavior."
+                task2_title = f"Implement core logic and capabilities for {comp.name}"
+                task2_desc = f"Implement {comp.name} preserving legacy business behavior and capabilities: {resp_summary}."
                 task2_risk = "MEDIUM"
                 task2_est = 3.0
                 task2_ac = [
-                    "Service methods return expected output matching legacy behavior",
-                    "Exception paths raise typed business exceptions",
+                    f"Component methods and logic return expected output matching legacy behavior",
+                    f"Fulfills declared responsibilities: {resp_summary}",
                 ]
 
             if is_accept_substitute:
@@ -200,7 +201,6 @@ class ModulePlanner:
                     task2_ac.append(
                         f"Data persistence conforms to target SchemaMigrationPlan v1 ({len(tables)} tables analyzed)"
                     )
-                    # Add database migration dependency
                     task2_deps.append("task_db_migration_001")
 
             tasks.append(PlanningTask(
@@ -211,40 +211,63 @@ class ModulePlanner:
                 dependencies=task2_deps,
                 interfaces=comp.interfaces,
                 migration_steps=[
-                    "Implement domain service logic and error handling",
-                    "Inject required repository and dependency contracts",
+                    f"Implement core component logic for {comp.name} fulfilling declared responsibilities",
+                    "Wire required dependency contracts and internal state management",
                 ],
-                required_tests=["Service unit test suite", "Mocked dependency behavioral tests"],
+                required_tests=["Unit test suite", "Behavioral equivalence tests"],
                 acceptance_criteria=task2_ac,
                 estimate_hours=task2_est,
                 risk=task2_risk,
                 required_tools=["compiler", "test_runner"],
-                environment_requirements=["Mock framework"],
+                environment_requirements=["Target runtime environment"],
             ))
 
-            # Task 3: Controller / Public Interface Adapter
+            # Task 3: Public Interface Adapter OR Integration Verification (dynamically driven by observed interfaces)
             task3_id = f"task_{effective_module_id}_controller"
-            tasks.append(PlanningTask(
-                task_id=task3_id,
-                module_id=effective_module_id,
-                title=f"Wire public controller / API adapters for {comp.name}",
-                description=f"Expose public endpoints conforming to preserved legacy HTTP interfaces.",
-                dependencies=[task2_id],
-                interfaces=comp.interfaces,
-                migration_steps=[
-                    "Implement REST controller routes matching legacy signatures",
-                    "Bind request validation and response serializers",
-                ],
-                required_tests=["Controller HTTP endpoint tests", "Characterization replay tests"],
-                acceptance_criteria=[
-                    "HTTP routes return matching status codes and payload structure",
-                    "Request validation rejects malformed inputs with 400 Bad Request",
-                ],
-                estimate_hours=2.5,
-                risk="MEDIUM",
-                required_tools=["http_client_test_runner"],
-                environment_requirements=["Test server container"],
-            ))
+            if comp.interfaces:
+                tasks.append(PlanningTask(
+                    task_id=task3_id,
+                    module_id=effective_module_id,
+                    title=f"Wire public interface adapters for {comp.name}",
+                    description=f"Expose public endpoints and interfaces conforming to preserved legacy contracts: {', '.join(comp.interfaces[:4])}.",
+                    dependencies=[task2_id],
+                    interfaces=comp.interfaces,
+                    migration_steps=[
+                        "Implement interface routes, adapters, or handlers matching legacy signatures",
+                        "Bind request/parameter validation and response serializers",
+                    ],
+                    required_tests=["Interface endpoint tests", "Characterization replay tests"],
+                    acceptance_criteria=[
+                        "Public interfaces handle valid inputs with matching response structure",
+                        "Input validation handles malformed or edge-case parameters gracefully",
+                    ],
+                    estimate_hours=2.5,
+                    risk="MEDIUM",
+                    required_tools=["test_runner"],
+                    environment_requirements=["Target runtime environment"],
+                ))
+            else:
+                tasks.append(PlanningTask(
+                    task_id=task3_id,
+                    module_id=effective_module_id,
+                    title=f"Verify module integration and regression suite for {comp.name}",
+                    description=f"Verify end-to-end integration and ensure zero regressions for {comp.name}.",
+                    dependencies=[task2_id],
+                    interfaces=[],
+                    migration_steps=[
+                        f"Execute integration tests connecting {comp.name} to target dependencies",
+                        "Verify zero functional regressions against legacy baseline",
+                    ],
+                    required_tests=["Module integration test suite", "Regression verification"],
+                    acceptance_criteria=[
+                        f"All integration assertions for {comp.name} pass cleanly",
+                        "Component integrates seamlessly with target application dependencies",
+                    ],
+                    estimate_hours=1.5,
+                    risk="LOW",
+                    required_tools=["test_runner"],
+                    environment_requirements=["Target runtime environment"],
+                ))
 
             total_hours = sum(t.estimate_hours for t in tasks)
             evidence_refs: List[str] = []

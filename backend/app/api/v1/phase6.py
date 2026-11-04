@@ -6,7 +6,10 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy import select
 from app.api.deps import require_job_access, get_current_user_and_permissions
 from app.core.database import get_db
-from app.core.errors import NotFoundException
+from app.core.errors import NotFoundException, ConflictException
+from app.models.agent import AgentRun
+from app.models.artifact import Artifact, ArtifactType
+import uuid
 from app.domain.state_machine import RBACPolicy
 from app.models.job import JobMembership
 from app.models.module import Module, ModuleAttempt
@@ -20,14 +23,10 @@ logger = logging.getLogger(__name__)
 
 async def actions(db, job, user):
     try:
-        role = (
-            user.role
-            if user.role == "SUPER_ADMIN"
-            else await db.scalar(
-                select(JobMembership.role_id).where(
-                    JobMembership.job_id == job.job_id,
-                    JobMembership.user_id == user.user_id,
-                )
+        role = await db.scalar(
+            select(JobMembership.role_id).where(
+                JobMembership.job_id == job.job_id,
+                JobMembership.user_id == user.user_id,
             )
         )
         return [
@@ -125,7 +124,31 @@ async def board(access=Depends(require_job_access()), db=Depends(get_db)):
             )
             details = []
             for attempt in attempts:
-                info = await service.detail(db, attempt)
+                try:
+                    info = await service.detail(db, attempt)
+                except ConflictException as exc:
+                    evidence_payload = {}
+                    if attempt.agent_run_id:
+                        run = await db.get(AgentRun, attempt.agent_run_id)
+                        if run and run.output_artifact_refs:
+                            for ref in run.output_artifact_refs:
+                                try:
+                                    art = await db.get(Artifact, uuid.UUID(ref))
+                                    if art and art.artifact_type in (ArtifactType.CODE_MODULE.value, "CONVERTED_MODULE"):
+                                        payload = await service.read_payload(art)
+                                        evidence_payload = {**payload, "code_artifact_id": str(art.artifact_id), "code_hash": art.content_hash}
+                                except Exception:
+                                    pass
+                    info = {
+                        "attempt_id": str(attempt.attempt_id),
+                        "module_id": str(attempt.module_id),
+                        "attempt_number": attempt.attempt_number,
+                        "status": attempt.status,
+                        "git_branch": attempt.git_branch,
+                        "failure_reason": str(exc),
+                        "metadata": {},
+                        "evidence": evidence_payload,
+                    }
                 info["allowed_actions"] = allowed if attempt == attempts[-1] else []
                 details.append(info)
             items.extend(details)

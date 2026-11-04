@@ -8,7 +8,7 @@ def test_auth_lifecycle_integration(client: TestClient):
     # 1. Login with valid credentials
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     assert login_resp.status_code == 200
     user_data = login_resp.json()
@@ -62,7 +62,7 @@ def test_jobs_lifecycle_api_integration(client: TestClient):
     # Authenticate client
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     assert login_resp.status_code == 200
 
@@ -105,7 +105,7 @@ def test_detect_stack_api_integration(client: TestClient):
     """Verifies repository tech stack detection endpoint."""
     client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     detect_resp = client.post(
         "/api/v1/jobs/detect-stack",
@@ -124,7 +124,7 @@ def test_gate_decision_api_integration(client: TestClient):
     """Verifies approval gate decision submission and validation via HTTP API."""
     client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
 
     create_payload = {
@@ -191,7 +191,7 @@ def test_reports_and_artifacts_endpoints(client: TestClient):
     """Verifies that verification reports, delivery reports, artifacts, and agents respond cleanly."""
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     assert login_resp.status_code == 200
 

@@ -1,0 +1,239 @@
+{
+  "scope": "Bounded source audit probes only; not full W09 acceptance or job verification",
+  "created_at": "2026-11-02T09:57:33.686229+00:00",
+  "source_sha256": "8dcee3b689b6dabc392a20dd598f2bd7dce2648e0c0404cbe661aec2321ea5de",
+  "harness_sha256": "fcc92395441de3727f538d0ff19ad5e1821438d48d5907bf795330bc20fe6198",
+  "daemon": {
+    "context": "rootless",
+    "version": "29.9.2",
+    "security_options": [
+      "name=seccomp,profile=builtin",
+      "name=rootless",
+      "name=cgroupns"
+    ],
+    "default_runtime": "runc",
+    "registered_runtime_names": [
+      "io.containerd.runc.v2",
+      "runc",
+      "runsc"
+    ]
+  },
+  "runs": [
+    {
+      "fixture_id": "tool-provenance-and-adapter-without-app",
+      "container_name": "w09-audit-6f6efe31b8274fb7",
+      "started_at": "2026-11-02T09:57:31.046401+00:00",
+      "container_id": "0d63fc8ed10db60914a9a1b62cd4c9d7fbb67f721a0b53f5cc1a2a9f7b6994c2",
+      "image_digest": "sha256:36add5930324d84c329adcc24f0f21622345a404adbf47197f1c5a9f3dc96001",
+      "container_configuration": {
+        "uid_gid": "65534:65534",
+        "Runtime": "runc",
+        "NetworkMode": "none",
+        "ReadonlyRootfs": true,
+        "Memory": 268435456,
+        "NanoCpus": 1000000000,
+        "PidsLimit": 64,
+        "CapDrop": [
+          "ALL"
+        ],
+        "SecurityOpt": [
+          "apparmor=docker-default",
+          "no-new-privileges"
+        ],
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,size=32m",
+          "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+        },
+        "Binds": null
+      },
+      "exit_code": 0,
+      "stdout_sha256": "b8738b4d55852c0dc672de45fda0a93fac99f88ead9c9f0cf8d1b5cfb543dd0e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr": "",
+      "observation": {
+        "adapter_sha256": "ddbd1d954ede78f3ec032a301034a46a7e4f16ae7aede3c9e35187cf12004fbe",
+        "adapter_without_application": {
+          "application_directory_empty": true,
+          "exit_code": 0,
+          "returned_embedded_expected": true,
+          "scenario": "test_user_cannot_view_approvals_returns_403"
+        },
+        "credential_environment_present": false,
+        "docker_socket_present": false,
+        "embedded_expected_scenarios": 141,
+        "gid": 65534,
+        "process_security": {
+          "CapEff": "0000000000000000",
+          "NoNewPrivs": "1",
+          "Seccomp": "2"
+        },
+        "readonly_root_enforced": true,
+        "root_write_errno": 30,
+        "tools": {
+          "bandit": {
+            "distribution_version": "1.8.3",
+            "module_origin": "/usr/local/lib/python3.12/site-packages/bandit/__init__.py"
+          },
+          "mypy": {
+            "distribution_version": "1.15.0",
+            "module_origin": "/usr/local/lib/python3.12/site-packages/mypy/__init__.py"
+          },
+          "pytest": {
+            "distribution_version": "9.1.1",
+            "module_origin": "/usr/local/lib/python3.12/site-packages/pytest/__init__.py"
+          },
+          "syft": {
+            "distribution_version": null,
+            "module_origin": null
+          }
+        },
+        "uid": 65534
+      },
+      "cleanup": {
+        "remove_exit_code": 0,
+        "container_absent": true
+      },
+      "finished_at": "2026-11-02T09:57:32.601667+00:00"
+    },
+    {
+      "fixture_id": "candidate-tool-module-shadowing",
+      "container_name": "w09-audit-abea2d4b2e044f4e",
+      "started_at": "2026-11-02T09:57:32.601749+00:00",
+      "container_id": "9d7b4f9775c9f0173033eb631e13091d25a57fa900ab31d7bc5f3d86d75ef122",
+      "image_digest": "sha256:36add5930324d84c329adcc24f0f21622345a404adbf47197f1c5a9f3dc96001",
+      "container_configuration": {
+        "uid_gid": "65534:65534",
+        "Runtime": "runc",
+        "NetworkMode": "none",
+        "ReadonlyRootfs": true,
+        "Memory": 268435456,
+        "NanoCpus": 1000000000,
+        "PidsLimit": 64,
+        "CapDrop": [
+          "ALL"
+        ],
+        "SecurityOpt": [
+          "apparmor=docker-default",
+          "no-new-privileges"
+        ],
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,size=32m",
+          "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+        },
+        "Binds": null
+      },
+      "exit_code": 0,
+      "stdout_sha256": "ba9bbab26909c6e0e152c11c7fbd52819c49409042021b342cc9943f2d1cc082",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr": "",
+      "observation": {
+        "checks": [
+          {
+            "category": "build",
+            "command": [
+              "python",
+              "-m",
+              "compileall",
+              "-q",
+              "."
+            ],
+            "tool_name": "python",
+            "tool_version": "Python 3.12.14",
+            "started_at": "2026-11-02T09:57:33.227121+00:00",
+            "finished_at": "2026-11-02T09:57:33.416213+00:00",
+            "exit_code": 0,
+            "duration_ms": 189.1059130030044,
+            "stdout": "",
+            "stderr": "",
+            "logs_hash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+            "case_count": null,
+            "assertion_count": null
+          },
+          {
+            "category": "unit",
+            "command": [
+              "python",
+              "-m",
+              "pytest",
+              "/acceptance/test_calc.py",
+              "-q"
+            ],
+            "tool_name": "python",
+            "tool_version": "Python 3.12.14",
+            "started_at": "2026-11-02T09:57:33.416245+00:00",
+            "finished_at": "2026-11-02T09:57:33.440947+00:00",
+            "exit_code": 0,
+            "duration_ms": 24.763512003119104,
+            "stdout": "W09_AUDIT_MARKER_ONLY_NO_REAL_CHECK\n",
+            "stderr": "",
+            "logs_hash": "6b16735fa74cfa25b2a7a4221cfda47dac9bd36675a78a4abba6e0e593a30cab",
+            "case_count": null,
+            "assertion_count": null
+          },
+          {
+            "category": "static",
+            "command": [
+              "python",
+              "-m",
+              "mypy",
+              "."
+            ],
+            "tool_name": "python",
+            "tool_version": "Python 3.12.14",
+            "started_at": "2026-11-02T09:57:33.441083+00:00",
+            "finished_at": "2026-11-02T09:57:33.466636+00:00",
+            "exit_code": 0,
+            "duration_ms": 25.56469999763067,
+            "stdout": "W09_AUDIT_MARKER_ONLY_NO_REAL_CHECK\n",
+            "stderr": "",
+            "logs_hash": "6b16735fa74cfa25b2a7a4221cfda47dac9bd36675a78a4abba6e0e593a30cab",
+            "case_count": null,
+            "assertion_count": null
+          },
+          {
+            "category": "security",
+            "command": [
+              "python",
+              "-m",
+              "bandit",
+              "-r",
+              "."
+            ],
+            "tool_name": "python",
+            "tool_version": "Python 3.12.14",
+            "started_at": "2026-11-02T09:57:33.466664+00:00",
+            "finished_at": "2026-11-02T09:57:33.492703+00:00",
+            "exit_code": 0,
+            "duration_ms": 26.052654000523034,
+            "stdout": "W09_AUDIT_MARKER_ONLY_NO_REAL_CHECK\n",
+            "stderr": "",
+            "logs_hash": "6b16735fa74cfa25b2a7a4221cfda47dac9bd36675a78a4abba6e0e593a30cab",
+            "case_count": null,
+            "assertion_count": null
+          }
+        ],
+        "observations": [],
+        "source_unchanged": true
+      },
+      "cleanup": {
+        "remove_exit_code": 0,
+        "container_absent": true
+      },
+      "finished_at": "2026-11-02T09:57:33.686198+00:00"
+    }
+  ],
+  "findings": {
+    "candidate_tool_shadowing_reproduced": true,
+    "affected_check_categories": [
+      "unit",
+      "static",
+      "security"
+    ],
+    "embedded_expected_without_application": {
+      "application_directory_empty": true,
+      "exit_code": 0,
+      "returned_embedded_expected": true,
+      "scenario": "test_user_cannot_view_approvals_returns_403"
+    }
+  }
+}

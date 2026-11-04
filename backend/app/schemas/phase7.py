@@ -16,7 +16,8 @@ class PackageRequest(IntegrationRequest):
 class SystemCheck(BaseModel):
     model_config = ConfigDict(extra="forbid")
     category: Literal[
-        "build", "unit", "integration", "static", "security", "schema", "sbom"
+        "build", "unit", "integration", "static", "security", "schema", "sbom",
+        "dependency", "license", "runtime", "api_compatibility"
     ]
     command: list[str] = Field(min_length=1, max_length=32)
 
@@ -30,8 +31,9 @@ class JobReport(BaseModel):
     source_stack: str
     target_stack: str
     source_commit: str
-    integrated_commit: str | None
-    branch: str
+    integrated_commit: str | None = None
+    branch: str = ""
+    candidate_hash: str
     baseline_hash: str
     plan_hash: str
     gate_ids: dict[str, str]

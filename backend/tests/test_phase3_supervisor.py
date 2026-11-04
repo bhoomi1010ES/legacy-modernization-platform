@@ -23,6 +23,23 @@ from app.services.supervisor_service import SupervisorService
 from app.services.workflow_outbox import WorkflowOutboxDispatcher
 
 
+async def _reviewer(db):
+    owner = await _owner(db)
+    reviewer = await db.scalar(select(User).where(User.user_id != owner.user_id, User.role.in_(("ADMIN", "REVIEWER"))).limit(1))
+    if not reviewer:
+        reviewer = User(
+            user_id=uuid.uuid4(),
+            email=f"reviewer_{uuid.uuid4().hex[:6]}@acme.corp",
+            full_name="Reviewer Test User",
+            password_hash="argon2_hash",
+            role="ADMIN",
+            status="ACTIVE",
+        )
+        db.add(reviewer)
+        await db.commit()
+        await db.refresh(reviewer)
+    return reviewer
+
 async def _owner(db):
     owner = await db.scalar(select(User).order_by(User.created_at.asc()).limit(1))
     assert owner is not None, "seeded test user is required"
@@ -122,10 +139,11 @@ async def test_rejection_stores_rationale_and_routes_to_revision():
         gate = WorkflowGate(job_id=job.job_id, gate_type="G2", version=1, artifact_hashes={})
         db.add(gate)
         await db.commit()
+        reviewer = await _reviewer(db)
         result, decided_gate, routed_job, replay = await GateService().decide(
             db, gate.gate_id,
             GateDecisionRequest(decision=DecisionOutcome.REJECTED, rationale="Coverage is missing the retry edge case.", artifact_hashes={}),
-            actor_id=owner.user_id, actor_role="ADMIN",
+            actor_id=reviewer.user_id, actor_role="ADMIN",
         )
         assert result.rationale.startswith("Coverage is missing")
         assert decided_gate.status == "REJECTED"
@@ -145,14 +163,15 @@ async def test_duplicate_gate_decision_is_rejected_but_idempotency_replays():
             decision=DecisionOutcome.REJECTED, rationale="Feasibility gaps require another analysis pass.",
             artifact_hashes={}, idempotency_key=f"gate-{uuid.uuid4()}",
         )
-        first = await GateService().decide(db, gate.gate_id, payload, actor_id=owner.user_id, actor_role="ADMIN")
-        second = await GateService().decide(db, gate.gate_id, payload, actor_id=owner.user_id, actor_role="ADMIN")
+        reviewer = await _reviewer(db)
+        first = await GateService().decide(db, gate.gate_id, payload, actor_id=reviewer.user_id, actor_role="ADMIN")
+        second = await GateService().decide(db, gate.gate_id, payload, actor_id=reviewer.user_id, actor_role="ADMIN")
         assert first[0].decision_id == second[0].decision_id and second[3] is True
         conflicting = GateDecisionRequest(
             decision=DecisionOutcome.REJECTED, rationale="A second reviewer attempted a stale decision.", artifact_hashes={}
         )
         with pytest.raises(ConflictException, match="already has terminal status"):
-            await GateService().decide(db, gate.gate_id, conflicting, actor_id=owner.user_id, actor_role="ADMIN")
+            await GateService().decide(db, gate.gate_id, conflicting, actor_id=reviewer.user_id, actor_role="ADMIN")
 
 
 @pytest.mark.asyncio

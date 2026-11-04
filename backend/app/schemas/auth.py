@@ -1,19 +1,21 @@
 """Authentication and user schemas."""
 
-from typing import Optional
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     email: EmailStr = Field(..., description="User's work email address.")
     password: str = Field(..., min_length=8, description="User password (minimum 8 characters).")
 
 
 class RegisterRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     email: EmailStr = Field(..., description="User's work email address.")
     full_name: str = Field(..., min_length=2, max_length=255, description="Full name or display name.")
     password: str = Field(..., min_length=8, max_length=128, description="User password (minimum 8 characters).")
-    role: Optional[str] = Field("DEVELOPER", description="Requested workspace role (e.g. DEVELOPER, VIEWER). Privileged roles require admin assignment.")
 
 
 class UserResponse(BaseModel):
@@ -27,5 +29,7 @@ class UserResponse(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     current_password: str = Field(..., min_length=8)
     new_password: str = Field(..., min_length=8)

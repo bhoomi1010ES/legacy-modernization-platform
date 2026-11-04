@@ -61,8 +61,6 @@ async def launch_agent_run(
     db: AsyncSession = Depends(get_db),
 ) -> AgentRunSummaryResponse:
     job, user = access
-    if user.role not in {"SUPER_ADMIN", "ADMIN"}:
-        raise ForbiddenException("Only an administrator or orchestrator may launch agent runs.")
     try:
         tools = service.allowed_tools(payload.agent_name, payload.allowed_tools)
     except ValueError as exc:
@@ -112,12 +110,11 @@ async def _authorized_run(run_id: str, user: User, db: AsyncSession) -> AgentRun
     if row is None:
         raise NotFoundException("AgentRun", run_id)
     # Reuse the same membership/IDOR rules through an explicit membership query for non-super-admin callers.
-    if user.role != "SUPER_ADMIN":
-        from app.models.job import JobMembership
-        from sqlalchemy import select
-        membership = (await db.execute(select(JobMembership).where(JobMembership.job_id == row.job_id, JobMembership.user_id == user.user_id))).scalar_one_or_none()
-        if membership is None:
-            raise NotFoundException("AgentRun", run_id)
+    from app.models.job import JobMembership
+    from sqlalchemy import select
+    membership = (await db.execute(select(JobMembership).where(JobMembership.job_id == row.job_id, JobMembership.user_id == user.user_id))).scalar_one_or_none()
+    if membership is None:
+        raise NotFoundException("AgentRun", run_id)
     return row
 
 
@@ -154,8 +151,6 @@ async def get_agent_run_trace(run_id: str, user: User = Depends(get_current_user
 
 @router.post("/agent-runs/{run_id}/cancel", response_model=CancelAgentRunResponse)
 async def cancel_agent_run(run_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> CancelAgentRunResponse:
-    if user.role not in {"SUPER_ADMIN", "ADMIN"}:
-        raise ForbiddenException("Only an administrator or orchestrator may cancel agent runs.")
     row = await _authorized_run(run_id, user, db)
     if row.status in {"SUCCEEDED", "FAILED", "CANCELLED"}:
         raise ConflictException(f"Run in terminal state '{row.status}' cannot be cancelled.")

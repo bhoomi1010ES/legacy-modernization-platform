@@ -19,6 +19,7 @@ export type AgentExecutionStatus =
   | 'RUNNING'
   | 'COMPLETED'
   | 'FAILED'
+  | 'BLOCKED'
   | 'ACTION_REQUIRED';
 
 export interface SpecializedWorker {
@@ -60,7 +61,7 @@ interface AgentCardProps {
 
 export const AgentCard: React.FC<AgentCardProps> = ({ agent, defaultExpanded = false }) => {
   const [expanded, setExpanded] = useState<boolean>(
-    defaultExpanded || agent.status === 'RUNNING' || agent.status === 'ACTION_REQUIRED'
+    defaultExpanded || agent.status === 'RUNNING' || agent.status === 'ACTION_REQUIRED' || agent.status === 'BLOCKED' || agent.status === 'FAILED'
   );
 
   const getStatusBadge = () => {
@@ -132,6 +133,13 @@ export const AgentCard: React.FC<AgentCardProps> = ({ agent, defaultExpanded = f
             <span>Failed</span>
           </span>
         );
+      case 'BLOCKED':
+        return (
+          <span className="badge orange" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 700 }}>
+            <AlertTriangle size={11} />
+            <span>Blocked</span>
+          </span>
+        );
       case 'PENDING':
       default:
         return (
@@ -181,7 +189,7 @@ export const AgentCard: React.FC<AgentCardProps> = ({ agent, defaultExpanded = f
           backgroundColor:
             agent.status === 'RUNNING'
               ? 'rgba(2, 132, 199, 0.04)'
-              : agent.status === 'ACTION_REQUIRED'
+              : agent.status === 'ACTION_REQUIRED' || agent.status === 'BLOCKED'
               ? 'rgba(245, 158, 11, 0.05)'
               : 'transparent',
           borderBottom: expanded ? '1px solid var(--border)' : 'none',
@@ -347,6 +355,15 @@ export const AgentCard: React.FC<AgentCardProps> = ({ agent, defaultExpanded = f
                   <span>Retry Agent</span>
                 </button>
               )}
+            </div>
+          )}
+
+          {agent.status === 'BLOCKED' && (
+            <div style={{ border: '1px solid var(--warning, #f59e0b)', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderRadius: 'var(--radius-sm, 4px)', padding: '12px 14px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--warning, #b45309)', marginBottom: '4px' }}>Agent Blocked</div>
+              <div style={{ fontSize: '11px', color: 'var(--foreground)' }}>
+                {agent.errorMessage || 'Required runtime or evidence is unavailable; this agent did not complete its work.'}
+              </div>
             </div>
           )}
 

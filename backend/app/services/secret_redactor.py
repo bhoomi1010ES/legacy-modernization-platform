@@ -15,7 +15,7 @@ SECRET_PATTERNS = [
     (re.compile(r"glpat-[a-zA-Z0-9\-]{20,}", re.IGNORECASE), "[REDACTED_GITLAB_TOKEN]"),
     (re.compile(r"xox[baprs]-[0-9a-zA-Z]{10,48}", re.IGNORECASE), "[REDACTED_SLACK_TOKEN]"),
     # AWS Access Keys & Secrets
-    (re.compile(r"(?:A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}", re.IGNORECASE), "[REDACTED_AWS_KEY]"),
+    (re.compile(r"\b(?:A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}\b"), "[REDACTED_AWS_KEY]"),
     # Private Keys (RSA, EC, DSA, OpenSSH)
     (
         re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----"),
@@ -148,3 +148,13 @@ def get_secret_redactor() -> SecretRedactor:
             logger.exception("Failed to initialize singleton SecretRedactor: %s", exc)
             _default_redactor = SecretRedactor()
     return _default_redactor
+
+
+def isolate_untrusted_input(content: str, label: str = "UNTRUSTED_REPOSITORY_INPUT") -> str:
+    """Wraps untrusted repository data (e.g. README, source comments, commit messages)
+    in strict delimiting tags to prevent prompt injection and instruction override."""
+    if not content:
+        return ""
+    # Neutralize any attempt to close the enclosing isolation block
+    sanitized = str(content).replace(f"</{label}>", "[ESCAPED_ISOLATION_TAG]")
+    return f"<{label}>\n{sanitized}\n</{label}>"

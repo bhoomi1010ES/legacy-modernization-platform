@@ -59,8 +59,12 @@ class UnauthorizedException(PlatformException):
 
 
 class ForbiddenException(PlatformException):
-    def __init__(self, message: str = "You do not have permission to perform this action."):
-        super().__init__(code="FORBIDDEN", message=message, status_code=403)
+    def __init__(
+        self,
+        message: str = "You do not have permission to perform this action.",
+        details: Optional[list] = None,
+    ):
+        super().__init__(code="FORBIDDEN", message=message, status_code=403, details=details)
 
 
 class NotFoundException(PlatformException):

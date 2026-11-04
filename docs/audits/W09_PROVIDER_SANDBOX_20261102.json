@@ -1,0 +1,1501 @@
+{
+  "scope": "Real controller security regression probes; full W09 acceptance remains separate",
+  "health": {
+    "blocked_reasons": [
+      "Approved image unavailable: sha256:36add5930324d84c329adcc24f0f21622345a404adbf47197f1c5a9f3dc96001",
+      "Image vulnerability scanner trivy is unavailable"
+    ],
+    "images": [
+      "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3"
+    ],
+    "rpc_nonce": null,
+    "runtime": {
+      "cgroup_version": "2",
+      "docker_version": "29.9.2",
+      "runtime_name": "docker-rootless",
+      "security_options": [
+        "name=seccomp,profile=builtin",
+        "name=rootless",
+        "name=cgroupns"
+      ],
+      "selected_runtime": "runc",
+      "timestamp": 1793617952.4031155
+    },
+    "status": "blocked",
+    "worker_alive": true
+  },
+  "runs": [
+    {
+      "fixture": "correct-calculator",
+      "status": "SUCCEEDED",
+      "result": {
+        "attempt_id": "f0bdf6f0ff0943d89ca131775ab0342b",
+        "candidate_hash": "03096db389096a59360b8fdf6ce475b5d1e291c032b996239ba8b4a080febdf5",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "2fa9a37237b782a0953e88252159c68241c7288f855e71ba9f1d329c6a7c5a28",
+          "deadline_at": 1793617990.0847125,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793617968.5142362,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "43ed72b7670545ab8a260a104dbd2496a8e8bc4c9c74f0c20cbb4335e77b05e4",
+          "observation": {
+            "checks": [
+              {
+                "assertion_count": null,
+                "case_count": null,
+                "category": "build",
+                "command": [
+                  "python",
+                  "-m",
+                  "compileall",
+                  "-q",
+                  "."
+                ],
+                "duration_ms": 147.12543499990716,
+                "exit_code": 0,
+                "finished_at": "2026-11-02T11:12:38.089558+00:00",
+                "logs_hash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:12:37.942434+00:00",
+                "status": "PASS",
+                "stderr": "",
+                "stdout": "",
+                "tool_name": "compileall",
+                "tool_version": "3.12.14"
+              },
+              {
+                "assertion_count": null,
+                "case_count": 6,
+                "category": "unit",
+                "command": [
+                  "python",
+                  "-m",
+                  "pytest",
+                  "/acceptance/test_calc.py",
+                  "-q"
+                ],
+                "duration_ms": 1312.2106120026729,
+                "exit_code": 0,
+                "finished_at": "2026-11-02T11:12:39.401808+00:00",
+                "logs_hash": "cb013f0e967baf83f624ba199c86f3670cb7c5ceb2c5668a1389528b5bbb6edf",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:12:38.089606+00:00",
+                "status": "PASS",
+                "stderr": "",
+                "stdout": "......                                                                   [100%]\n=============================== warnings summary ===============================\n../usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469\n  /usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469: PytestCacheWarning: could not create cache path /dev/.pytest_cache/v/cache/nodeids: [Errno 13] Permission denied: '/dev/pytest-cache-files-cxle0r2s'\n    config.cache.set(\"cache/nodeids\", sorted(self.cached_nodeids))\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n6 passed, 1 warning in 0.03s\n",
+                "tool_name": "pytest",
+                "tool_version": "9.1.1"
+              },
+              {
+                "assertion_count": null,
+                "case_count": null,
+                "category": "static",
+                "command": [
+                  "python",
+                  "-m",
+                  "mypy",
+                  "--cache-dir=/tmp/mypy-cache",
+                  "modern"
+                ],
+                "duration_ms": 7737.995982002758,
+                "exit_code": 0,
+                "finished_at": "2026-11-02T11:12:47.139859+00:00",
+                "logs_hash": "301ebcaac2b22416681032881ce335c2916f748639be5c1228294dbd7dcad40a",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:12:39.401871+00:00",
+                "status": "PASS",
+                "stderr": "/dev/null: No [mypy] section in config file\n",
+                "stdout": "Success: no issues found in 1 source file\n",
+                "tool_name": "mypy",
+                "tool_version": "1.15.0"
+              },
+              {
+                "assertion_count": null,
+                "case_count": null,
+                "category": "security",
+                "command": [
+                  "python",
+                  "-m",
+                  "bandit",
+                  "-r",
+                  "modern",
+                  "-q"
+                ],
+                "duration_ms": 974.985327997274,
+                "exit_code": 0,
+                "finished_at": "2026-11-02T11:12:48.114926+00:00",
+                "logs_hash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:12:47.139948+00:00",
+                "status": "PASS",
+                "stderr": "",
+                "stdout": "",
+                "tool_name": "bandit",
+                "tool_version": "1.8.3"
+              }
+            ],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 137.88643799853162,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": 3, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "case-one"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793617956.8091476
+          },
+          "stage": "verify",
+          "started_at": 1793617956.809162,
+          "stderr": "",
+          "stdout": "{\"checks\": [{\"category\": \"build\", \"command\": [\"python\", \"-m\", \"compileall\", \"-q\", \".\"], \"tool_name\": \"compileall\", \"tool_version\": \"3.12.14\", \"started_at\": \"2026-11-02T11:12:37.942434+00:00\", \"finished_at\": \"2026-11-02T11:12:38.089558+00:00\", \"exit_code\": 0, \"duration_ms\": 147.12543499990716, \"stdout\": \"\", \"stderr\": \"\", \"logs_hash\": \"01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b\", \"case_count\": null, \"assertion_count\": null, \"status\": \"PASS\", \"skipped_reason\": null}, {\"category\": \"unit\", \"command\": [\"python\", \"-m\", \"pytest\", \"/acceptance/test_calc.py\", \"-q\"], \"tool_name\": \"pytest\", \"tool_version\": \"9.1.1\", \"started_at\": \"2026-11-02T11:12:38.089606+00:00\", \"finished_at\": \"2026-11-02T11:12:39.401808+00:00\", \"exit_code\": 0, \"duration_ms\": 1312.2106120026729, \"stdout\": \"......                                                                   [100%]\\n=============================== warnings summary ===============================\\n../usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469\\n  /usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469: PytestCacheWarning: could not create cache path /dev/.pytest_cache/v/cache/nodeids: [Errno 13] Permission denied: '/dev/pytest-cache-files-cxle0r2s'\\n    config.cache.set(\\\"cache/nodeids\\\", sorted(self.cached_nodeids))\\n\\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\\n6 passed, 1 warning in 0.03s\\n\", \"stderr\": \"\", \"logs_hash\": \"cb013f0e967baf83f624ba199c86f3670cb7c5ceb2c5668a1389528b5bbb6edf\", \"case_count\": 6, \"assertion_count\": null, \"status\": \"PASS\", \"skipped_reason\": null}, {\"category\": \"static\", \"command\": [\"python\", \"-m\", \"mypy\", \"--cache-dir=/tmp/mypy-cache\", \"modern\"], \"tool_name\": \"mypy\", \"tool_version\": \"1.15.0\", \"started_at\": \"2026-11-02T11:12:39.401871+00:00\", \"finished_at\": \"2026-11-02T11:12:47.139859+00:00\", \"exit_code\": 0, \"duration_ms\": 7737.995982002758, \"stdout\": \"Success: no issues found in 1 source file\\n\", \"stderr\": \"/dev/null: No [mypy] section in config file\\n\", \"logs_hash\": \"301ebcaac2b22416681032881ce335c2916f748639be5c1228294dbd7dcad40a\", \"case_count\": null, \"assertion_count\": null, \"status\": \"PASS\", \"skipped_reason\": null}, {\"category\": \"security\", \"command\": [\"python\", \"-m\", \"bandit\", \"-r\", \"modern\", \"-q\"], \"tool_name\": \"bandit\", \"tool_version\": \"1.8.3\", \"started_at\": \"2026-11-02T11:12:47.139948+00:00\", \"finished_at\": \"2026-11-02T11:12:48.114926+00:00\", \"exit_code\": 0, \"duration_ms\": 974.985327997274, \"stdout\": \"\", \"stderr\": \"\", \"logs_hash\": \"01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b\", \"case_count\": null, \"assertion_count\": null, \"status\": \"PASS\", \"skipped_reason\": null}], \"observations\": [{\"test_case_id\": \"case-one\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 137.88643799853162, \"stdout\": \"{\\\"output\\\": 3, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-32b21c4a299845708efd7ffa4a986bd3-verify"
+        },
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "reason": "Operator image vulnerability scanner trivy is unavailable",
+          "status": "NOT_RUN"
+        },
+        "input_hash": "7e5275e6a4d7d642b2ccc5b1a22afde6c5be399477adab723c6f23d5e6b4582f",
+        "job_id": "1213879544034fc9898e87a2e2734f5a",
+        "lease_expires_at": 1793618007.7651362,
+        "lease_generation": 1,
+        "lease_token": "768a03009ab24f9ab5601b9cc3ca59fe",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "405cb2557f6c1354f31194942b6f190163d0dd0a73b92a7d9d7568feb4298815",
+          "deadline_at": 1793617987.7635486,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793617955.0846157,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "995820ba08f0e0e0c20f94a9b805d31b42843e2cdd899fc526c003333c89fe0d",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793617954.1843252
+          },
+          "stage": "preflight",
+          "started_at": 1793617954.1843588,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-32b21c4a299845708efd7ffa4a986bd3-preflight"
+        },
+        "request_id": "32b21c4a299845708efd7ffa4a986bd3",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "f647e236433d0176d99b19f9bbf9bde03b1f301f57e4f90d1c5b6afcd9c72219",
+          "deadline_at": 1793618003.514527,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793617971.3892884,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793617970.1389089
+          },
+          "stage": "review",
+          "started_at": 1793617970.1389294,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-32b21c4a299845708efd7ffa4a986bd3-review"
+        },
+        "suite_hash": "c0fd84faa9c3516bb2469b74a97a128fb0617dc626e333f66b1b91474806a832",
+        "worker_id": "verifier-54082-d3979f74bb0a482e89987b5eea2177b3"
+      }
+    },
+    {
+      "fixture": "wrong-calculator",
+      "status": "SUCCEEDED",
+      "result": {
+        "attempt_id": "2a8973dc33a0444e85076ba24fd87d30",
+        "candidate_hash": "4530e81f1073b5a7090a9d8f2fb168d4075df418768d49c2ce3c5b099836b6a8",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "e17a96e197d1cbfdaacd072bf46f00ad36acdb51664f55c2c5b40eaa158cc2c3",
+          "deadline_at": 1793618008.7786574,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793617983.8736603,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "77319d198e37d199f4ef69ab3e60d34a326068dc02357e9b62ce18090e453d56",
+          "observation": {
+            "checks": [
+              {
+                "assertion_count": null,
+                "case_count": null,
+                "category": "build",
+                "command": [
+                  "python",
+                  "-m",
+                  "compileall",
+                  "-q",
+                  "."
+                ],
+                "duration_ms": 113.31386600068072,
+                "exit_code": 0,
+                "finished_at": "2026-11-02T11:12:55.817005+00:00",
+                "logs_hash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:12:55.703693+00:00",
+                "status": "PASS",
+                "stderr": "",
+                "stdout": "",
+                "tool_name": "compileall",
+                "tool_version": "3.12.14"
+              },
+              {
+                "assertion_count": null,
+                "case_count": 6,
+                "category": "unit",
+                "command": [
+                  "python",
+                  "-m",
+                  "pytest",
+                  "/acceptance/test_calc.py",
+                  "-q"
+                ],
+                "duration_ms": 888.1513780033856,
+                "exit_code": 1,
+                "finished_at": "2026-11-02T11:12:56.705185+00:00",
+                "logs_hash": "94b5db15a8cd0ad5c0b49aa6c6cd01914e8443a403a2186d04157a2f67fb183c",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:12:55.817042+00:00",
+                "status": "FAIL",
+                "stderr": "",
+                "stdout": "FFF.FF                                                                   [100%]\n=================================== FAILURES ===================================\n_________________________ test_integer_addition[1-2-3] _________________________\n\nx = 1, y = 2, expected = 3\n\n    @pytest.mark.parametrize('x,y,expected', [(1, 2, 3), (-5, 2, -3), (5, -8, -3), (0, 0, 0), (123456, 100, 123556), (-10, -10, -20)])\n    def test_integer_addition(x: int, y: int, expected: int) -> None:\n>       assert module.add(x, y) == expected\nE       assert -1 == 3\nE        +  where -1 = <function add at 0x7e0b06df93a0>(1, 2)\nE        +    where <function add at 0x7e0b06df93a0> = module.add\n\n/acceptance/test_calc.py:17: AssertionError\n________________________ test_integer_addition[-5-2--3] ________________________\n\nx = -5, y = 2, expected = -3\n\n    @pytest.mark.parametrize('x,y,expected', [(1, 2, 3), (-5, 2, -3), (5, -8, -3), (0, 0, 0), (123456, 100, 123556), (-10, -10, -20)])\n    def test_integer_addition(x: int, y: int, expected: int) -> None:\n>       assert module.add(x, y) == expected\nE       assert -7 == -3\nE        +  where -7 = <function add at 0x7e0b06df93a0>(-5, 2)\nE        +    where <function add at 0x7e0b06df93a0> = module.add\n\n/acceptance/test_calc.py:17: AssertionError\n________________________ test_integer_addition[5--8--3] ________________________\n\nx = 5, y = -8, expected = -3\n\n    @pytest.mark.parametrize('x,y,expected', [(1, 2, 3), (-5, 2, -3), (5, -8, -3), (0, 0, 0), (123456, 100, 123556), (-10, -10, -20)])\n    def test_integer_addition(x: int, y: int, expected: int) -> None:\n>       assert module.add(x, y) == expected\nE       assert 13 == -3\nE        +  where 13 = <function add at 0x7e0b06df93a0>(5, -8)\nE        +    where <function add at 0x7e0b06df93a0> = module.add\n\n/acceptance/test_calc.py:17: AssertionError\n___________________ test_integer_addition[123456-100-123556] ___________________\n\nx = 123456, y = 100, expected = 123556\n\n    @pytest.mark.parametrize('x,y,expected', [(1, 2, 3), (-5, 2, -3), (5, -8, -3), (0, 0, 0), (123456, 100, 123556), (-10, -10, -20)])\n    def test_integer_addition(x: int, y: int, expected: int) -> None:\n>       assert module.add(x, y) == expected\nE       assert 123356 == 123556\nE        +  where 123356 = <function add at 0x7e0b06df93a0>(123456, 100)\nE        +    where <function add at 0x7e0b06df93a0> = module.add\n\n/acceptance/test_calc.py:17: AssertionError\n______________________ test_integer_addition[-10--10--20] ______________________\n\nx = -10, y = -10, expected = -20\n\n    @pytest.mark.parametrize('x,y,expected', [(1, 2, 3), (-5, 2, -3), (5, -8, -3), (0, 0, 0), (123456, 100, 123556), (-10, -10, -20)])\n    def test_integer_addition(x: int, y: int, expected: int) -> None:\n>       assert module.add(x, y) == expected\nE       assert 0 == -20\nE        +  where 0 = <function add at 0x7e0b06df93a0>(-10, -10)\nE        +    where <function add at 0x7e0b06df93a0> = module.add\n\n/acceptance/test_calc.py:17: AssertionError\n=============================== warnings summary ===============================\n../usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469\n  /usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469: PytestCacheWarning: could not create cache path /dev/.pytest_cache/v/cache/nodeids: [Errno 13] Permission denied: '/dev/pytest-cache-files-hhnw9kmu'\n    config.cache.set(\"cache/nodeids\", sorted(self.cached_nodeids))\n\n../usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:423\n  /usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:423: PytestCacheWarning: could not create cache path /dev/.pytest_cache/v/cache/lastfailed: [Errno 13] Permission denied: '/dev/pytest-cache-files-4k01gy0v'\n    config.cache.set(\"cache/lastfailed\", self.lastfailed)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ============================\nFAILED ../dev::test_integer_addition[1-2-3] - assert -1 == 3\nFAILED ../dev::test_integer_addition[-5-2--3] - assert -7 == -3\nFAILED ../dev::test_integer_addition[5--8--3] - assert 13 == -3\nFAILED ../dev::test_integer_addition[123456-100-123556] - assert 123356 == 12...\nFAILED ../dev::test_integer_addition[-10--10--20] - assert 0 == -20\n5 failed, 1 passed, 2 warnings in 0.04s\n",
+                "tool_name": "pytest",
+                "tool_version": "9.1.1"
+              },
+              {
+                "assertion_count": null,
+                "case_count": null,
+                "category": "static",
+                "command": [
+                  "python",
+                  "-m",
+                  "mypy",
+                  "--cache-dir=/tmp/mypy-cache",
+                  "modern"
+                ],
+                "duration_ms": 6032.184017996769,
+                "exit_code": 0,
+                "finished_at": "2026-11-02T11:13:02.737345+00:00",
+                "logs_hash": "301ebcaac2b22416681032881ce335c2916f748639be5c1228294dbd7dcad40a",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:12:56.705229+00:00",
+                "status": "PASS",
+                "stderr": "/dev/null: No [mypy] section in config file\n",
+                "stdout": "Success: no issues found in 1 source file\n",
+                "tool_name": "mypy",
+                "tool_version": "1.15.0"
+              },
+              {
+                "assertion_count": null,
+                "case_count": null,
+                "category": "security",
+                "command": [
+                  "python",
+                  "-m",
+                  "bandit",
+                  "-r",
+                  "modern",
+                  "-q"
+                ],
+                "duration_ms": 788.9904889998434,
+                "exit_code": 0,
+                "finished_at": "2026-11-02T11:13:03.526424+00:00",
+                "logs_hash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:13:02.737505+00:00",
+                "status": "PASS",
+                "stderr": "",
+                "stdout": "",
+                "tool_name": "bandit",
+                "tool_version": "1.8.3"
+              }
+            ],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 104.60941500059562,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": -1, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "case-one"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793617974.9292698
+          },
+          "stage": "verify",
+          "started_at": 1793617974.9292822,
+          "stderr": "",
+          "stdout": "{\"checks\": [{\"category\": \"build\", \"command\": [\"python\", \"-m\", \"compileall\", \"-q\", \".\"], \"tool_name\": \"compileall\", \"tool_version\": \"3.12.14\", \"started_at\": \"2026-11-02T11:12:55.703693+00:00\", \"finished_at\": \"2026-11-02T11:12:55.817005+00:00\", \"exit_code\": 0, \"duration_ms\": 113.31386600068072, \"stdout\": \"\", \"stderr\": \"\", \"logs_hash\": \"01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b\", \"case_count\": null, \"assertion_count\": null, \"status\": \"PASS\", \"skipped_reason\": null}, {\"category\": \"unit\", \"command\": [\"python\", \"-m\", \"pytest\", \"/acceptance/test_calc.py\", \"-q\"], \"tool_name\": \"pytest\", \"tool_version\": \"9.1.1\", \"started_at\": \"2026-11-02T11:12:55.817042+00:00\", \"finished_at\": \"2026-11-02T11:12:56.705185+00:00\", \"exit_code\": 1, \"duration_ms\": 888.1513780033856, \"stdout\": \"FFF.FF                                                                   [100%]\\n=================================== FAILURES ===================================\\n_________________________ test_integer_addition[1-2-3] _________________________\\n\\nx = 1, y = 2, expected = 3\\n\\n    @pytest.mark.parametrize('x,y,expected', [(1, 2, 3), (-5, 2, -3), (5, -8, -3), (0, 0, 0), (123456, 100, 123556), (-10, -10, -20)])\\n    def test_integer_addition(x: int, y: int, expected: int) -> None:\\n>       assert module.add(x, y) == expected\\nE       assert -1 == 3\\nE        +  where -1 = <function add at 0x7e0b06df93a0>(1, 2)\\nE        +    where <function add at 0x7e0b06df93a0> = module.add\\n\\n/acceptance/test_calc.py:17: AssertionError\\n________________________ test_integer_addition[-5-2--3] ________________________\\n\\nx = -5, y = 2, expected = -3\\n\\n    @pytest.mark.parametrize('x,y,expected', [(1, 2, 3), (-5, 2, -3), (5, -8, -3), (0, 0, 0), (123456, 100, 123556), (-10, -10, -20)])\\n    def test_integer_addition(x: int, y: int, expected: int) -> None:\\n>       assert module.add(x, y) == expected\\nE       assert -7 == -3\\nE        +  where -7 = <function add at 0x7e0b06df93a0>(-5, 2)\\nE        +    where <function add at 0x7e0b06df93a0> = module.add\\n\\n/acceptance/test_calc.py:17: AssertionError\\n________________________ test_integer_addition[5--8--3] ________________________\\n\\nx = 5, y = -8, expected = -3\\n\\n    @pytest.mark.parametrize('x,y,expected', [(1, 2, 3), (-5, 2, -3), (5, -8, -3), (0, 0, 0), (123456, 100, 123556), (-10, -10, -20)])\\n    def test_integer_addition(x: int, y: int, expected: int) -> None:\\n>       assert module.add(x, y) == expected\\nE       assert 13 == -3\\nE        +  where 13 = <function add at 0x7e0b06df93a0>(5, -8)\\nE        +    where <function add at 0x7e0b06df93a0> = module.add\\n\\n/acceptance/test_calc.py:17: AssertionError\\n___________________ test_integer_addition[123456-100-123556] ___________________\\n\\nx = 123456, y = 100, expected = 123556\\n\\n    @pytest.mark.parametrize('x,y,expected', [(1, 2, 3), (-5, 2, -3), (5, -8, -3), (0, 0, 0), (123456, 100, 123556), (-10, -10, -20)])\\n    def test_integer_addition(x: int, y: int, expected: int) -> None:\\n>       assert module.add(x, y) == expected\\nE       assert 123356 == 123556\\nE        +  where 123356 = <function add at 0x7e0b06df93a0>(123456, 100)\\nE        +    where <function add at 0x7e0b06df93a0> = module.add\\n\\n/acceptance/test_calc.py:17: AssertionError\\n______________________ test_integer_addition[-10--10--20] ______________________\\n\\nx = -10, y = -10, expected = -20\\n\\n    @pytest.mark.parametrize('x,y,expected', [(1, 2, 3), (-5, 2, -3), (5, -8, -3), (0, 0, 0), (123456, 100, 123556), (-10, -10, -20)])\\n    def test_integer_addition(x: int, y: int, expected: int) -> None:\\n>       assert module.add(x, y) == expected\\nE       assert 0 == -20\\nE        +  where 0 = <function add at 0x7e0b06df93a0>(-10, -10)\\nE        +    where <function add at 0x7e0b06df93a0> = module.add\\n\\n/acceptance/test_calc.py:17: AssertionError\\n=============================== warnings summary ===============================\\n../usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469\\n  /usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469: PytestCacheWarning: could not create cache path /dev/.pytest_cache/v/cache/nodeids: [Errno 13] Permission denied: '/dev/pytest-cache-files-hhnw9kmu'\\n    config.cache.set(\\\"cache/nodeids\\\", sorted(self.cached_nodeids))\\n\\n../usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:423\\n  /usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:423: PytestCacheWarning: could not create cache path /dev/.pytest_cache/v/cache/lastfailed: [Errno 13] Permission denied: '/dev/pytest-cache-files-4k01gy0v'\\n    config.cache.set(\\\"cache/lastfailed\\\", self.lastfailed)\\n\\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\\n=========================== short test summary info ============================\\nFAILED ../dev::test_integer_addition[1-2-3] - assert -1 == 3\\nFAILED ../dev::test_integer_addition[-5-2--3] - assert -7 == -3\\nFAILED ../dev::test_integer_addition[5--8--3] - assert 13 == -3\\nFAILED ../dev::test_integer_addition[123456-100-123556] - assert 123356 == 12...\\nFAILED ../dev::test_integer_addition[-10--10--20] - assert 0 == -20\\n5 failed, 1 passed, 2 warnings in 0.04s\\n\", \"stderr\": \"\", \"logs_hash\": \"94b5db15a8cd0ad5c0b49aa6c6cd01914e8443a403a2186d04157a2f67fb183c\", \"case_count\": 6, \"assertion_count\": null, \"status\": \"FAIL\", \"skipped_reason\": null}, {\"category\": \"static\", \"command\": [\"python\", \"-m\", \"mypy\", \"--cache-dir=/tmp/mypy-cache\", \"modern\"], \"tool_name\": \"mypy\", \"tool_version\": \"1.15.0\", \"started_at\": \"2026-11-02T11:12:56.705229+00:00\", \"finished_at\": \"2026-11-02T11:13:02.737345+00:00\", \"exit_code\": 0, \"duration_ms\": 6032.184017996769, \"stdout\": \"Success: no issues found in 1 source file\\n\", \"stderr\": \"/dev/null: No [mypy] section in config file\\n\", \"logs_hash\": \"301ebcaac2b22416681032881ce335c2916f748639be5c1228294dbd7dcad40a\", \"case_count\": null, \"assertion_count\": null, \"status\": \"PASS\", \"skipped_reason\": null}, {\"category\": \"security\", \"command\": [\"python\", \"-m\", \"bandit\", \"-r\", \"modern\", \"-q\"], \"tool_name\": \"bandit\", \"tool_version\": \"1.8.3\", \"started_at\": \"2026-11-02T11:13:02.737505+00:00\", \"finished_at\": \"2026-11-02T11:13:03.526424+00:00\", \"exit_code\": 0, \"duration_ms\": 788.9904889998434, \"stdout\": \"\", \"stderr\": \"\", \"logs_hash\": \"01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b\", \"case_count\": null, \"assertion_count\": null, \"status\": \"PASS\", \"skipped_reason\": null}], \"observations\": [{\"test_case_id\": \"case-one\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 104.60941500059562, \"stdout\": \"{\\\"output\\\": -1, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-8fb7d7e9347b4dad95c357105f35918b-verify"
+        },
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "reason": "Operator image vulnerability scanner trivy is unavailable",
+          "status": "NOT_RUN"
+        },
+        "input_hash": "add52f2dec42419db417b7c0364b4f289fb83f7d977cfe0e58f978c4ea1141a9",
+        "job_id": "d5ec0cebac574aeca3e114642d9cbc0d",
+        "lease_expires_at": 1793618021.9771602,
+        "lease_generation": 1,
+        "lease_token": "b216e81e0e0342d1baa1e28403c966d1",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "329f1f118290f840cea575b1a676f92008ff3d5859bf4518692ea954b20ab21f",
+          "deadline_at": 1793618006.976286,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793617973.778611,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "995820ba08f0e0e0c20f94a9b805d31b42843e2cdd899fc526c003333c89fe0d",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793617973.0564716
+          },
+          "stage": "preflight",
+          "started_at": 1793617973.05649,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-8fb7d7e9347b4dad95c357105f35918b-preflight"
+        },
+        "request_id": "8fb7d7e9347b4dad95c357105f35918b",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "5893508c946f41e56a9924adea03573b32e8eb8c9b3d8a0edf534896f090890b",
+          "deadline_at": 1793618018.87391,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793617985.8131673,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793617985.0717266
+          },
+          "stage": "review",
+          "started_at": 1793617985.0717378,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-8fb7d7e9347b4dad95c357105f35918b-review"
+        },
+        "suite_hash": "c0fd84faa9c3516bb2469b74a97a128fb0617dc626e333f66b1b91474806a832",
+        "worker_id": "verifier-54082-d3979f74bb0a482e89987b5eea2177b3"
+      }
+    },
+    {
+      "fixture": "tool-shadowing",
+      "status": "SUCCEEDED",
+      "result": {
+        "attempt_id": "633bb074b31441a2b9e8df6631e0d162",
+        "candidate_hash": "1b75c43372d89666acc7a319f781dc95b5b0ae4d21fe5994655590eedf585bb1",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "2b4a63c214815637a49da93db07a7823a63dfb3c7bc09989b6adcd38112ca8b9",
+          "deadline_at": 1793618023.4964306,
+          "execution_uid": "65534:65534",
+          "exit_code": 1,
+          "finished_at": 1793617993.4856768,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "df3706f8c49b36482498795040a5ed6fba523bb94acf4c865e35ea8a07b2a437",
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793617991.8696258
+          },
+          "stage": "verify",
+          "started_at": 1793617991.869653,
+          "stderr": "Traceback (most recent call last):\n  File \"<string>\", line 13, in <module>\nValueError: Candidate attempts to replace a trusted verification tool\n",
+          "stdout": "",
+          "worker_id": "rebase-88ed872d06f146df9b825567dc4a25fd-verify"
+        },
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "reason": "Operator image vulnerability scanner trivy is unavailable",
+          "status": "NOT_RUN"
+        },
+        "input_hash": "79fdb10b4a633fd9ef3203d88b67bb547fd8d6cf2437603e65b83c2f82629657",
+        "job_id": "d99a6f8ee3724be791b6740e45411518",
+        "lease_expires_at": 1793618031.394422,
+        "lease_generation": 1,
+        "lease_token": "279f75f7dcc7481d9cda64575c3d9365",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "8d7935de43d6f7957b0565d6ffcf693aab2ccf413c45f61415315fdeb6ec1fb0",
+          "deadline_at": 1793618021.3939855,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793617988.4963644,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "995820ba08f0e0e0c20f94a9b805d31b42843e2cdd899fc526c003333c89fe0d",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793617987.4286172
+          },
+          "stage": "preflight",
+          "started_at": 1793617987.4286306,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-88ed872d06f146df9b825567dc4a25fd-preflight"
+        },
+        "request_id": "88ed872d06f146df9b825567dc4a25fd",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "1bea586e0db02d18e6f373ec1485a6b3e29709a4bd964e1efabcdf68a04f7d0f",
+          "deadline_at": 1793618028.4859385,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793617995.6149147,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793617994.826107
+          },
+          "stage": "review",
+          "started_at": 1793617994.826119,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-88ed872d06f146df9b825567dc4a25fd-review"
+        },
+        "suite_hash": "c0fd84faa9c3516bb2469b74a97a128fb0617dc626e333f66b1b91474806a832",
+        "worker_id": "verifier-54082-d3979f74bb0a482e89987b5eea2177b3"
+      }
+    },
+    {
+      "fixture": "unsupported-scenario",
+      "status": "SUCCEEDED",
+      "result": {
+        "attempt_id": "cdb0db39579248e68d661aad351f7803",
+        "candidate_hash": "03096db389096a59360b8fdf6ce475b5d1e291c032b996239ba8b4a080febdf5",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "30517ab1f8ed37df175e652a8eff10d608a6ec3cb9e73f33c3ac9acb4365ffb8",
+          "deadline_at": 1793618032.9156632,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793618007.717882,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "94ef201625dd27bb0b9980e1842e55d273a100740ca32f279a4178d7eec4aa0c",
+          "observation": {
+            "checks": [
+              {
+                "assertion_count": null,
+                "case_count": null,
+                "category": "build",
+                "command": [
+                  "python",
+                  "-m",
+                  "compileall",
+                  "-q",
+                  "."
+                ],
+                "duration_ms": 110.94239899830427,
+                "exit_code": 0,
+                "finished_at": "2026-11-02T11:13:20.201886+00:00",
+                "logs_hash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:13:20.090949+00:00",
+                "status": "PASS",
+                "stderr": "",
+                "stdout": "",
+                "tool_name": "compileall",
+                "tool_version": "3.12.14"
+              },
+              {
+                "assertion_count": null,
+                "case_count": 6,
+                "category": "unit",
+                "command": [
+                  "python",
+                  "-m",
+                  "pytest",
+                  "/acceptance/test_calc.py",
+                  "-q"
+                ],
+                "duration_ms": 887.0791429981182,
+                "exit_code": 0,
+                "finished_at": "2026-11-02T11:13:21.087061+00:00",
+                "logs_hash": "ffdbf95a45d02e574cffea61d138d27be556f753ec98b25db904ae959d6dd757",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:13:20.201932+00:00",
+                "status": "PASS",
+                "stderr": "",
+                "stdout": "......                                                                   [100%]\n=============================== warnings summary ===============================\n../usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469\n  /usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469: PytestCacheWarning: could not create cache path /dev/.pytest_cache/v/cache/nodeids: [Errno 13] Permission denied: '/dev/pytest-cache-files-rl2yxne0'\n    config.cache.set(\"cache/nodeids\", sorted(self.cached_nodeids))\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n6 passed, 1 warning in 0.02s\n",
+                "tool_name": "pytest",
+                "tool_version": "9.1.1"
+              },
+              {
+                "assertion_count": null,
+                "case_count": null,
+                "category": "static",
+                "command": [
+                  "python",
+                  "-m",
+                  "mypy",
+                  "--cache-dir=/tmp/mypy-cache",
+                  "modern"
+                ],
+                "duration_ms": 5661.710350002977,
+                "exit_code": 0,
+                "finished_at": "2026-11-02T11:13:26.748819+00:00",
+                "logs_hash": "301ebcaac2b22416681032881ce335c2916f748639be5c1228294dbd7dcad40a",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:13:21.087120+00:00",
+                "status": "PASS",
+                "stderr": "/dev/null: No [mypy] section in config file\n",
+                "stdout": "Success: no issues found in 1 source file\n",
+                "tool_name": "mypy",
+                "tool_version": "1.15.0"
+              },
+              {
+                "assertion_count": null,
+                "case_count": null,
+                "category": "security",
+                "command": [
+                  "python",
+                  "-m",
+                  "bandit",
+                  "-r",
+                  "modern",
+                  "-q"
+                ],
+                "duration_ms": 661.5264920001209,
+                "exit_code": 0,
+                "finished_at": "2026-11-02T11:13:27.410369+00:00",
+                "logs_hash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:13:26.748853+00:00",
+                "status": "PASS",
+                "stderr": "",
+                "stdout": "",
+                "tool_name": "bandit",
+                "tool_version": "1.8.3"
+              }
+            ],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 86.86467499865103,
+                "exit_code": 78,
+                "status": "UNOBSERVED",
+                "stderr": "UNOBSERVED: no approved application adapter implements this scenario\n",
+                "stdout": "",
+                "test_case_id": "case-one"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793617999.1915169
+          },
+          "stage": "verify",
+          "started_at": 1793617999.1915314,
+          "stderr": "",
+          "stdout": "{\"checks\": [{\"category\": \"build\", \"command\": [\"python\", \"-m\", \"compileall\", \"-q\", \".\"], \"tool_name\": \"compileall\", \"tool_version\": \"3.12.14\", \"started_at\": \"2026-11-02T11:13:20.090949+00:00\", \"finished_at\": \"2026-11-02T11:13:20.201886+00:00\", \"exit_code\": 0, \"duration_ms\": 110.94239899830427, \"stdout\": \"\", \"stderr\": \"\", \"logs_hash\": \"01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b\", \"case_count\": null, \"assertion_count\": null, \"status\": \"PASS\", \"skipped_reason\": null}, {\"category\": \"unit\", \"command\": [\"python\", \"-m\", \"pytest\", \"/acceptance/test_calc.py\", \"-q\"], \"tool_name\": \"pytest\", \"tool_version\": \"9.1.1\", \"started_at\": \"2026-11-02T11:13:20.201932+00:00\", \"finished_at\": \"2026-11-02T11:13:21.087061+00:00\", \"exit_code\": 0, \"duration_ms\": 887.0791429981182, \"stdout\": \"......                                                                   [100%]\\n=============================== warnings summary ===============================\\n../usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469\\n  /usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469: PytestCacheWarning: could not create cache path /dev/.pytest_cache/v/cache/nodeids: [Errno 13] Permission denied: '/dev/pytest-cache-files-rl2yxne0'\\n    config.cache.set(\\\"cache/nodeids\\\", sorted(self.cached_nodeids))\\n\\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\\n6 passed, 1 warning in 0.02s\\n\", \"stderr\": \"\", \"logs_hash\": \"ffdbf95a45d02e574cffea61d138d27be556f753ec98b25db904ae959d6dd757\", \"case_count\": 6, \"assertion_count\": null, \"status\": \"PASS\", \"skipped_reason\": null}, {\"category\": \"static\", \"command\": [\"python\", \"-m\", \"mypy\", \"--cache-dir=/tmp/mypy-cache\", \"modern\"], \"tool_name\": \"mypy\", \"tool_version\": \"1.15.0\", \"started_at\": \"2026-11-02T11:13:21.087120+00:00\", \"finished_at\": \"2026-11-02T11:13:26.748819+00:00\", \"exit_code\": 0, \"duration_ms\": 5661.710350002977, \"stdout\": \"Success: no issues found in 1 source file\\n\", \"stderr\": \"/dev/null: No [mypy] section in config file\\n\", \"logs_hash\": \"301ebcaac2b22416681032881ce335c2916f748639be5c1228294dbd7dcad40a\", \"case_count\": null, \"assertion_count\": null, \"status\": \"PASS\", \"skipped_reason\": null}, {\"category\": \"security\", \"command\": [\"python\", \"-m\", \"bandit\", \"-r\", \"modern\", \"-q\"], \"tool_name\": \"bandit\", \"tool_version\": \"1.8.3\", \"started_at\": \"2026-11-02T11:13:26.748853+00:00\", \"finished_at\": \"2026-11-02T11:13:27.410369+00:00\", \"exit_code\": 0, \"duration_ms\": 661.5264920001209, \"stdout\": \"\", \"stderr\": \"\", \"logs_hash\": \"01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b\", \"case_count\": null, \"assertion_count\": null, \"status\": \"PASS\", \"skipped_reason\": null}], \"observations\": [{\"test_case_id\": \"case-one\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 78, \"duration_ms\": 86.86467499865103, \"stdout\": \"\", \"stderr\": \"UNOBSERVED: no approved application adapter implements this scenario\\n\", \"status\": \"UNOBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-b8f8e638469d4071a0f086ce38bd1fc9-verify"
+        },
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "reason": "Operator image vulnerability scanner trivy is unavailable",
+          "status": "NOT_RUN"
+        },
+        "input_hash": "62bdc2a53840451bdf62e502d1168a870364a2babb402e77de163729a6d335cd",
+        "job_id": "a89c9158023d4a9bb7f70ba6668f5177",
+        "lease_expires_at": 1793618046.1850476,
+        "lease_generation": 1,
+        "lease_token": "baf25a98f8184e78a4b1757541a1e6b2",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "4f83bbb01cdd1288b60f828383f7c60d6e77d32c7d11bda088f3e691f4d728c6",
+          "deadline_at": 1793618031.186252,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793617997.9156199,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "995820ba08f0e0e0c20f94a9b805d31b42843e2cdd899fc526c003333c89fe0d",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793617997.210386
+          },
+          "stage": "preflight",
+          "started_at": 1793617997.2103965,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-b8f8e638469d4071a0f086ce38bd1fc9-preflight"
+        },
+        "request_id": "b8f8e638469d4071a0f086ce38bd1fc9",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "c0a843820d5a9e680dfe5276e51f17f6ce3643e3217cdf9189c13a4a71c8297a",
+          "deadline_at": 1793618042.7180312,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793618009.6611502,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793618008.937903
+          },
+          "stage": "review",
+          "started_at": 1793618008.9379156,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-b8f8e638469d4071a0f086ce38bd1fc9-review"
+        },
+        "suite_hash": "c3d1bcde3b54cf744de3825cb89d42131f1245ffc90aafec33e853c1391a1240",
+        "worker_id": "verifier-54082-d3979f74bb0a482e89987b5eea2177b3"
+      }
+    },
+    {
+      "fixture": "historical-echo-image",
+      "status": "BLOCKED",
+      "result": {
+        "attempt_id": "f0a25c65b6354ba48584798d2fbb1947",
+        "job_id": "ffec69a570f7497bb6e06b81d4aeb9e7",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "deadline_at": 1793618045.2270567,
+          "error": "ValueError: Container creation failed: Error response from daemon: No such image: sha256:36add5930324d84c329adcc24f0f21622345a404adbf47197f1c5a9f3dc96001\n",
+          "exit_code": null,
+          "finished_at": 1793618011.3547282,
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793618011.2134209
+          },
+          "stage": "preflight",
+          "started_at": 1793618011.2134323,
+          "worker_id": "rebase-965cecc0a2f24433b10654af3ad6810c-preflight"
+        },
+        "reason": "ValueError: Image adapter is not an operator-reviewed application observer",
+        "request_id": "965cecc0a2f24433b10654af3ad6810c"
+      }
+    },
+    {
+      "fixture": "real-provider-generated",
+      "status": "SUCCEEDED",
+      "result": {
+        "attempt_id": "c6386326526c4cd392c2080184da8094",
+        "candidate_hash": "d59399b7b92f0875dafea2308aa9d85f77b14e6fa25cc908a6609890f3c4944e",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "f03d1344f4246b25b781f5f88e7f114e02c57772d9fff8f2696ee7ca88658bbf",
+          "deadline_at": 1793618048.544684,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793618023.3587346,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "70d281acd76a8173ab665e24df60f4005d80165987d72eb2a58e9f47e4646bfb",
+          "observation": {
+            "checks": [
+              {
+                "assertion_count": null,
+                "case_count": null,
+                "category": "build",
+                "command": [
+                  "python",
+                  "-m",
+                  "compileall",
+                  "-q",
+                  "."
+                ],
+                "duration_ms": 134.40285000251606,
+                "exit_code": 0,
+                "finished_at": "2026-11-02T11:13:35.707925+00:00",
+                "logs_hash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:13:35.573525+00:00",
+                "status": "PASS",
+                "stderr": "",
+                "stdout": "",
+                "tool_name": "compileall",
+                "tool_version": "3.12.14"
+              },
+              {
+                "assertion_count": null,
+                "case_count": 6,
+                "category": "unit",
+                "command": [
+                  "python",
+                  "-m",
+                  "pytest",
+                  "/acceptance/test_calc.py",
+                  "-q"
+                ],
+                "duration_ms": 1132.72118399982,
+                "exit_code": 0,
+                "finished_at": "2026-11-02T11:13:36.840680+00:00",
+                "logs_hash": "5ee5e5f10b1fe3cd05ee85d7be5ffbb929cc61b21dd428540ad8c6ddbdc5211e",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:13:35.707968+00:00",
+                "status": "PASS",
+                "stderr": "",
+                "stdout": "......                                                                   [100%]\n=============================== warnings summary ===============================\n../usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469\n  /usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469: PytestCacheWarning: could not create cache path /dev/.pytest_cache/v/cache/nodeids: [Errno 13] Permission denied: '/dev/pytest-cache-files-qwokxyrx'\n    config.cache.set(\"cache/nodeids\", sorted(self.cached_nodeids))\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n6 passed, 1 warning in 0.02s\n",
+                "tool_name": "pytest",
+                "tool_version": "9.1.1"
+              },
+              {
+                "assertion_count": null,
+                "case_count": null,
+                "category": "static",
+                "command": [
+                  "python",
+                  "-m",
+                  "mypy",
+                  "--cache-dir=/tmp/mypy-cache",
+                  "modern"
+                ],
+                "duration_ms": 5546.458647997497,
+                "exit_code": 0,
+                "finished_at": "2026-11-02T11:13:42.387167+00:00",
+                "logs_hash": "301ebcaac2b22416681032881ce335c2916f748639be5c1228294dbd7dcad40a",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:13:36.840718+00:00",
+                "status": "PASS",
+                "stderr": "/dev/null: No [mypy] section in config file\n",
+                "stdout": "Success: no issues found in 1 source file\n",
+                "tool_name": "mypy",
+                "tool_version": "1.15.0"
+              },
+              {
+                "assertion_count": null,
+                "case_count": null,
+                "category": "security",
+                "command": [
+                  "python",
+                  "-m",
+                  "bandit",
+                  "-r",
+                  "modern",
+                  "-q"
+                ],
+                "duration_ms": 647.1909889987728,
+                "exit_code": 0,
+                "finished_at": "2026-11-02T11:13:43.034378+00:00",
+                "logs_hash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "skipped_reason": null,
+                "started_at": "2026-11-02T11:13:42.387201+00:00",
+                "status": "PASS",
+                "stderr": "",
+                "stdout": "",
+                "tool_name": "bandit",
+                "tool_version": "1.8.3"
+              }
+            ],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 90.53710700027295,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": 3, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "case-one"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793618014.7271411
+          },
+          "stage": "verify",
+          "started_at": 1793618014.727153,
+          "stderr": "",
+          "stdout": "{\"checks\": [{\"category\": \"build\", \"command\": [\"python\", \"-m\", \"compileall\", \"-q\", \".\"], \"tool_name\": \"compileall\", \"tool_version\": \"3.12.14\", \"started_at\": \"2026-11-02T11:13:35.573525+00:00\", \"finished_at\": \"2026-11-02T11:13:35.707925+00:00\", \"exit_code\": 0, \"duration_ms\": 134.40285000251606, \"stdout\": \"\", \"stderr\": \"\", \"logs_hash\": \"01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b\", \"case_count\": null, \"assertion_count\": null, \"status\": \"PASS\", \"skipped_reason\": null}, {\"category\": \"unit\", \"command\": [\"python\", \"-m\", \"pytest\", \"/acceptance/test_calc.py\", \"-q\"], \"tool_name\": \"pytest\", \"tool_version\": \"9.1.1\", \"started_at\": \"2026-11-02T11:13:35.707968+00:00\", \"finished_at\": \"2026-11-02T11:13:36.840680+00:00\", \"exit_code\": 0, \"duration_ms\": 1132.72118399982, \"stdout\": \"......                                                                   [100%]\\n=============================== warnings summary ===============================\\n../usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469\\n  /usr/local/lib/python3.12/site-packages/_pytest/cacheprovider.py:469: PytestCacheWarning: could not create cache path /dev/.pytest_cache/v/cache/nodeids: [Errno 13] Permission denied: '/dev/pytest-cache-files-qwokxyrx'\\n    config.cache.set(\\\"cache/nodeids\\\", sorted(self.cached_nodeids))\\n\\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\\n6 passed, 1 warning in 0.02s\\n\", \"stderr\": \"\", \"logs_hash\": \"5ee5e5f10b1fe3cd05ee85d7be5ffbb929cc61b21dd428540ad8c6ddbdc5211e\", \"case_count\": 6, \"assertion_count\": null, \"status\": \"PASS\", \"skipped_reason\": null}, {\"category\": \"static\", \"command\": [\"python\", \"-m\", \"mypy\", \"--cache-dir=/tmp/mypy-cache\", \"modern\"], \"tool_name\": \"mypy\", \"tool_version\": \"1.15.0\", \"started_at\": \"2026-11-02T11:13:36.840718+00:00\", \"finished_at\": \"2026-11-02T11:13:42.387167+00:00\", \"exit_code\": 0, \"duration_ms\": 5546.458647997497, \"stdout\": \"Success: no issues found in 1 source file\\n\", \"stderr\": \"/dev/null: No [mypy] section in config file\\n\", \"logs_hash\": \"301ebcaac2b22416681032881ce335c2916f748639be5c1228294dbd7dcad40a\", \"case_count\": null, \"assertion_count\": null, \"status\": \"PASS\", \"skipped_reason\": null}, {\"category\": \"security\", \"command\": [\"python\", \"-m\", \"bandit\", \"-r\", \"modern\", \"-q\"], \"tool_name\": \"bandit\", \"tool_version\": \"1.8.3\", \"started_at\": \"2026-11-02T11:13:42.387201+00:00\", \"finished_at\": \"2026-11-02T11:13:43.034378+00:00\", \"exit_code\": 0, \"duration_ms\": 647.1909889987728, \"stdout\": \"\", \"stderr\": \"\", \"logs_hash\": \"01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b\", \"case_count\": null, \"assertion_count\": null, \"status\": \"PASS\", \"skipped_reason\": null}], \"observations\": [{\"test_case_id\": \"case-one\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 90.53710700027295, \"stdout\": \"{\\\"output\\\": 3, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-a1fb4e1e18a74797bd8720244b3ca299-verify"
+        },
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "reason": "Operator image vulnerability scanner trivy is unavailable",
+          "status": "NOT_RUN"
+        },
+        "input_hash": "ab86a78247d933ffb4f8b13af29d4232d524bc85f4f799e201bb6757533cf096",
+        "job_id": "f1b39e267347401c9b1072f813447ed9",
+        "lease_expires_at": 1793618061.8605986,
+        "lease_generation": 1,
+        "lease_token": "8d1262d7d7c846f2b93a7624a4032dd7",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "9789e3132bc0a417cdc94813a545d00d476c0981bfbd3a4799a82bfc8997ef05",
+          "deadline_at": 1793618046.8597908,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793618013.544636,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "995820ba08f0e0e0c20f94a9b805d31b42843e2cdd899fc526c003333c89fe0d",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793618012.8407388
+          },
+          "stage": "preflight",
+          "started_at": 1793618012.840751,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-a1fb4e1e18a74797bd8720244b3ca299-preflight"
+        },
+        "request_id": "a1fb4e1e18a74797bd8720244b3ca299",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "ef98e00dd6b052d938f30d65b79c0a6d9acbbaaefc4d7df4ddb3e9dd8b9c0eaf",
+          "deadline_at": 1793618058.3588889,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793618025.130518,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793618024.4262927
+          },
+          "stage": "review",
+          "started_at": 1793618024.4263043,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-a1fb4e1e18a74797bd8720244b3ca299-review"
+        },
+        "suite_hash": "c0fd84faa9c3516bb2469b74a97a128fb0617dc626e333f66b1b91474806a832",
+        "worker_id": "verifier-54082-d3979f74bb0a482e89987b5eea2177b3"
+      }
+    }
+  ],
+  "immutable_input_change_denied": true,
+  "cross_job_status_denied": true,
+  "persistent_result_survived_restart": true,
+  "provider_lineage": {
+    "local_request_id": "w09-test-9872013227724972ba50467f5f046cee",
+    "provider_request_id": "chatcmpl-Efk1k4bTOGVbyAQoIUr5POQTuf0F7",
+    "changeset_sha256": "d835bbccb849233413b65dfd9503a5a7608d8544f7374cbfcdfe0eff14d94a0b",
+    "evidence_sha256": "4698985a6ec47fed9a9329170e9635a256c67a191559fcb0fe3913b7a190caea"
+  }
+}

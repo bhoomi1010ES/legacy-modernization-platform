@@ -101,28 +101,37 @@ class StructureModulesWorker(BaseAnalyzerWorker):
                 discovered_roots.add(module_dir)
 
             if not discovered_roots:
-                # Fallback to top-level source folders (src, lib, app)
+                # Discover top-level source packages naturally from repository files
                 all_dirs = set(inventory.directories)
                 all_dirs.update(f.path.split("/")[0] for f in inventory.files if "/" in f.path)
                 for d in all_dirs:
                     parts = d.split("/")
-                    if len(parts) == 1 and parts[0] in {"src", "app", "lib", "pkg", "backend", "frontend", "core"}:
+                    if len(parts) == 1 and parts[0] not in {"tests", "test", ".git", ".github", "docs"}:
                         discovered_roots.add(parts[0])
 
-            # If only a single generic root like "src" or "." was found, inspect subdirectories
-            # (e.g., src/models, src/services, src/api) to identify modular component boundaries
+            # If only a single generic root was found, inspect natural subdirectories
+            # to identify modular component boundaries
             if len(discovered_roots) <= 1:
                 sub_packages: Set[str] = set()
                 for f in inventory.files:
                     parts = f.path.replace("\\", "/").split("/")
-                    if len(parts) >= 3 and parts[0] in {"src", "app", "lib", "pkg", "core"}:
+                    if len(parts) >= 3 and parts[0] not in {"tests", "test", ".git", ".github", "docs"}:
                         sub_packages.add(f"{parts[0]}/{parts[1]}")
                     elif len(parts) >= 2 and parts[0] not in {"tests", "test", ".git", ".github", "docs"}:
                         sub_packages.add(parts[0])
                 if len(sub_packages) > 1:
                     discovered_roots = sub_packages
 
-            if not discovered_roots:
+            # Ensure all repository files are covered by at least one module.
+            # If root files exist outside sub-directories, include '.' (root module).
+            if discovered_roots:
+                uncovered = [
+                    f.path for f in inventory.files
+                    if not any(f.path == r or f.path.startswith(f"{r}/") for r in discovered_roots)
+                ]
+                if uncovered:
+                    discovered_roots.add(".")
+            else:
                 discovered_roots.add(".")
 
             for mod_path in sorted(discovered_roots):
@@ -130,15 +139,24 @@ class StructureModulesWorker(BaseAnalyzerWorker):
                 clean_name = mod_name.replace("/", "-").replace("\\", "-")
                 mod_id = f"mod_{clean_name}_{uuid.uuid4().hex[:6]}"
 
-                # Collect files in this module
-                mod_files = [
-                    f.path for f in inventory.files
-                    if mod_path == "." or f.path.startswith(f"{mod_path}/")
-                ]
+                # Collect files in this module ensuring no file is dropped
+                if mod_path == ".":
+                    if len(discovered_roots) > 1:
+                        mod_files = [
+                            f.path for f in inventory.files
+                            if not any(f.path.startswith(f"{r}/") for r in discovered_roots if r != ".")
+                        ]
+                    else:
+                        mod_files = [f.path for f in inventory.files]
+                else:
+                    mod_files = [
+                        f.path for f in inventory.files
+                        if f.path == mod_path or f.path.startswith(f"{mod_path}/")
+                    ]
 
                 # Identify language
                 langs = [f.language for f in inventory.files if f.path in mod_files and f.language]
-                primary_lang = max(set(langs), key=langs.count) if langs else "Java"
+                primary_lang = max(set(langs), key=langs.count) if langs else "Unknown"
 
                 # Check for entry points
                 entry_points: List[str] = []
@@ -614,7 +632,21 @@ class TestsWorker(BaseAnalyzerWorker):
 
             for loc in sorted(test_locations):
                 loc_files = [f for f in test_files if f.path.startswith(f"{loc}/")]
-                framework = "JUnit" if any("java" in f.path.lower() for f in loc_files) else "pytest"
+                framework = "native-test-suite"
+                for tf in loc_files:
+                    try:
+                        t_text = (workspace_path / tf.path).read_text(encoding="utf-8", errors="replace")
+                        if "junit" in t_text.lower() or "@Test" in t_text:
+                            framework = "JUnit"
+                            break
+                        elif any(k in t_text for k in ["describe(", "it(", "test(", "expect("]):
+                            framework = "Jest/Vitest"
+                            break
+                        elif "pytest" in t_text or "unittest" in t_text:
+                            framework = "pytest"
+                            break
+                    except Exception:
+                        pass
 
                 ev = evidence_service.create_evidence(
                     source_artifact=inventory.inventory_hash,

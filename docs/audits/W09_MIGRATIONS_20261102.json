@@ -1,0 +1,34 @@
+{
+  "scope": "Forward migration acceptance on a schema-only isolated PostgreSQL clone; live DB is read only.",
+  "migration_exit_code": 0,
+  "migration_steps": [
+    "INFO  [alembic.runtime.migration] Running upgrade d9e0f1a2b3c4 -> e9f0a1b2c3d4, Bind durable verification rows to a candidate tree hash, not a commit.",
+    "INFO  [alembic.runtime.migration] Running upgrade e9f0a1b2c3d4 -> f0a1b2c3d4e5, Link independently controlled system verification without rewriting historical rows.",
+    "INFO  [alembic.runtime.migration] Running upgrade f0a1b2c3d4e5 -> f1b2c3d4e5f6, Append explicit request attempt/selection and reconciliation evidence."
+  ],
+  "status": "PASS",
+  "from_revision": "d9e0f1a2b3c4",
+  "to_revision": "f1b2c3d4e5f6",
+  "historical_request_preserved": true,
+  "verification_columns": [
+    "verification_run_id",
+    "attempt_id",
+    "agent_run_id",
+    "candidate_hash",
+    "suite_hash",
+    "profile_version",
+    "profile_digest",
+    "input_hash",
+    "worker_id",
+    "lease_token",
+    "lease_expires_at",
+    "status",
+    "started_at",
+    "finished_at",
+    "evidence",
+    "evidence_hash",
+    "created_at",
+    "integration_run_id"
+  ],
+  "isolated_database_cleanup": true
+}

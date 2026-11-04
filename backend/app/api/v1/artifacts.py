@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, require_job_access
-from app.core.errors import NotFoundException, ForbiddenException
+from app.core.errors import NotFoundException, ForbiddenException, ConflictException
 from app.models.artifact import Artifact
 from app.models.job import Job
 from app.models.user import User
@@ -38,10 +38,24 @@ class CreateArtifactPayload(BaseModel):
 async def download_artifact(artifact_id: uuid.UUID, access=Depends(require_job_access("artifact:download")), db=Depends(get_db)):
     try:
         artifact, raw = await artifact_service.get_artifact_content(db, access[0].job_id, artifact_id)
-        return Response(content=raw, media_type=artifact.media_type, headers={"Content-Disposition": f'attachment; filename="{artifact.artifact_id}.json"', "X-Content-SHA256": artifact.content_hash, "X-Content-Type-Options": "nosniff"})
+        await _authorize_delivery_download(db, access[0], artifact)
+        suffix = ".zip" if artifact.media_type == "application/zip" else ".json"
+        return Response(content=raw, media_type=artifact.media_type, headers={"Content-Disposition": f'attachment; filename="modernized-project-{artifact.artifact_id}{suffix}"', "X-Content-SHA256": artifact.content_hash, "X-Content-Type-Options": "nosniff"})
     except Exception:
         logger.exception("artifacts.download_artifact failed")
         raise
+
+
+async def _authorize_delivery_download(db, job, artifact):
+    kind = ''.join(ch for ch in artifact.artifact_type.upper() if ch.isalnum())
+    if artifact.media_type != 'application/zip' and kind not in {'MODERNIZEDPROJECTZIP', 'MODERNIZATIONMANIFEST'}:
+        return
+    from app.services.phase7_service import delivery
+    current = await delivery(db, job)
+    package = current.get('delivery_zip') or {}
+    allowed = {package.get('artifact_id'), package.get('manifest_artifact_id')}
+    if not current.get('delivery_ready') or not current.get('package_current') or str(artifact.artifact_id) not in allowed:
+        raise ConflictException('Delivery requires the current verified ZIP and human G4 approval')
 
 
 def _artifact_to_response(art: Artifact) -> ArtifactResponse:
@@ -51,11 +65,15 @@ def _artifact_to_response(art: Artifact) -> ArtifactResponse:
         artifact_type=art.artifact_type,
         version=art.version,
         content_hash=art.content_hash,
-        storage_path=art.storage_path,
         producing_agent=art.producing_agent,
         derived_from=art.derived_from or [],
         size_bytes=art.content_size_bytes,
         created_at=art.created_at.isoformat() if hasattr(art.created_at, "isoformat") else str(art.created_at),
+        schema_version=getattr(art, "schema_version", "1.0.0"),
+        is_invalidated=getattr(art, "is_invalidated", False),
+        invalidated_at=art.invalidated_at.isoformat() if getattr(art, "invalidated_at", None) else None,
+        invalidation_reason=getattr(art, "invalidation_reason", None),
+        producer_run_id=str(art.producer_run_id) if getattr(art, "producer_run_id", None) else None,
     )
 
 
@@ -101,7 +119,7 @@ async def create_artifact(
         "SCHEMAMIGRATIONPLAN", "CONVERSIONPLAN", "CHANGESET",
         "VERIFICATIONREPORT", "SYSTEMVERIFICATION", "SYSTEMVERIFICATIONREPORT",
         "INTEGRATEDWORKSPACE", "INTEGRATIONREPORT", "JOBREPORT", "SBOM",
-        "DELIVERYRECORD", "PULLREQUESTRECORD",
+        "DELIVERYRECORD", "DELIVERYPACKAGE", "PULLREQUESTRECORD", "MODERNIZATIONMANIFEST",
     }
     if normalized_type in workflow_owned:
         raise ForbiddenException("Workflow-owned evidence can only be published by a supervisor-dispatched agent")
@@ -164,6 +182,7 @@ async def get_artifact_content(
     except ValueError:
         raise NotFoundException("Artifact", artifact_id)
     artifact, content_bytes = await artifact_service.get_artifact_content(db, job.job_id, art_uuid)
+    await _authorize_delivery_download(db, job, artifact)
     try:
         parsed_json = json.loads(content_bytes.decode("utf-8"))
     except Exception:

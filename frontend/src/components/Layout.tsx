@@ -225,7 +225,7 @@ export const Layout: React.FC<LayoutProps> = ({
               <div style={{ fontWeight: 650, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {user ? user.full_name : 'Authorized User'}
               </div>
-              <small>{user ? user.role : 'ADMIN'}</small>
+              <small>Signed in</small>
             </div>
             <button
               onClick={() => {

@@ -41,7 +41,7 @@ class ChangeSet(BaseModel):
 
 class CheckSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    category: Literal["build", "unit", "static", "security"]
+    category: Literal["build", "unit", "static", "security", "dependency", "license", "schema", "runtime", "integration", "api_compatibility", "sbom"]
     command: list[str] = Field(min_length=1, max_length=32)
 
 

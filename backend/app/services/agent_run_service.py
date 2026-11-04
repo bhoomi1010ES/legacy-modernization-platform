@@ -81,6 +81,13 @@ class AgentRunService:
         row.input_tokens = result.input_tokens
         row.output_tokens = result.output_tokens
         row.cost_usd = Decimal(str(result.cost_usd))
+        row.reported_input_tokens = getattr(result, "reported_input_tokens", None) or result.input_tokens
+        row.reported_output_tokens = getattr(result, "reported_output_tokens", None) or result.output_tokens
+        row.provider_request_id = getattr(result, "provider_request_id", None) or getattr(result.trace, "provider_request_id", None)
+        row.provider_model_id = getattr(result, "provider_model_id", None) or task.model_identifier
+        row.pricing_table_version = getattr(result, "pricing_table_version", None)
+        row.estimated_cost = Decimal(str(result.cost_usd)) if result.cost_usd is not None else None
+        row.billed_cost = Decimal(str(result.billed_cost)) if getattr(result, "billed_cost", None) is not None else None
         row.error_message = result.error_message
         row.failure_classification = result.failure_classification.value if result.failure_classification else None
         row.trace_payload = result.trace.model_dump(mode="json")

@@ -1,0 +1,93 @@
+{
+  "scope": "Configured OpenAI key; isolated persistent test ledger. No production gate decision, job conversion, or ZIP acceptance is claimed.",
+  "request_id": "w09-test-9872013227724972ba50467f5f046cee",
+  "requested_provider": "openai",
+  "requested_model": "gpt-4o-mini",
+  "maximum_output_tokens": 256,
+  "request_budget_usd": 0.01,
+  "automatic_retries": 0,
+  "documentation": "https://developers.openai.com/api/docs/models/gpt-4o-mini",
+  "status": "PASS",
+  "actual_model": "gpt-4o-mini-2024-07-18",
+  "provider_request_id": "chatcmpl-Efk1k4bTOGVbyAQoIUr5POQTuf0F7",
+  "usage": {
+    "input_tokens": 67,
+    "output_tokens": 67,
+    "cost_usd": 5e-05,
+    "reported_input_tokens": 67,
+    "reported_output_tokens": 67,
+    "provider_request_id": "chatcmpl-Efk1k4bTOGVbyAQoIUr5POQTuf0F7",
+    "provider_model_id": "gpt-4o-mini-2024-07-18",
+    "pricing_table_version": null,
+    "estimated_cost": 5e-05,
+    "billed_cost": null
+  },
+  "provider_metadata": {
+    "model": "gpt-4o-mini-2024-07-18",
+    "created": 1793617084,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 67,
+      "completion_tokens": 67,
+      "total_tokens": 134,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "audio_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "audio_tokens": 0,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0
+      }
+    },
+    "usage_reported": true,
+    "cost_source": "estimated_not_provider_billed",
+    "model_lane": "budget_capped_real",
+    "acceptance_claim_valid": true,
+    "cumulative_spend_usd": 5e-05,
+    "request_id": "w09-test-9872013227724972ba50467f5f046cee",
+    "provider": "openai",
+    "requested_model": "gpt-4o-mini",
+    "actual_model": "gpt-4o-mini-2024-07-18",
+    "prompt_revision": "w09-isolated-bounded-changeset-v1",
+    "attempts": 1
+  },
+  "changeset": {
+    "files": {
+      "modern/calc.py": "def add(x: int, y: int) -> int:\n    return x + y"
+    },
+    "design_notes": "This module provides a simple addition function with type annotations.",
+    "assumptions": [],
+    "test_commands": []
+  },
+  "changeset_sha256": "d835bbccb849233413b65dfd9503a5a7608d8544f7374cbfcdfe0eff14d94a0b",
+  "ledger": {
+    "status": "COMPLETED",
+    "requested_model": "gpt-4o-mini",
+    "actual_model": "gpt-4o-mini-2024-07-18",
+    "provider_request_id": "chatcmpl-Efk1k4bTOGVbyAQoIUr5POQTuf0F7",
+    "reserved_usd": "0.010000",
+    "estimated_cost_usd": "0.000050",
+    "billed_cost_usd": null,
+    "input_tokens": "67",
+    "output_tokens": "67",
+    "attempt_count": "1",
+    "rate_limit_count": "0",
+    "last_error_type": null,
+    "started_at": "2026-11-02 10:58:02.104600",
+    "finished_at": "2026-11-02 10:58:05.478489"
+  },
+  "budget": {
+    "ceiling_usd": "0.010000",
+    "reserved_usd": "0.000000",
+    "spent_usd": "0.000050"
+  },
+  "duplicate_dispatch_blocked": true,
+  "over_ceiling_reservation_blocked": true,
+  "persistent_recovery": {
+    "status": "COMPLETED",
+    "actual_model": "gpt-4o-mini-2024-07-18",
+    "provider_request_id": "chatcmpl-Efk1k4bTOGVbyAQoIUr5POQTuf0F7"
+  }
+}

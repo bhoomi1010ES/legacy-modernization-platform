@@ -1,0 +1,2804 @@
+{
+  "scope": "Real bounded containment probes; not full W09 acceptance. Missing tools never count as verification PASS.",
+  "health": {
+    "blocked_reasons": [],
+    "images": [
+      "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3"
+    ],
+    "runtime": {
+      "cgroup_version": "2",
+      "docker_version": "29.9.2",
+      "runtime_name": "docker-rootless",
+      "security_options": [
+        "name=seccomp,profile=builtin",
+        "name=rootless",
+        "name=cgroupns"
+      ],
+      "selected_runtime": "runc",
+      "timestamp": 1793621026.6877139
+    },
+    "status": "ready",
+    "worker_alive": true,
+    "worker_pid": 84116
+  },
+  "fixtures": [
+    {
+      "fixture": "path-traversal",
+      "attempt_id": "ce524d2830f04b0dac7b06f359c882bd",
+      "request_id": "d1faed9c56c946e0bb58002bf726ccfc",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "POLICY_DENIAL",
+      "actual": {
+        "policy_denied": true,
+        "output": null,
+        "status": null
+      },
+      "execution_mode": "POLICY_REJECTION",
+      "started_at": 1793621026.6888273,
+      "finished_at": 1793621026.766265,
+      "evidence": {},
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "symlink-escape",
+      "attempt_id": "d55c5749a1f24e47ad05d337ed4e8ed2",
+      "request_id": "ae5658c6da354edca26795b3e7f71233",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793621026.7665043,
+      "finished_at": 1793621037.1797812,
+      "evidence": {
+        "attempt_id": "d55c5749a1f24e47ad05d337ed4e8ed2",
+        "candidate_hash": "3d8f63539ed14b7cc7be0f6e0c695b8a0548d2c1cd9cb4ee3274250c0ce58395",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "a6a7e935aec832e8d01425f27a775adf6ee12f3c15b9a0f415a0cebca2ed7b2c",
+          "deadline_at": 1793621044.9657853,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621034.1368353,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "da9557cabd820d5ab2660447b4c66be280b319e2edf1b697782384bc91cf6b33",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 275.84865000244463,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621031.7991707
+          },
+          "stage": "verify",
+          "started_at": 1793621031.7991996,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 275.84865000244463, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-ae5658c6da354edca26795b3e7f71233-verify"
+        },
+        "execution_purpose": "CONTAINMENT_DIAGNOSTIC",
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "blocking_findings": [],
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "report_hash": "db3d16e9e1d7cbe8fd2410891cb8e4459671b9f599f1fba29f7acc25e5aee0d5",
+          "status": "PASS",
+          "tool": "trivy",
+          "tool_version": "Version: 0.76.1\nVulnerability DB:\n  Version: 2\n  UpdatedAt: 2026-11-02 07:17:05.526948404 +0000 UTC\n  NextUpdate: 2026-11-03 07:17:05.526947983 +0000 UTC\n  DownloadedAt: 2026-11-02 11:22:53.128148865 +0000 UTC\n"
+        },
+        "input_hash": "7678707d852575988c8ced6be50bc8c2bc7166ea474a6f8581ca3d070d8631f8",
+        "job_id": "705701daa82a43fb88f16cb8e236759d",
+        "lease_expires_at": 1793621071.8972516,
+        "lease_generation": 1,
+        "lease_token": "ae2bec40d77042f796c51da9da49f7e4",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "fab436c4442def55ea1c9acd8ba01ffa202827921c6239642bbd58c1c0703503",
+          "deadline_at": 1793621042.3076959,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621029.965674,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9f4cb539f7a103e498a31c5f74bd03d40a41cd45cbcde43ec2a60ed0f5132531",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "8:80 rbps=10485760 wbps=10485760 riops=max wiops=max",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "credential_environment_names": [],
+            "docker_socket_paths_present": [],
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534,
+            "uid_map": "0       1000          1\n         1     100000      65536"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621028.9629714
+          },
+          "stage": "preflight",
+          "started_at": 1793621028.9630187,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"uid_map\": \"0       1000          1\\n         1     100000      65536\", \"credential_environment_names\": [], \"docker_socket_paths_present\": [], \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"8:80 rbps=10485760 wbps=10485760 riops=max wiops=max\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-ae5658c6da354edca26795b3e7f71233-preflight"
+        },
+        "request_id": "ae5658c6da354edca26795b3e7f71233",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "a29b27d6c9016d79310eba7257a65c7574a086e0031a12e158b3cbfe531c6147",
+          "deadline_at": 1793621049.1375804,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621037.0136704,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621035.9476788
+          },
+          "stage": "review",
+          "started_at": 1793621035.9476957,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-ae5658c6da354edca26795b3e7f71233-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-84116-569958c9b9c240fc998cdc92be61df10"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "host-secret-access",
+      "attempt_id": "7d11c4b6b8894ee587d0c9489ece4262",
+      "request_id": "ed0fdc1fce6d4b24b8b6f9d27377f6aa",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793621037.1799896,
+      "finished_at": 1793621047.6581094,
+      "evidence": {
+        "attempt_id": "7d11c4b6b8894ee587d0c9489ece4262",
+        "candidate_hash": "8193f373645d50aa48523f0a2f39660ccd6dca16418c8b5adca5c98c01893271",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "63b48ebf6533698c315b2ca580579a154a7fdc0ad0b85e65689f0739a5202308",
+          "deadline_at": 1793621055.6504126,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621044.7928603,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "7abc3858731aaa90b41fc3a9b3dc7dac2b4bc0e2a70d79b4481993468080a7d8",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 159.27946300143958,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621042.9893563
+          },
+          "stage": "verify",
+          "started_at": 1793621042.989377,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 159.27946300143958, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-ed0fdc1fce6d4b24b8b6f9d27377f6aa-verify"
+        },
+        "execution_purpose": "CONTAINMENT_DIAGNOSTIC",
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "blocking_findings": [],
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "report_hash": "bc2a73de5482e978161b0f150949b6909579d920ec834b28046ce834defbcdf6",
+          "status": "PASS",
+          "tool": "trivy",
+          "tool_version": "Version: 0.76.1\nVulnerability DB:\n  Version: 2\n  UpdatedAt: 2026-11-02 07:17:05.526948404 +0000 UTC\n  NextUpdate: 2026-11-03 07:17:05.526947983 +0000 UTC\n  DownloadedAt: 2026-11-02 11:22:53.128148865 +0000 UTC\n"
+        },
+        "input_hash": "02632c4938eae545341ebe95c8726171b484e9d96ca469cde9ff5778d808ac2d",
+        "job_id": "608675929f504d8399865ec741720e7a",
+        "lease_expires_at": 1793621087.5191846,
+        "lease_generation": 1,
+        "lease_token": "585be48e53bb4e3fa9e4f028beb19c59",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "170dfc0a47a1765571b99dbc32279f0ca363f905ce13c15247f0557e3d93dfd5",
+          "deadline_at": 1793621052.9073255,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621040.6503465,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9f4cb539f7a103e498a31c5f74bd03d40a41cd45cbcde43ec2a60ed0f5132531",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "8:80 rbps=10485760 wbps=10485760 riops=max wiops=max",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "credential_environment_names": [],
+            "docker_socket_paths_present": [],
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534,
+            "uid_map": "0       1000          1\n         1     100000      65536"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621039.593997
+          },
+          "stage": "preflight",
+          "started_at": 1793621039.5940115,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"uid_map\": \"0       1000          1\\n         1     100000      65536\", \"credential_environment_names\": [], \"docker_socket_paths_present\": [], \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"8:80 rbps=10485760 wbps=10485760 riops=max wiops=max\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-ed0fdc1fce6d4b24b8b6f9d27377f6aa-preflight"
+        },
+        "request_id": "ed0fdc1fce6d4b24b8b6f9d27377f6aa",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "09adf8be018e4be6a61d1c66aac7f741b54ab6ebf5e83f978ed0939b699342f2",
+          "deadline_at": 1793621059.793267,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621047.566155,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621046.523258
+          },
+          "stage": "review",
+          "started_at": 1793621046.5232747,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-ed0fdc1fce6d4b24b8b6f9d27377f6aa-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-84116-569958c9b9c240fc998cdc92be61df10"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "docker-socket-access",
+      "attempt_id": "fad83adf611d4281824537cc4f848444",
+      "request_id": "c74e9ecb226748ae8608648ee905b9ae",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793621047.6583252,
+      "finished_at": 1793621057.973588,
+      "evidence": {
+        "attempt_id": "fad83adf611d4281824537cc4f848444",
+        "candidate_hash": "3e6475f8555d40cb2425565cf6c9aa58c304b83fe133522309edca544723d47f",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "ae32a4e1794ff361e45d68355d82cd9be401467c7c7532e7afd39f967319f485",
+          "deadline_at": 1793621066.4731033,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621055.1752832,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "41461642f9318d54819a297cb399947b33da7594dd42f11b61be7db1c3d30018",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 159.10289800012833,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621053.281048
+          },
+          "stage": "verify",
+          "started_at": 1793621053.2810726,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 159.10289800012833, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-c74e9ecb226748ae8608648ee905b9ae-verify"
+        },
+        "execution_purpose": "CONTAINMENT_DIAGNOSTIC",
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "blocking_findings": [],
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "report_hash": "af14889bc8c0e16bf8f97825883dac8735e15251c5ceb937bb895e85cad24df6",
+          "status": "PASS",
+          "tool": "trivy",
+          "tool_version": "Version: 0.76.1\nVulnerability DB:\n  Version: 2\n  UpdatedAt: 2026-11-02 07:17:05.526948404 +0000 UTC\n  NextUpdate: 2026-11-03 07:17:05.526947983 +0000 UTC\n  DownloadedAt: 2026-11-02 11:22:53.128148865 +0000 UTC\n"
+        },
+        "input_hash": "63ae72961b504c5e2b316c233e2158dfd8f09c0e941fee1a191f7d5412283ae8",
+        "job_id": "44d3f47e4f6a4840a9714b95cd5be706",
+        "lease_expires_at": 1793621093.0723426,
+        "lease_generation": 1,
+        "lease_token": "bfd7ea847e864e27b6a6f2ac467b8d54",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "0712416a19f9d2b86e5abe574aef3d7a8665fbd3d3ee32bac48fdd4b2e99154d",
+          "deadline_at": 1793621063.5811515,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621051.47304,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9f4cb539f7a103e498a31c5f74bd03d40a41cd45cbcde43ec2a60ed0f5132531",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "8:80 rbps=10485760 wbps=10485760 riops=max wiops=max",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "credential_environment_names": [],
+            "docker_socket_paths_present": [],
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534,
+            "uid_map": "0       1000          1\n         1     100000      65536"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621050.5224197
+          },
+          "stage": "preflight",
+          "started_at": 1793621050.5224354,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"uid_map\": \"0       1000          1\\n         1     100000      65536\", \"credential_environment_names\": [], \"docker_socket_paths_present\": [], \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"8:80 rbps=10485760 wbps=10485760 riops=max wiops=max\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-c74e9ecb226748ae8608648ee905b9ae-preflight"
+        },
+        "request_id": "c74e9ecb226748ae8608648ee905b9ae",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "1a3f39610be095dfb60e77c5b072ab51b46c033b5f30559c87c4ce5b420b68ca",
+          "deadline_at": 1793621070.1756845,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621057.8710692,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621056.859492
+          },
+          "stage": "review",
+          "started_at": 1793621056.8595092,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-c74e9ecb226748ae8608648ee905b9ae-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-84116-569958c9b9c240fc998cdc92be61df10"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "cloud-metadata-access",
+      "attempt_id": "923cdb9a65f14b2aa1f1e350e9dd3e63",
+      "request_id": "942bb7e99b9f44d3a203719a8d3066b0",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793621057.9737654,
+      "finished_at": 1793621068.267256,
+      "evidence": {
+        "attempt_id": "923cdb9a65f14b2aa1f1e350e9dd3e63",
+        "candidate_hash": "33655afd63f9be5de47a090ef402ec14bc16f1abad2e3fe8a3321ba98d243eb8",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "fa7b65b61da32c256d8357c2607b972e6379921d57c80aec50d5397a40ab7d40",
+          "deadline_at": 1793621076.5847738,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621065.489786,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "c259e6395f9daf48d88a4063f40d7203192512bc746837cc09704da061bfcf8e",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 181.59486699732952,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621063.6597455
+          },
+          "stage": "verify",
+          "started_at": 1793621063.6597729,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 181.59486699732952, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-942bb7e99b9f44d3a203719a8d3066b0-verify"
+        },
+        "execution_purpose": "CONTAINMENT_DIAGNOSTIC",
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "blocking_findings": [],
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "report_hash": "a37a1728255941d3119d0e29b9f4fba9b226452c481c52e2489034c76909ef1a",
+          "status": "PASS",
+          "tool": "trivy",
+          "tool_version": "Version: 0.76.1\nVulnerability DB:\n  Version: 2\n  UpdatedAt: 2026-11-02 07:17:05.526948404 +0000 UTC\n  NextUpdate: 2026-11-03 07:17:05.526947983 +0000 UTC\n  DownloadedAt: 2026-11-02 11:22:53.128148865 +0000 UTC\n"
+        },
+        "input_hash": "9d73fc386f301fcd8f13b619f8f1452911adebfc497151e63dc059af872881e0",
+        "job_id": "0125f6c2383a4d36a04142fac38f1277",
+        "lease_expires_at": 1793621103.3727608,
+        "lease_generation": 1,
+        "lease_token": "2742147d2a3f4791a382296257db1482",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "f09c1ff36e956882baad1b13ab1dc058f3ce57fffea60cb398e387abf60abbf4",
+          "deadline_at": 1793621073.7584648,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621061.5846925,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9f4cb539f7a103e498a31c5f74bd03d40a41cd45cbcde43ec2a60ed0f5132531",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "8:80 rbps=10485760 wbps=10485760 riops=max wiops=max",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "credential_environment_names": [],
+            "docker_socket_paths_present": [],
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534,
+            "uid_map": "0       1000          1\n         1     100000      65536"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621060.5024397
+          },
+          "stage": "preflight",
+          "started_at": 1793621060.5024629,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"uid_map\": \"0       1000          1\\n         1     100000      65536\", \"credential_environment_names\": [], \"docker_socket_paths_present\": [], \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"8:80 rbps=10485760 wbps=10485760 riops=max wiops=max\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-942bb7e99b9f44d3a203719a8d3066b0-preflight"
+        },
+        "request_id": "942bb7e99b9f44d3a203719a8d3066b0",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "d6a9dc2efac14989cbd41282e3563be73be2f9dd53999a93a809585cb9cac70f",
+          "deadline_at": 1793621080.490385,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621068.159214,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621067.136016
+          },
+          "stage": "review",
+          "started_at": 1793621067.1360314,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-942bb7e99b9f44d3a203719a8d3066b0-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-84116-569958c9b9c240fc998cdc92be61df10"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "other-tenant-access",
+      "attempt_id": "c205ccd8c2c949f4a8c1cd1fb1708f02",
+      "request_id": "2bc0ac80e9e648bab458c2ca4a00b159",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793621068.2674685,
+      "finished_at": 1793621078.9703922,
+      "evidence": {
+        "attempt_id": "c205ccd8c2c949f4a8c1cd1fb1708f02",
+        "candidate_hash": "cf0542272b9b18975694d13844583d0eeaf42652bb52e363848a714deb00ff01",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "cef2e91db0dbf85c85292d15092527c3769bfd0ec84cca3253b0218ed6950792",
+          "deadline_at": 1793621086.7291067,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621075.541717,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "4b1e11d2004a4094767fc23f2d7601abd09e1e84266328846cac3211de7461eb",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 168.03907199937385,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621073.8875136
+          },
+          "stage": "verify",
+          "started_at": 1793621073.8875387,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 168.03907199937385, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-2bc0ac80e9e648bab458c2ca4a00b159-verify"
+        },
+        "execution_purpose": "CONTAINMENT_DIAGNOSTIC",
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "blocking_findings": [],
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "report_hash": "5a421255eae424d11fbcbd4598dfb14aad51d58e0e668689f543a1e42a716a22",
+          "status": "PASS",
+          "tool": "trivy",
+          "tool_version": "Version: 0.76.1\nVulnerability DB:\n  Version: 2\n  UpdatedAt: 2026-11-02 07:17:05.526948404 +0000 UTC\n  NextUpdate: 2026-11-03 07:17:05.526947983 +0000 UTC\n  DownloadedAt: 2026-11-02 11:22:53.128148865 +0000 UTC\n"
+        },
+        "input_hash": "2e89a53959df88d76033d708d0eb5f908db97c9c97ea42eb4da414b99e3731d1",
+        "job_id": "f2f2f862f7ce41858d99d378537f00a4",
+        "lease_expires_at": 1793621118.6650093,
+        "lease_generation": 1,
+        "lease_token": "29d853ff7fd94e13839eb338fb9bd9a4",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "224c4d5f70e7d52e92de83d731e621afb023fb1ef96a37b15fa3b088ed2b03a3",
+          "deadline_at": 1793621084.0763087,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621071.728992,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9f4cb539f7a103e498a31c5f74bd03d40a41cd45cbcde43ec2a60ed0f5132531",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "8:80 rbps=10485760 wbps=10485760 riops=max wiops=max",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "credential_environment_names": [],
+            "docker_socket_paths_present": [],
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534,
+            "uid_map": "0       1000          1\n         1     100000      65536"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621070.7515054
+          },
+          "stage": "preflight",
+          "started_at": 1793621070.7515287,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"uid_map\": \"0       1000          1\\n         1     100000      65536\", \"credential_environment_names\": [], \"docker_socket_paths_present\": [], \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"8:80 rbps=10485760 wbps=10485760 riops=max wiops=max\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-2bc0ac80e9e648bab458c2ca4a00b159-preflight"
+        },
+        "request_id": "2bc0ac80e9e648bab458c2ca4a00b159",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "f4464b47d0ecd133b331a0f34e96931c1a8a77860a12f830f5e28a7d381508c0",
+          "deadline_at": 1793621090.5421867,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621078.8320377,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621077.7283542
+          },
+          "stage": "review",
+          "started_at": 1793621077.7283723,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-2bc0ac80e9e648bab458c2ca4a00b159-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-84116-569958c9b9c240fc998cdc92be61df10"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "fork-bomb-bounded",
+      "attempt_id": "06e2e5b7e0b54feb9e9236eac20fdc45",
+      "request_id": "942d0a2217844d17ba3f66019a7bd34f",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793621078.9706092,
+      "finished_at": 1793621091.2241902,
+      "evidence": {
+        "attempt_id": "06e2e5b7e0b54feb9e9236eac20fdc45",
+        "candidate_hash": "9923dfc776f2fc47f2a3fc65d44a9bc05f39749d097794f9a11b5faba86d33c6",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "ccf7d18cd158eaec2a97c610524160a323435c0d35afc89a3855a7828abd0736",
+          "deadline_at": 1793621097.546074,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621088.1026258,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "1e16c00aa865169a2340aeb63f7bfe006606ae33b708f81ebcbf19de60ba4faa",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 1769.9463280005148,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621084.8099132
+          },
+          "stage": "verify",
+          "started_at": 1793621084.809931,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 1769.9463280005148, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-942d0a2217844d17ba3f66019a7bd34f-verify"
+        },
+        "execution_purpose": "CONTAINMENT_DIAGNOSTIC",
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "blocking_findings": [],
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "report_hash": "66e12de00e0a8980d821e76133cdc6586a30b2f689523a6304c09d21fdbf9ced",
+          "status": "PASS",
+          "tool": "trivy",
+          "tool_version": "Version: 0.76.1\nVulnerability DB:\n  Version: 2\n  UpdatedAt: 2026-11-02 07:17:05.526948404 +0000 UTC\n  NextUpdate: 2026-11-03 07:17:05.526947983 +0000 UTC\n  DownloadedAt: 2026-11-02 11:22:53.128148865 +0000 UTC\n"
+        },
+        "input_hash": "3ebe6f42d5b0652332da27c53ba6e751df6e87e9733c1316013627ee34dc493a",
+        "job_id": "79a3296a197c47e68cbf888da41a5337",
+        "lease_expires_at": 1793621129.3372984,
+        "lease_generation": 1,
+        "lease_token": "748f0b6d457b456db5741a0ab5fbad4f",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "eb515ead9ea0af91253d357d8bb72aafcf87555af88f4aeb135d491393b7a847",
+          "deadline_at": 1793621094.7504954,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621082.5459824,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9f4cb539f7a103e498a31c5f74bd03d40a41cd45cbcde43ec2a60ed0f5132531",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "8:80 rbps=10485760 wbps=10485760 riops=max wiops=max",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "credential_environment_names": [],
+            "docker_socket_paths_present": [],
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534,
+            "uid_map": "0       1000          1\n         1     100000      65536"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621081.415801
+          },
+          "stage": "preflight",
+          "started_at": 1793621081.4158244,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"uid_map\": \"0       1000          1\\n         1     100000      65536\", \"credential_environment_names\": [], \"docker_socket_paths_present\": [], \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"8:80 rbps=10485760 wbps=10485760 riops=max wiops=max\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-942d0a2217844d17ba3f66019a7bd34f-preflight"
+        },
+        "request_id": "942d0a2217844d17ba3f66019a7bd34f",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "1b4a3bc5dbb84d664839d29cbcc7a11c5d28b84ca8dde749d5e162f9e94d56cd",
+          "deadline_at": 1793621103.103277,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621090.9986916,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621089.8785665
+          },
+          "stage": "review",
+          "started_at": 1793621089.8785932,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-942d0a2217844d17ba3f66019a7bd34f-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-84116-569958c9b9c240fc998cdc92be61df10"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "infinite-loop",
+      "attempt_id": "4107fa098ac1492bafc5632662a911bb",
+      "request_id": "43352341b8444bc38e22f2f96c65520c",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "DEADLINE",
+      "actual": {
+        "policy_denied": false,
+        "output": null,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793621091.2243934,
+      "finished_at": 1793621105.2292812,
+      "evidence": {
+        "attempt_id": "4107fa098ac1492bafc5632662a911bb",
+        "candidate_hash": "3df15a468e51acdc69bf21dec8133183cadb5da1d0fdc2756c1d3560eb6987ba",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "31d0b6a82e46d2df5f60f3075adce6655a13d42d513d00cbe45303f065d473d6",
+          "deadline_at": 1793621100.6936083,
+          "execution_uid": "65534:65534",
+          "exit_code": 137,
+          "finished_at": 1793621101.9976354,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621097.3894646
+          },
+          "stage": "verify",
+          "started_at": 1793621097.38948,
+          "stderr": "",
+          "stdout": "",
+          "termination": {
+            "reason": "DEADLINE_EXCEEDED",
+            "timestamp": 1793621101.6072373
+          },
+          "worker_id": "rebase-43352341b8444bc38e22f2f96c65520c-verify"
+        },
+        "execution_purpose": "CONTAINMENT_DIAGNOSTIC",
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "blocking_findings": [],
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "report_hash": "77ce9834eb1bd5c5f53ccec50a943e16253373d61acd20f3a32fc587d7844717",
+          "status": "PASS",
+          "tool": "trivy",
+          "tool_version": "Version: 0.76.1\nVulnerability DB:\n  Version: 2\n  UpdatedAt: 2026-11-02 07:17:05.526948404 +0000 UTC\n  NextUpdate: 2026-11-03 07:17:05.526947983 +0000 UTC\n  DownloadedAt: 2026-11-02 11:22:53.128148865 +0000 UTC\n"
+        },
+        "input_hash": "a08aaae2dfe0e5a4cc697c0a783cebcddc1eba6c01bffb3cf66f50aadba458cf",
+        "job_id": "a52af462ac874038b58760be31bd0419",
+        "lease_expires_at": 1793621141.505099,
+        "lease_generation": 1,
+        "lease_token": "fb286de22cf64a4989c6bc4d2a54ae91",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "956c5deb060b5c1a79ce9180609fa767a3d4d34f85ad35050038b06aa8a6e2cf",
+          "deadline_at": 1793621096.926029,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621095.6935515,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9f4cb539f7a103e498a31c5f74bd03d40a41cd45cbcde43ec2a60ed0f5132531",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "8:80 rbps=10485760 wbps=10485760 riops=max wiops=max",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "credential_environment_names": [],
+            "docker_socket_paths_present": [],
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534,
+            "uid_map": "0       1000          1\n         1     100000      65536"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621094.7331805
+          },
+          "stage": "preflight",
+          "started_at": 1793621094.7332036,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"uid_map\": \"0       1000          1\\n         1     100000      65536\", \"credential_environment_names\": [], \"docker_socket_paths_present\": [], \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"8:80 rbps=10485760 wbps=10485760 riops=max wiops=max\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-43352341b8444bc38e22f2f96c65520c-preflight"
+        },
+        "request_id": "43352341b8444bc38e22f2f96c65520c",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "37446db8a450b2f8f1114cd2125af51c803b87c5d5650717cf53167b3c49aa71",
+          "deadline_at": 1793621106.9982297,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621105.0532415,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621103.9356718
+          },
+          "stage": "review",
+          "started_at": 1793621103.9356973,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-43352341b8444bc38e22f2f96c65520c-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-84116-569958c9b9c240fc998cdc92be61df10"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "network-egress",
+      "attempt_id": "3f816fd9f6734d4d9ae64717b8f7aeb9",
+      "request_id": "8ad1ce887632482b9b8016117d8a9286",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793621105.2294755,
+      "finished_at": 1793621115.718181,
+      "evidence": {
+        "attempt_id": "3f816fd9f6734d4d9ae64717b8f7aeb9",
+        "candidate_hash": "76c14d09a752cd3dc5be79631b1ec878c7f9c2441e10e0731dd348aa4fda3e03",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "9836ccaf16d934b7acd35619d4e05ee606b4294fdb328c7d16b14718e794fb37",
+          "deadline_at": 1793621123.7518046,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621112.5043442,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "d354a12c8b4c8979ad5b0e9d8f44a433db3f038da622ac1b72a54d3038b3bc8e",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 235.82022699702065,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621110.4505465
+          },
+          "stage": "verify",
+          "started_at": 1793621110.4505713,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 235.82022699702065, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-8ad1ce887632482b9b8016117d8a9286-verify"
+        },
+        "execution_purpose": "CONTAINMENT_DIAGNOSTIC",
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "blocking_findings": [],
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "report_hash": "051dcc81606e7f0db16d32f2c2f4d80660754f2343c0f7de5cdd20733c39d752",
+          "status": "PASS",
+          "tool": "trivy",
+          "tool_version": "Version: 0.76.1\nVulnerability DB:\n  Version: 2\n  UpdatedAt: 2026-11-02 07:17:05.526948404 +0000 UTC\n  NextUpdate: 2026-11-03 07:17:05.526947983 +0000 UTC\n  DownloadedAt: 2026-11-02 11:22:53.128148865 +0000 UTC\n"
+        },
+        "input_hash": "232a0d271d2ce1aa1d57b317b297ef09f9fecef6c6844aa3a222cbb4d56b3fea",
+        "job_id": "a2744e1d84b341739b2971efe55fdf41",
+        "lease_expires_at": 1793621150.5594764,
+        "lease_generation": 1,
+        "lease_token": "48ddee4b24104ee09c6669371005ba5f",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "bc0832b4b0a436e8bceabdcd048fe5dda07fc989e7525583da70713bc84c6151",
+          "deadline_at": 1793621120.973113,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621108.7517376,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9f4cb539f7a103e498a31c5f74bd03d40a41cd45cbcde43ec2a60ed0f5132531",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "8:80 rbps=10485760 wbps=10485760 riops=max wiops=max",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "credential_environment_names": [],
+            "docker_socket_paths_present": [],
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534,
+            "uid_map": "0       1000          1\n         1     100000      65536"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621107.6284096
+          },
+          "stage": "preflight",
+          "started_at": 1793621107.6284418,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"uid_map\": \"0       1000          1\\n         1     100000      65536\", \"credential_environment_names\": [], \"docker_socket_paths_present\": [], \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"8:80 rbps=10485760 wbps=10485760 riops=max wiops=max\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-8ad1ce887632482b9b8016117d8a9286-preflight"
+        },
+        "request_id": "8ad1ce887632482b9b8016117d8a9286",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "c77c05c03f8d74ff4900c7a9feae6da877f5732feb3cd1dc07f6a8b9dd2bce7b",
+          "deadline_at": 1793621127.5050628,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621115.6333776,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621114.467991
+          },
+          "stage": "review",
+          "started_at": 1793621114.4680154,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-8ad1ce887632482b9b8016117d8a9286-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-84116-569958c9b9c240fc998cdc92be61df10"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "unexpected-install",
+      "attempt_id": "5c6362d12e7b4a67a6d4aaa64ebb4825",
+      "request_id": "9c1f8efb01834b4190ca20ad88029168",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "INSTALL_DENIAL",
+      "actual": {
+        "policy_denied": true,
+        "output": null,
+        "status": null
+      },
+      "execution_mode": "POLICY_REJECTION",
+      "started_at": 1793621115.7185295,
+      "finished_at": 1793621115.8079932,
+      "evidence": {},
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "unsafe-submodule",
+      "attempt_id": "7d31d228276740238137db112e936232",
+      "request_id": "f614502919af4997aa3ea27108531bc1",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "POLICY_DENIAL",
+      "actual": {
+        "policy_denied": true,
+        "output": null,
+        "status": null
+      },
+      "execution_mode": "POLICY_REJECTION",
+      "started_at": 1793621115.808244,
+      "finished_at": 1793621115.89516,
+      "evidence": {},
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "unsafe-git-hook",
+      "attempt_id": "3450a19c2cfd43b0a5d003287021eb33",
+      "request_id": "041547d4c3c1439ba2b478a0dc253cdc",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "POLICY_DENIAL",
+      "actual": {
+        "policy_denied": true,
+        "output": null,
+        "status": null
+      },
+      "execution_mode": "POLICY_REJECTION",
+      "started_at": 1793621115.895352,
+      "finished_at": 1793621115.9803236,
+      "evidence": {},
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "archive-traversal",
+      "attempt_id": "5242b4d7b77e454d9438cd08a36569bc",
+      "request_id": "44af6ef511e0433491058e17aa5fdf76",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793621115.9805467,
+      "finished_at": 1793621126.266347,
+      "evidence": {
+        "attempt_id": "5242b4d7b77e454d9438cd08a36569bc",
+        "candidate_hash": "bb00d8bdaaa7274f81086fed1bf8120b013d403ee701a972eb848c08809590d9",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "4de7768860619fa3300cbcc90781854e96366f90a3200d94e37d7fbb4d5dd5db",
+          "deadline_at": 1793621134.3205783,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621122.8906176,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "c21c47cebb7ca2cb2d071be49f43edc9a54d81ea837d8051c5f2bf8f7a21377e",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 275.99689300041064,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621120.9974291
+          },
+          "stage": "verify",
+          "started_at": 1793621120.9974544,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 275.99689300041064, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-44af6ef511e0433491058e17aa5fdf76-verify"
+        },
+        "execution_purpose": "CONTAINMENT_DIAGNOSTIC",
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "blocking_findings": [],
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "report_hash": "a5b7f58b7aec1aea4c13770ff709c62fc56cf58bbc6fe0f6cb15716151b8761b",
+          "status": "PASS",
+          "tool": "trivy",
+          "tool_version": "Version: 0.76.1\nVulnerability DB:\n  Version: 2\n  UpdatedAt: 2026-11-02 07:17:05.526948404 +0000 UTC\n  NextUpdate: 2026-11-03 07:17:05.526947983 +0000 UTC\n  DownloadedAt: 2026-11-02 11:22:53.128148865 +0000 UTC\n"
+        },
+        "input_hash": "9ae911bcec451aa7b85822d49a3d212c44f8241c47a1e314ada43f4dda35f032",
+        "job_id": "14b2b6f5003f499c84c1a3b5d09688db",
+        "lease_expires_at": 1793621161.137692,
+        "lease_generation": 1,
+        "lease_token": "eff560a8a0904006a22b95acdef79ae6",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "71904aec5f167190f146949fd67cdb8d418df727539cea2e50064f65d0dd9f5f",
+          "deadline_at": 1793621131.546712,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621119.320497,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9f4cb539f7a103e498a31c5f74bd03d40a41cd45cbcde43ec2a60ed0f5132531",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "8:80 rbps=10485760 wbps=10485760 riops=max wiops=max",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "credential_environment_names": [],
+            "docker_socket_paths_present": [],
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534,
+            "uid_map": "0       1000          1\n         1     100000      65536"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621118.2851744
+          },
+          "stage": "preflight",
+          "started_at": 1793621118.285197,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"uid_map\": \"0       1000          1\\n         1     100000      65536\", \"credential_environment_names\": [], \"docker_socket_paths_present\": [], \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"8:80 rbps=10485760 wbps=10485760 riops=max wiops=max\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-44af6ef511e0433491058e17aa5fdf76-preflight"
+        },
+        "request_id": "44af6ef511e0433491058e17aa5fdf76",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "b011b40e8b5c3f88b769d0e0a7c62ec711dd036209cc28f87efa554cbfefede7",
+          "deadline_at": 1793621137.89155,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621126.157355,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621124.9807823
+          },
+          "stage": "review",
+          "started_at": 1793621124.980807,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-44af6ef511e0433491058e17aa5fdf76-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-84116-569958c9b9c240fc998cdc92be61df10"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "archive-bomb-bounded",
+      "attempt_id": "d27dc22b26a34fe98dbffa51a4f2a822",
+      "request_id": "352ed5a6b763493aba2a89031827e69a",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793621126.2665355,
+      "finished_at": 1793621138.1786382,
+      "evidence": {
+        "attempt_id": "d27dc22b26a34fe98dbffa51a4f2a822",
+        "candidate_hash": "5b7e099d3f665c13bc6af73ebf5319668a07939d907e4af7d97006950c28e3b7",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "2047c76e1811632278118d1b8450c464ec0746893fd3f49d706dddbc6de8a5fd",
+          "deadline_at": 1793621144.9343834,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621134.3134506,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9add6af56006f9b26ea1d84dfbb00f9e424d3caccb014443e879c8d998cfe5ad",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 929.8041310030385,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621131.5796459
+          },
+          "stage": "verify",
+          "started_at": 1793621131.579661,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 929.8041310030385, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-352ed5a6b763493aba2a89031827e69a-verify"
+        },
+        "execution_purpose": "CONTAINMENT_DIAGNOSTIC",
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "blocking_findings": [],
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "report_hash": "ccffb8fa1dbe17728e5082d9d9a75a01ca7ce499ac3b8caf28854e798b07cb9b",
+          "status": "PASS",
+          "tool": "trivy",
+          "tool_version": "Version: 0.76.1\nVulnerability DB:\n  Version: 2\n  UpdatedAt: 2026-11-02 07:17:05.526948404 +0000 UTC\n  NextUpdate: 2026-11-03 07:17:05.526947983 +0000 UTC\n  DownloadedAt: 2026-11-02 11:22:53.128148865 +0000 UTC\n"
+        },
+        "input_hash": "7c288b805e4de77b80ac3af497a0701a16ce149367443643ce54dc90785bf5c0",
+        "job_id": "e27c3fb627834bca9486f89dd4cc88d8",
+        "lease_expires_at": 1793621176.8421822,
+        "lease_generation": 1,
+        "lease_token": "8f66c1e9431345bdb4e8e7c18e902d24",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "479aee323e6f96ceb9caa88e03d1c2e452cfd16b3d78112bab77de62ea0dd82a",
+          "deadline_at": 1793621142.0538514,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621129.9343228,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9f4cb539f7a103e498a31c5f74bd03d40a41cd45cbcde43ec2a60ed0f5132531",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "8:80 rbps=10485760 wbps=10485760 riops=max wiops=max",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "credential_environment_names": [],
+            "docker_socket_paths_present": [],
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534,
+            "uid_map": "0       1000          1\n         1     100000      65536"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621128.912527
+          },
+          "stage": "preflight",
+          "started_at": 1793621128.912542,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"uid_map\": \"0       1000          1\\n         1     100000      65536\", \"credential_environment_names\": [], \"docker_socket_paths_present\": [], \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"8:80 rbps=10485760 wbps=10485760 riops=max wiops=max\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-352ed5a6b763493aba2a89031827e69a-preflight"
+        },
+        "request_id": "352ed5a6b763493aba2a89031827e69a",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "BlkioDeviceReadBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "BlkioDeviceWriteBps": [
+              {
+                "Path": "/dev/sdf",
+                "Rate": 10485760
+              }
+            ],
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "a5ff2428540c836da9fcfc9a08e033bc8af92bf2286d5ad8e393e689b007f893",
+          "deadline_at": 1793621149.313971,
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793621137.9306822,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793621136.5451698
+          },
+          "stage": "review",
+          "started_at": 1793621136.5451958,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-352ed5a6b763493aba2a89031827e69a-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-84116-569958c9b9c240fc998cdc92be61df10"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "process-tree-cancellation",
+      "attempt_id": "e5553bf46d9f44a98fef5215f4a40a17",
+      "request_id": "6c8aa90f6b5b467ba7721bc81c3e30be",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "Running child tree removed",
+      "actual": {
+        "running_tree_observed": true,
+        "reply": {
+          "status": "CANCELLED"
+        }
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    }
+  ],
+  "counts": {
+    "PASS": 15,
+    "FAIL": 0
+  },
+  "host_canaries_unchanged": true
+}

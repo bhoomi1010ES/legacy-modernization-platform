@@ -1,4 +1,4 @@
-"""Domain state machine, gate policy, and RBAC governance logic."""
+"""Domain state machine and authenticated human gate policy."""
 
 from typing import Optional
 from app.core.errors import IllegalStateTransitionException, GatePolicyException, ForbiddenException
@@ -61,7 +61,6 @@ class GatePolicy:
     """Enforces non-bypassable human approval gate policies."""
 
     MIN_RATIONALE_LENGTH = 10
-    AUTHORIZED_APPROVER_ROLES = {"SUPER_ADMIN", "ADMIN", "REVIEWER"}
 
     @classmethod
     def validate_decision(
@@ -80,13 +79,9 @@ class GatePolicy:
                 issue="Every gate decision requires an authenticated human reviewer."
             )
 
-        # Rule 2: Approver must possess an authorized role
-        if actor_role not in cls.AUTHORIZED_APPROVER_ROLES:
-            raise ForbiddenException(
-                message=f"Role '{actor_role}' is not authorized to decide approval gates. Requires REVIEWER or ADMIN."
-            )
-
-        # Rule 3: Rationale must meet minimum character length
+        # Role assignments do not authorize gate decisions. Authenticated human,
+        # separation-of-duties, evidence and rationale checks remain enforced.
+        # Rule 2: Rationale must meet minimum character length
         clean_rationale = rationale.strip() if rationale else ""
         if len(clean_rationale) < cls.MIN_RATIONALE_LENGTH:
             raise GatePolicyException(
@@ -104,7 +99,7 @@ class GatePolicy:
 
 
 class RBACPolicy:
-    """Evaluates role-based permissions for users."""
+    """Compatibility adapter while authorization is role-independent."""
 
     ROLE_PERMISSIONS: dict[str, set[str]] = {
         "SUPER_ADMIN": {
@@ -139,7 +134,11 @@ class RBACPolicy:
 
     @classmethod
     def has_permission(cls, role: str, permission: str) -> bool:
-        return permission in cls.ROLE_PERMISSIONS.get(role, set())
+        return True
+
+    @classmethod
+    def permissions_for(cls, role: str) -> list[str]:
+        return sorted(set().union(*cls.ROLE_PERMISSIONS.values()))
 
     @classmethod
     def check_permission(cls, role: str, permission: str) -> None:

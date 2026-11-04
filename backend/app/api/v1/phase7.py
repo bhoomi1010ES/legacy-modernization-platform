@@ -112,21 +112,16 @@ async def delivery(access=Depends(require_job_access()), db=Depends(get_db)):
     try:
         job, user = access
         result = await service.delivery(db, job)
-        role = (
-            user.role
-            if user.role == "SUPER_ADMIN"
-            else await db.scalar(
-                select(JobMembership.role_id).where(
-                    JobMembership.job_id == job.job_id,
-                    JobMembership.user_id == user.user_id,
-                )
+        role = await db.scalar(
+            select(JobMembership.role_id).where(
+                JobMembership.job_id == job.job_id,
+                JobMembership.user_id == user.user_id,
             )
         )
         result["allowed_actions"] = [
             action
             for action, capability in (
                 ("integrate", "integration:run"),
-                ("pull_request", "delivery:publish"),
                 ("submit_g4", "integration:run"),
                 ("decide_g4", "gate:approve_g4"),
                 ("download", "artifact:download"),

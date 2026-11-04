@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import type { Job, WorkflowState, WorkflowEvent } from '../../types/domain';
+import type { AgentRun, Job, WorkflowState, WorkflowEvent } from '../../types/domain';
 import type { FileInventoryItem } from '../../types/phase4';
 import { AgentCard, AgentCardData, SpecializedWorker } from './AgentCard';
 import { FileStatusIndicator, FileAnalysisStatus } from './FileStatusIndicator';
@@ -21,6 +21,7 @@ interface AgentExecutionProps {
   job: Job | null;
   workflow: WorkflowState | null;
   events: WorkflowEvent[];
+  agentRuns?: AgentRun[];
   selectedFile: string | null;
   selectedFileItem?: FileInventoryItem | null;
   fileStatuses?: Record<string, FileAnalysisStatus>;
@@ -36,6 +37,7 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
   job,
   workflow,
   events,
+  agentRuns = [],
   selectedFile,
   selectedFileItem,
   fileStatuses = {},
@@ -70,6 +72,21 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
   const isAwaitingG4 = job?.status === 'AWAITING_GATE_G4';
   const isCompleted = job?.status === 'COMPLETED';
   const isFailed = job?.status === 'FAILED';
+  const isEscalated = workflow?.active_node === 'escalation';
+  const currentPhaseFailed = isEscalated || isFailed;
+  const failedPhase = workflow?.current_phase;
+  const latestRunsByAgent = useMemo(() => {
+    const latest = new Map<string, AgentRun>();
+    [...agentRuns]
+      .sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at))
+      .forEach((run) => {
+        const key = run.agent_name.toLowerCase();
+        if (!latest.has(key)) latest.set(key, run);
+      });
+    return [...latest.values()];
+  }, [agentRuns]);
+  const latestCharacterizerRun = latestRunsByAgent.find((run) => run.agent_name.toLowerCase().includes('characteriz'));
+  const agentRunsNeedingAttention = latestRunsByAgent.filter((run) => ['FAILED', 'BLOCKED'].includes(run.status));
 
   // Count analyzed files
   const fileStatusValues = Object.values(fileStatuses);
@@ -88,84 +105,139 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
 
     // Stage 2: Analysis Coordinator & Workers
     const isAnalysisRunning =
-      job?.status === 'ANALYZING' ||
+      (!isEscalated && job?.status === 'ANALYZING') ||
       (!isAwaitingG1 && !isCharacterizing && !isPlanning && !isAwaitingG2 && !isAwaitingG3 && !isConverting && !isCompleted && !isFailed && job?.status !== 'CREATED' && job?.status !== 'INTAKE');
 
     const analysisStatus =
-      intakeStatus !== 'COMPLETED'
+      currentPhaseFailed && (failedPhase === 'INTAKE' || failedPhase === 'G1' || failedPhase === 'SCHEMA_DATA')
+        ? 'FAILED'
+        : intakeStatus !== 'COMPLETED'
         ? 'PENDING'
         : isAnalysisRunning
         ? 'RUNNING'
         : 'COMPLETED';
 
+    const workerRunMap: Record<string, AgentRun | undefined> = {
+      structure: latestRunsByAgent.find(r => r.agent_name.toLowerCase().includes('structure')),
+      dependency: latestRunsByAgent.find(r => r.agent_name.toLowerCase().includes('dependency')),
+      interface: latestRunsByAgent.find(r => r.agent_name.toLowerCase().includes('interface')),
+      data: latestRunsByAgent.find(r => r.agent_name.toLowerCase().includes('data')),
+      test: latestRunsByAgent.find(r => r.agent_name.toLowerCase().includes('test')),
+      integration: latestRunsByAgent.find(r => r.agent_name.toLowerCase().includes('integration')),
+      risk: latestRunsByAgent.find(r => r.agent_name.toLowerCase().includes('risk')),
+    };
+
+    const getWorkerStatus = (type: string): 'Pending' | 'Running' | 'Completed' | 'Failed' => {
+      const run = workerRunMap[type];
+      if (!run) {
+        return isAnalysisRunning ? 'Running' : 'Pending';
+      }
+      if (run.status === 'SUCCEEDED' || run.status === 'Completed') return 'Completed';
+      if (run.status === 'FAILED' || run.status === 'BLOCKED') return 'Failed';
+      if (run.status === 'RUNNING' || run.status === 'QUEUED') return 'Running';
+      return 'Pending';
+    };
+
+    const getWorkerSummary = (type: string, fallbackDesc: string): string => {
+      const run = workerRunMap[type];
+      if (!run) {
+        return isAnalysisRunning ? 'Worker dispatched for analysis...' : 'Awaiting worker execution.';
+      }
+      if (run.status === 'SUCCEEDED' || run.status === 'Completed') {
+        return run.output_payload?.summary || fallbackDesc;
+      }
+      if (run.error_message) return run.error_message;
+      return fallbackDesc;
+    };
+
     const specializedWorkers: SpecializedWorker[] = [
       {
         name: 'Structure Worker',
         type: 'structure',
-        status: isAnalysisRunning ? 'Running' : analysisStatus === 'COMPLETED' ? 'Completed' : 'Pending',
-        summary: 'Parsed repository directory layout and module boundary definitions.',
+        status: getWorkerStatus('structure'),
+        summary: getWorkerSummary('structure', 'Parsed repository directory layout and module boundary definitions.'),
       },
       {
         name: 'Dependency Worker',
         type: 'dependency',
-        status: isAnalysisRunning ? 'Running' : analysisStatus === 'COMPLETED' ? 'Completed' : 'Pending',
-        summary: 'Resolved direct and transitive dependencies from project manifests.',
+        status: getWorkerStatus('dependency'),
+        summary: getWorkerSummary('dependency', 'Resolved direct and transitive dependencies from project manifests.'),
       },
       {
         name: 'Interface Worker',
         type: 'interface',
-        status: isAnalysisRunning ? 'Running' : analysisStatus === 'COMPLETED' ? 'Completed' : 'Pending',
-        summary: 'Identified public HTTP routes, controller endpoints, and RPC stubs.',
+        status: getWorkerStatus('interface'),
+        summary: getWorkerSummary('interface', 'Identified public HTTP routes, controller endpoints, and RPC stubs.'),
       },
       {
         name: 'Data Worker',
         type: 'data',
-        status: analysisStatus === 'COMPLETED' ? 'Completed' : isAnalysisRunning ? 'Running' : 'Pending',
-        summary: 'Inspected database models, migrations, ORM schemas, and queries.',
+        status: getWorkerStatus('data'),
+        summary: getWorkerSummary('data', 'Inspected database models, migrations, ORM schemas, and queries.'),
       },
       {
         name: 'Test Worker',
         type: 'test',
-        status: analysisStatus === 'COMPLETED' ? 'Completed' : isAnalysisRunning ? 'Running' : 'Pending',
-        summary: 'Cataloged unit/integration test suites and mock boundaries.',
+        status: getWorkerStatus('test'),
+        summary: getWorkerSummary('test', 'Cataloged unit/integration test suites and mock boundaries.'),
       },
       {
         name: 'Integration Worker',
         type: 'integration',
-        status: analysisStatus === 'COMPLETED' ? 'Completed' : 'Pending',
-        summary: 'Verified external service contracts and messaging brokers.',
+        status: getWorkerStatus('integration'),
+        summary: getWorkerSummary('integration', 'Verified external service contracts and messaging brokers.'),
       },
       {
         name: 'Risk Worker',
         type: 'risk',
-        status: analysisStatus === 'COMPLETED' ? 'Completed' : 'Pending',
-        summary: 'Analyzed security risks, sensitive data surfaces, and migration hazards.',
+        status: getWorkerStatus('risk'),
+        summary: getWorkerSummary('risk', 'Analyzed security risks, sensitive data surfaces, and migration hazards.'),
       },
     ];
 
     // Stage 3: Legacy Model
-    const legacyModelStatus =
-      analysisStatus !== 'COMPLETED'
-        ? 'PENDING'
-        : 'COMPLETED';
+    const legacyModelRun = latestRunsByAgent.find(r => r.agent_name.toLowerCase().includes('legacy_model') || r.agent_name.toLowerCase().includes('legacymodel'));
+    const legacyModelStatus = legacyModelRun?.status === 'SUCCEEDED' || legacyModelRun?.status === 'Completed'
+      ? 'COMPLETED'
+      : legacyModelRun?.status === 'RUNNING'
+      ? 'RUNNING'
+      : (analysisStatus === 'COMPLETED' && isPlanning)
+      ? 'COMPLETED'
+      : 'PENDING';
 
     // Stage 4: Architect
-    const architectStatus =
-      legacyModelStatus !== 'COMPLETED'
-        ? 'PENDING'
-        : 'COMPLETED';
+    const architectRun = latestRunsByAgent.find(r => r.agent_name.toLowerCase().includes('architect'));
+    const architectStatus = architectRun?.status === 'SUCCEEDED' || architectRun?.status === 'Completed'
+      ? 'COMPLETED'
+      : architectRun?.status === 'RUNNING'
+      ? 'RUNNING'
+      : architectRun?.status === 'FAILED'
+      ? 'FAILED'
+      : (legacyModelStatus === 'COMPLETED' && isPlanning)
+      ? 'COMPLETED'
+      : 'PENDING';
 
     // Stage 5: Target Blueprint
-    const blueprintStatus =
-      architectStatus !== 'COMPLETED'
-        ? 'PENDING'
-        : 'COMPLETED';
+    const blueprintRun = latestRunsByAgent.find(r => r.agent_name.toLowerCase().includes('blueprint'));
+    const blueprintStatus = blueprintRun?.status === 'SUCCEEDED' || blueprintRun?.status === 'Completed'
+      ? 'COMPLETED'
+      : blueprintRun?.status === 'RUNNING'
+      ? 'RUNNING'
+      : (architectStatus === 'COMPLETED' && isPlanning)
+      ? 'COMPLETED'
+      : 'PENDING';
 
     // Stage 6: Feasibility Agent
-    const feasibilityStatus =
-      blueprintStatus !== 'COMPLETED'
-        ? 'PENDING'
-        : 'COMPLETED';
+    const feasibilityRun = latestRunsByAgent.find(r => r.agent_name.toLowerCase().includes('feasibility'));
+    const feasibilityStatus = feasibilityRun?.status === 'SUCCEEDED' || feasibilityRun?.status === 'Completed'
+      ? 'COMPLETED'
+      : feasibilityRun?.status === 'RUNNING'
+      ? 'RUNNING'
+      : feasibilityRun?.status === 'FAILED'
+      ? 'FAILED'
+      : (blueprintStatus === 'COMPLETED' && isPlanning)
+      ? 'COMPLETED'
+      : 'PENDING';
 
     // Stage 7: G1 Human Review
     const g1Status = isAwaitingG1
@@ -175,12 +247,23 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
       : 'PENDING';
 
     // Stage 8: Characterizer Agent (Phase 5)
-    const characterizerStatus = isCharacterizing
+    const characterizerRunStatus = latestCharacterizerRun?.status === 'FAILED'
+      ? 'FAILED'
+      : latestCharacterizerRun?.status === 'BLOCKED'
+      ? 'BLOCKED'
+      : latestCharacterizerRun?.status === 'RUNNING' || latestCharacterizerRun?.status === 'QUEUED'
+      ? 'RUNNING'
+      : latestCharacterizerRun?.status === 'SUCCEEDED' || latestCharacterizerRun?.status === 'Completed'
+      ? 'COMPLETED'
+      : undefined;
+    const characterizerStatus = currentPhaseFailed && failedPhase === 'CHARACTERIZATION'
+      ? 'FAILED'
+      : characterizerRunStatus
+      ? characterizerRunStatus
+      : isCharacterizing
       ? 'RUNNING'
       : (isAwaitingG2 || isPlanning || isAwaitingG3 || isConverting || isCompleted)
       ? 'COMPLETED'
-      : isFailed
-      ? 'FAILED'
       : g1Status === 'COMPLETED'
       ? 'RUNNING'
       : 'PENDING';
@@ -193,7 +276,7 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
       : 'PENDING';
 
     // Stage 10: Planner Coordinator (Phase 4)
-    const plannerStatus = isFailed
+    const plannerStatus = currentPhaseFailed && failedPhase === 'PLANNING'
       ? 'FAILED'
       : isPlanning
       ? 'RUNNING'
@@ -245,7 +328,7 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
       ? 'RUNNING'
       : (isIntegrating || isAwaitingG4 || isCompleted)
       ? 'COMPLETED'
-      : isFailed && (job?.workflow_phase === 'PHASE_6' || job?.workflow_phase === 'CONVERTING')
+      : currentPhaseFailed && (failedPhase === 'CONVERSION' || failedPhase === 'VERIFICATION')
       ? 'FAILED'
       : 'PENDING';
 
@@ -254,7 +337,7 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
       ? 'RUNNING'
       : (isAwaitingG4 || isCompleted)
       ? 'COMPLETED'
-      : isFailed && (job?.workflow_phase === 'PHASE_7' || job?.workflow_phase === 'INTEGRATING')
+      : currentPhaseFailed && failedPhase === 'INTEGRATION'
       ? 'FAILED'
       : 'PENDING';
 
@@ -360,7 +443,12 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
         phaseNumber: 8,
         status: characterizerStatus,
         shortDescription: 'Executes behavioral replay against legacy endpoints to generate frozen characterization test suite.',
-        currentActivity: isCharacterizing
+        errorMessage: latestCharacterizerRun?.status === 'BLOCKED'
+          ? latestCharacterizerRun.error_message || 'Legacy runtime unavailable; characterization scenarios were not executed. Review the G2 readiness report.'
+          : latestCharacterizerRun?.error_message || workflow?.blocking_reason,
+        currentActivity: isEscalated
+          ? (workflow?.blocking_reason || 'Workflow escalated; agent execution stopped')
+          : isCharacterizing
           ? 'CharacterizerAgent: Recording golden behavioral test vectors and state transitions in container sandbox'
           : undefined,
       },
@@ -454,13 +542,20 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
     ];
   }, [
     job,
+    workflow,
+    latestCharacterizerRun,
+    failedPhase,
     isAwaitingG1,
+    isCharacterizing,
+    isAwaitingG2,
     isAwaitingG3,
     isConverting,
     isIntegrating,
     isAwaitingG4,
     isCompleted,
     isFailed,
+    isEscalated,
+    currentPhaseFailed,
     activeAnalyzingFile,
     selectedFile,
     shortSha,
@@ -512,7 +607,15 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
               <h2 style={{ fontSize: '18px', fontWeight: 750, letterSpacing: '-0.3px', margin: 0 }}>
                 Agent Execution
               </h2>
-              {isAwaitingG1 || isAwaitingG2 || isAwaitingG3 || isAwaitingG4 ? (
+              {isEscalated ? (
+                <span className="badge red" style={{ fontSize: '10px', fontWeight: 700 }}>
+                  ● Escalated · action required
+                </span>
+              ) : agentRunsNeedingAttention.length > 0 ? (
+                <span className={`badge ${agentRunsNeedingAttention[0].status === 'FAILED' ? 'red' : 'orange'}`} style={{ fontSize: '10px', fontWeight: 700 }}>
+                  ● Agent {agentRunsNeedingAttention[0].status.toLowerCase()}: {agentRunsNeedingAttention[0].agent_name}
+                </span>
+              ) : isAwaitingG1 || isAwaitingG2 || isAwaitingG3 || isAwaitingG4 ? (
                 <span className="badge orange" style={{ fontSize: '10px', fontWeight: 700 }}>
                   ● Awaiting Gate Decision
                 </span>
@@ -602,6 +705,17 @@ export const AgentExecution: React.FC<AgentExecutionProps> = ({
             />
           </div>
         </div>
+
+        {(isEscalated || agentRunsNeedingAttention.length > 0) && (
+          <div role="alert" style={{ marginTop: '10px', padding: '9px 12px', borderRadius: '6px', border: `1px solid ${isEscalated || agentRunsNeedingAttention[0]?.status === 'FAILED' ? 'var(--destructive, #dc2626)' : 'var(--warning, #f59e0b)'}`, background: isEscalated || agentRunsNeedingAttention[0]?.status === 'FAILED' ? 'rgba(220, 38, 38, 0.06)' : 'rgba(245, 158, 11, 0.08)', fontSize: '11px' }}>
+            <strong>{isEscalated ? 'Workflow escalated' : `${agentRunsNeedingAttention[0].agent_name} ${agentRunsNeedingAttention[0].status.toLowerCase()}`}:</strong>{' '}
+            {isEscalated
+              ? workflow?.blocking_reason || 'Execution stopped and needs attention.'
+              : agentRunsNeedingAttention[0].error_message || (agentRunsNeedingAttention[0].status === 'BLOCKED'
+                ? 'Required runtime or evidence is unavailable; this agent did not complete its work.'
+                : 'Agent failed. See the activity log for the recorded failure details.')}
+          </div>
+        )}
       </div>
 
       {/* Main Content Scrollable Area */}

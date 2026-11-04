@@ -1,0 +1,72 @@
+{
+  "status": "PASS",
+  "block_device": "/dev/sdf",
+  "read_bps": 10485760,
+  "write_bps": 10485760,
+  "preflight": {
+    "stage": "io-preflight",
+    "worker_id": "rebase-f32179403230408ea517bceea2bb86a6-io-preflight",
+    "started_at": 1793618534.436095,
+    "deadline_at": 1793618547.399961,
+    "runtime_evidence": {
+      "runtime_name": "docker-rootless",
+      "selected_runtime": "runc",
+      "docker_version": "29.9.2",
+      "security_options": [
+        "name=seccomp,profile=builtin",
+        "name=rootless",
+        "name=cgroupns"
+      ],
+      "cgroup_version": "2",
+      "timestamp": 1793618534.436072
+    },
+    "container_id": "ee919fd3a9b6ba3cec6450554559ec56696ead7689e1b88cf24f27933549121f",
+    "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+    "execution_uid": "65534:65534",
+    "container_configuration": {
+      "Runtime": "runc",
+      "NetworkMode": "none",
+      "ReadonlyRootfs": true,
+      "Memory": 268435456,
+      "NanoCpus": 1000000000,
+      "PidsLimit": 64,
+      "CapDrop": [
+        "ALL"
+      ],
+      "SecurityOpt": [
+        "apparmor=docker-default",
+        "no-new-privileges"
+      ],
+      "Tmpfs": {
+        "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+        "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+      },
+      "Binds": null
+    },
+    "exit_code": 0,
+    "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"8:80 rbps=10485760 wbps=10485760 riops=max wiops=max\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+    "stderr": "",
+    "logs_hash": "7c9dd90e26185d7d28605c83f60903ccf54c2034cccc9370e2a94c25c17837d0",
+    "observation": {
+      "uid": 65534,
+      "gid": 65534,
+      "process_security": {
+        "CapEff": "0000000000000000",
+        "NoNewPrivs": "1",
+        "Seccomp": "2"
+      },
+      "cgroup_limits": {
+        "memory.max": "268435456",
+        "pids.max": "64",
+        "cpu.max": "100000 100000",
+        "io.max": "8:80 rbps=10485760 wbps=10485760 riops=max wiops=max"
+      },
+      "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d"
+    },
+    "cleanup": {
+      "remove_exit_code": 0,
+      "container_absent": true
+    },
+    "finished_at": 1793618536.351093
+  }
+}

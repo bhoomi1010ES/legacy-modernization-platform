@@ -453,7 +453,9 @@ export const JobDetail: React.FC<JobDetailProps> = ({ jobId, onNavigate, onGateD
           <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px', backgroundColor: 'var(--card)' }}>
             <h2 style={{ fontSize: '16px', fontWeight: 650, marginBottom: '10px' }}>Dual-Harness Behavioral Verification (Gate G4)</h2>
             <p style={{ fontSize: '12px', color: 'var(--muted-foreground)', marginBottom: '20px' }}>
-              Both legacy and converted services executed against identical fixtures. Zero unintended regressions detected.
+              {job?.status === 'COMPLETED'
+                ? 'Both legacy and converted services executed against identical fixtures. Behavioral parity verified.'
+                : 'Verification pending or unobserved. No verified equivalence claims can be made until dual-harness execution completes.'}
             </p>
             <button className="button button-primary" onClick={() => onNavigate('/verification')}>
               Open Full Verification Suite

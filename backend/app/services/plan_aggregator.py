@@ -55,33 +55,79 @@ class PlanAggregator:
                         missing_deps.append(dep)
                         messages.append(f"Task {t.task_id} depends on nonexistent task {dep}")
 
-            # 3. Cycle Detection using Kahn's algorithm / DFS
-            adj: Dict[str, List[str]] = defaultdict(list)
-            in_degree: Dict[str, int] = {t.task_id: 0 for t in tasks}
+            # 3. Task cycle detection using Kahn's algorithm
+            task_adj: Dict[str, List[str]] = defaultdict(list)
+            task_in_degree: Dict[str, int] = {t.task_id: 0 for t in tasks}
 
             for t in tasks:
                 for dep in t.dependencies:
-                    adj[dep].append(t.task_id)
-                    in_degree[t.task_id] += 1
+                    task_adj[dep].append(t.task_id)
+                    task_in_degree[t.task_id] += 1
 
-            queue = deque([tid for tid, deg in in_degree.items() if deg == 0])
-            visited_count = 0
+            queue = deque([tid for tid, deg in task_in_degree.items() if deg == 0])
+            task_visited_count = 0
             cycles: List[List[str]] = []
 
             while queue:
                 curr = queue.popleft()
-                visited_count += 1
-                for nxt in adj[curr]:
-                    in_degree[nxt] -= 1
-                    if in_degree[nxt] == 0:
+                task_visited_count += 1
+                for nxt in task_adj[curr]:
+                    task_in_degree[nxt] -= 1
+                    if task_in_degree[nxt] == 0:
                         queue.append(nxt)
 
-            has_cycles = visited_count < len(tasks)
-            if has_cycles:
-                cycle_nodes = [tid for tid, deg in in_degree.items() if deg > 0]
+            has_task_cycles = task_visited_count < len(tasks) if tasks else False
+            if has_task_cycles:
+                cycle_nodes = [tid for tid, deg in task_in_degree.items() if deg > 0]
                 cycles.append(cycle_nodes)
                 messages.append(f"Dependency cycle detected among tasks: {cycle_nodes}")
 
+            # 4. Module-level validation: missing dependencies, duplicate module IDs, and cycles
+            module_ids: Set[str] = set()
+            dup_modules: List[str] = []
+            for m in modules:
+                if m.module_id in module_ids:
+                    dup_modules.append(m.module_id)
+                module_ids.add(m.module_id)
+
+            if dup_modules:
+                duplicate_ids.extend(dup_modules)
+                messages.append(f"Duplicate module IDs found: {dup_modules}")
+
+            for m in modules:
+                for dep in m.dependencies:
+                    if dep not in module_ids:
+                        missing_deps.append(dep)
+                        messages.append(f"Module {m.module_id} depends on nonexistent module {dep}")
+
+            # Module cycle detection
+            mod_adj: Dict[str, List[str]] = defaultdict(list)
+            mod_in_degree: Dict[str, int] = {m.module_id: 0 for m in modules}
+            for m in modules:
+                # Deduplicate dependencies
+                deps = list(dict.fromkeys(m.dependencies))
+                for dep in deps:
+                    if dep in module_ids:
+                        mod_adj[dep].append(m.module_id)
+                        mod_in_degree[m.module_id] += 1
+
+            mod_queue = deque([mid for mid, deg in mod_in_degree.items() if deg == 0])
+            mod_visited = 0
+            while mod_queue:
+                curr_m = mod_queue.popleft()
+                mod_visited += 1
+                for nxt_m in mod_adj[curr_m]:
+                    mod_in_degree[nxt_m] -= 1
+                    if mod_in_degree[nxt_m] == 0:
+                        mod_queue.append(nxt_m)
+
+            has_module_cycles = mod_visited < len(modules) if modules else False
+            if has_module_cycles:
+                mod_cycle_nodes = [mid for mid, deg in mod_in_degree.items() if deg > 0]
+                cycles.append(mod_cycle_nodes)
+                messages.append(f"Dependency cycle detected among modules: {mod_cycle_nodes}")
+
+            has_cycles = has_task_cycles or has_module_cycles
             is_valid = (
                 not has_cycles
                 and not missing_deps
@@ -89,10 +135,8 @@ class PlanAggregator:
                 and not missing_ac_tasks
             )
 
-            if duplicate_ids:
+            if duplicate_ids and not dup_modules:
                 messages.append(f"Duplicate task IDs found: {duplicate_ids}")
-            if missing_deps:
-                messages.extend(missing_deps)
             if missing_ac_tasks:
                 messages.append(f"Tasks missing acceptance criteria: {missing_ac_tasks}")
 
@@ -118,11 +162,69 @@ class PlanAggregator:
         tasks: List[PlanningTask],
         modules: List[ModulePlanningUnit],
     ) -> List[ConversionPlanWave]:
-        """Calculates topological execution waves based on task dependency levels."""
+        """Calculates topological execution waves based on module dependency levels (and task levels)."""
         try:
-            if not tasks:
+            if not modules and not tasks:
                 return []
 
+            # If modules are provided, compute waves directly on the module DAG
+            if modules:
+                module_map = {m.module_id: m for m in modules}
+                task_by_module: Dict[str, List[str]] = defaultdict(list)
+                for t in tasks:
+                    task_by_module[t.module_id].append(t.task_id)
+
+                waves: List[ConversionPlanWave] = []
+                completed_modules: Set[str] = set()
+                remaining_modules: Dict[str, ModulePlanningUnit] = dict(module_map)
+                wave_num = 1
+
+                while remaining_modules:
+                    # Find all modules whose dependencies are satisfied
+                    current_wave_modules = [
+                        mid
+                        for mid, m in remaining_modules.items()
+                        if all(dep in completed_modules for dep in dict.fromkeys(m.dependencies))
+                    ]
+
+                    if not current_wave_modules:
+                        # Cycle or unresolvable dependency: drain remaining
+                        current_wave_modules = sorted(list(remaining_modules.keys()))
+
+                    current_wave_modules.sort()
+                    current_wave_tasks: List[str] = []
+                    for mid in current_wave_modules:
+                        current_wave_tasks.extend(task_by_module.get(mid, []))
+                    current_wave_tasks.sort()
+
+                    wave_name = f"Wave {wave_num}"
+                    if wave_num == 1:
+                        rationale = "Foundation: Shared domain contracts and independent base scaffolding."
+                    elif wave_num == 2:
+                        rationale = "Core: Business logic services depending on Wave 1 contracts."
+                    elif wave_num == 3:
+                        rationale = "Integration: Public controllers, API adapters, and downstream services."
+                    else:
+                        rationale = f"Finalization and end-to-end integration wave {wave_num}."
+
+                    waves.append(ConversionPlanWave(
+                        wave_number=wave_num,
+                        name=wave_name,
+                        module_ids=current_wave_modules,
+                        task_ids=current_wave_tasks,
+                        rationale=rationale,
+                    ))
+
+                    completed_modules.update(current_wave_modules)
+                    for mid in current_wave_modules:
+                        if mid in remaining_modules:
+                            del remaining_modules[mid]
+
+                    wave_num += 1
+
+                return waves
+
+            # Fallback for task-only planning
             task_map = {t.task_id: t for t in tasks}
             in_degree = {t.task_id: len(t.dependencies) for t in tasks}
             adj = defaultdict(list)
@@ -136,34 +238,20 @@ class PlanAggregator:
             wave_num = 1
 
             while remaining_tasks:
-                # Independent tasks in current tier
                 current_wave_tasks = [
                     tid for tid in remaining_tasks
                     if in_degree[tid] == 0
                 ]
-
                 if not current_wave_tasks:
-                    # Circular or broken dependency remaining: drain remaining
                     current_wave_tasks = list(remaining_tasks)
 
                 current_wave_modules = sorted(list({task_map[tid].module_id for tid in current_wave_tasks}))
-
-                wave_name = f"Wave {wave_num}"
-                if wave_num == 1:
-                    rationale = "Foundation: Shared domain contracts and independent base scaffolding."
-                elif wave_num == 2:
-                    rationale = "Core: Business logic services depending on Wave 1 contracts."
-                elif wave_num == 3:
-                    rationale = "Integration: Public controllers, API adapters, and downstream services."
-                else:
-                    rationale = f"Finalization and end-to-end integration wave {wave_num}."
-
                 waves.append(ConversionPlanWave(
                     wave_number=wave_num,
-                    name=wave_name,
+                    name=f"Wave {wave_num}",
                     module_ids=current_wave_modules,
                     task_ids=sorted(current_wave_tasks),
-                    rationale=rationale,
+                    rationale=f"Execution wave {wave_num}.",
                 ))
 
                 for tid in current_wave_tasks:
@@ -261,17 +349,6 @@ class PlanAggregator:
                 sp = context.schema_data_plan
                 schema_hash = sp.get("schema_hash") or sp.get("content_hash") or sp.get("source_schema_hash") if isinstance(sp, dict) else getattr(sp, "content_hash", None)
 
-            # Content hash
-            hasher = hashlib.sha256()
-            hasher.update(json.dumps([m.model_dump() for m in units], sort_keys=True).encode("utf-8"))
-            hasher.update(json.dumps([t.model_dump() for t in all_tasks], sort_keys=True).encode("utf-8"))
-            hasher.update(json.dumps([w.model_dump() for w in waves], sort_keys=True).encode("utf-8"))
-            if leg_hash:
-                hasher.update(leg_hash.encode("utf-8"))
-            if bp_hash:
-                hasher.update(bp_hash.encode("utf-8"))
-            content_hash = hasher.hexdigest()
-
             full_provenance = {
                 "repo_inventory_hash": repo_inv_hash,
                 "legacy_model_hash": leg_hash,
@@ -281,8 +358,27 @@ class PlanAggregator:
                 "characterization_suite_hash": char_suite_hash,
                 "characterization_coverage_hash": char_cov_hash,
                 "schema_data_plan_hash": schema_hash,
+                "upstream_approval_hashes": (
+                    dict(context.provenance_hashes) if context else {}
+                ),
+                "stack_profile": context.stack_profile if context else None,
+                "cost_ceiling_usd": str(context.cost_ceiling_usd) if context and context.cost_ceiling_usd is not None else None,
+                "baseline_source_sha": context.baseline_source_sha if context else None,
                 "planner_version": "v4.5",
             }
+
+            # Hash the complete approved input snapshot as well as the DAG. A
+            # plan must change when an upstream decision, schema, baseline,
+            # stack, or budget changes, even if the generated module text does not.
+            hash_payload = {
+                "modules": [m.model_dump(mode="json") for m in units],
+                "tasks": [t.model_dump(mode="json") for t in all_tasks],
+                "waves": [w.model_dump(mode="json") for w in waves],
+                "provenance": full_provenance,
+            }
+            content_hash = hashlib.sha256(
+                json.dumps(hash_payload, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+            ).hexdigest()
 
             plan = ConversionPlan(
                 plan_id=f"plan_{uuid.uuid4().hex[:12]}",

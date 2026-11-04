@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.job import Job
 from app.core.errors import ConflictException, NotFoundException
-from app.models.artifact import Artifact
+from app.models.artifact import Artifact, normalize_artifact_type
 from app.models.job import Job
 from app.models.phase4 import (
     ConversionPlanDependencyModel,
@@ -188,6 +188,18 @@ class PlannerCoordinator:
 
             # Build PlanningContext if not explicitly provided
             if context is None:
+                # Planning is a post-G2 operation. Require the human-approved
+                # inputs and never manufacture hash-only stand-ins on read errors.
+                for gate_type in ("G1", "G2"):
+                    approved = await db.scalar(
+                        select(WorkflowGate).where(
+                            WorkflowGate.job_id == job.job_id,
+                            WorkflowGate.gate_type == gate_type,
+                            WorkflowGate.status == "APPROVED",
+                        ).order_by(WorkflowGate.version.desc()).limit(1)
+                    )
+                    if approved is None:
+                        raise ConflictException(f"Planner requires an approved {gate_type} snapshot")
                 feas_model = (
                     await db.execute(
                         select(FeasibilityReportModel)
@@ -196,6 +208,8 @@ class PlannerCoordinator:
                         .order_by(FeasibilityReportModel.version.desc())
                     )
                 ).scalars().first()
+                if feas_model is None:
+                    raise ConflictException("Planner requires a persisted FeasibilityReport")
                 feas_report_obj = None
                 if feas_model:
                     try:
@@ -226,7 +240,11 @@ class PlannerCoordinator:
                             legacy_model_version=feas_model.legacy_model_version,
                             capabilities=caps,
                             tool_readiness=[],
-                            overall_feasibility_score=feas_model.overall_score,
+                            overall_feasibility_score=(
+                                float(feas_model.overall_score) / 100.0
+                                if float(feas_model.overall_score) > 1.0
+                                else float(feas_model.overall_score)
+                            ),
                             unsupported_count=feas_model.unsupported_count,
                             custom_build_count=feas_model.custom_build_count,
                             substitute_count=feas_model.substitute_count,
@@ -279,52 +297,50 @@ class PlannerCoordinator:
                         )
                     )
 
-                char_art = (
-                    await db.execute(
-                        select(Artifact)
-                        .where(
-                            Artifact.job_id == job.job_id,
-                            Artifact.artifact_type.in_(("CHARACTERIZATION_SUITE", "CharacterizationSuite")),
-                        )
-                        .order_by(Artifact.version.desc())
-                    )
-                ).scalars().first()
+                artifacts = list((await db.execute(
+                    select(Artifact).where(Artifact.job_id == job.job_id)
+                    .order_by(Artifact.version.desc())
+                )).scalars().all())
+                normalized_artifacts = []
+                for artifact in artifacts:
+                    try:
+                        normalized_artifacts.append((normalize_artifact_type(artifact.artifact_type), artifact))
+                    except Exception as exc:
+                        raise ConflictException(f"Planner encountered unknown artifact type {artifact.artifact_type!r}") from exc
+                char_art = next((a for kind, a in normalized_artifacts if kind == "CHARACTERIZATION_SUITE"), None)
                 char_suite = None
                 char_coverage = None
-                if char_art:
-                    try:
-                        content_bytes = await self.artifact_service.storage.get_object(char_art.storage_path)
-                        char_suite = json.loads(content_bytes.decode("utf-8"))
-                        if isinstance(char_suite, dict):
-                            char_suite["content_hash"] = char_art.content_hash
-                            char_coverage = char_suite.get("coverage") or char_suite.get("coverage_report")
-                    except Exception:
-                        char_suite = {"content_hash": char_art.content_hash}
-                    if not char_suite:
-                        char_suite = {"content_hash": char_art.content_hash}
+                if char_art is None:
+                    raise ConflictException("Planner requires the G2-frozen CharacterizationSuite artifact")
+                content_bytes = await self.artifact_service.storage.get_object(char_art.storage_path)
+                char_suite = json.loads(content_bytes.decode("utf-8"))
+                if not isinstance(char_suite, dict):
+                    raise ConflictException("Frozen CharacterizationSuite payload must be an object")
+                char_suite["content_hash"] = char_art.content_hash
+                char_coverage = char_suite.get("coverage") or char_suite.get("coverage_report")
 
-                schema_art = (
-                    await db.execute(
-                        select(Artifact)
-                        .where(
-                            Artifact.job_id == job.job_id,
-                            Artifact.artifact_type.in_(("SCHEMA_MIGRATION_PLAN", "SchemaMigrationPlan")),
-                        )
-                        .order_by(Artifact.version.desc())
-                    )
-                ).scalars().first()
-                schema_plan = None
-                if schema_art:
-                    try:
-                        content_bytes = await self.artifact_service.storage.get_object(schema_art.storage_path)
-                        schema_plan = json.loads(content_bytes.decode("utf-8"))
-                        if isinstance(schema_plan, dict):
-                            schema_plan["schema_hash"] = schema_art.content_hash
-                            schema_plan["content_hash"] = schema_art.content_hash
-                    except Exception:
-                        schema_plan = {"schema_hash": schema_art.content_hash, "content_hash": schema_art.content_hash}
-                    if not schema_plan:
-                        schema_plan = {"schema_hash": schema_art.content_hash, "content_hash": schema_art.content_hash}
+                schema_art = next((a for kind, a in normalized_artifacts if kind == "SCHEMA_MIGRATION_PLAN"), None)
+                if schema_art is None:
+                    raise ConflictException("Planner requires a validated SchemaPlan artifact")
+                content_bytes = await self.artifact_service.storage.get_object(schema_art.storage_path)
+                schema_plan = json.loads(content_bytes.decode("utf-8"))
+                if not isinstance(schema_plan, dict):
+                    raise ConflictException("SchemaPlan payload must be an object")
+                schema_state = str(schema_plan.get("status") or schema_plan.get("validation_status") or "").upper()
+                if schema_state not in {"VALIDATED", "APPROVED", "COMPLETE", "VALID"}:
+                    raise ConflictException("Planner requires a validated SchemaPlan")
+                schema_plan["schema_hash"] = schema_art.content_hash
+                schema_plan["content_hash"] = schema_art.content_hash
+                g2_snapshot = await db.scalar(
+                    select(WorkflowGate).where(
+                        WorkflowGate.job_id == job.job_id,
+                        WorkflowGate.gate_type == "G2",
+                        WorkflowGate.status == "APPROVED",
+                    ).order_by(WorkflowGate.version.desc()).limit(1)
+                )
+                approved_g2_hashes = set((g2_snapshot.artifact_hashes or {}).values()) if g2_snapshot else set()
+                if char_art.content_hash not in approved_g2_hashes or schema_art.content_hash not in approved_g2_hashes:
+                    raise ConflictException("G2 approval does not bind the exact frozen suite and validated schema hashes")
 
                 snap_record = (
                     await db.execute(
@@ -334,6 +350,10 @@ class PlannerCoordinator:
                     )
                 ).scalars().first()
                 repo_inv_hash = snap_record.inventory_hash if snap_record else None
+                stack_profile = getattr(job, "stack_profile", None) or (snap_record.tech_profile if snap_record else None)
+                baseline_source_sha = snap_record.commit_sha if snap_record else getattr(job, "source_commit_sha", None)
+                if not stack_profile or not baseline_source_sha:
+                    raise ConflictException("Planner requires a stack profile and pinned baseline source SHA")
 
                 prov_hashes = {}
                 if repo_inv_hash:
@@ -344,6 +364,23 @@ class PlannerCoordinator:
                     prov_hashes["schema_data_plan_hash"] = schema_art.content_hash
                 if feas_model:
                     prov_hashes["feasibility_report_hash"] = feas_model.content_hash
+                for gate_type in ("G1", "G2"):
+                    gate = await db.scalar(
+                        select(WorkflowGate).where(
+                            WorkflowGate.job_id == job.job_id,
+                            WorkflowGate.gate_type == gate_type,
+                            WorkflowGate.status == "APPROVED",
+                        ).order_by(WorkflowGate.version.desc()).limit(1)
+                    )
+                    if gate:
+                        encoded = json.dumps({"gate_id": str(gate.gate_id), "version": gate.version, "artifact_hashes": gate.artifact_hashes or {}}, sort_keys=True, separators=(",", ":"))
+                        prov_hashes[f"{gate_type.lower()}_approval_hash"] = hashlib.sha256(encoded.encode()).hexdigest()
+                decisions_encoded = json.dumps(
+                    [d.model_dump(mode="json") for d in g1_decisions],
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                prov_hashes["g1_decision_hash"] = hashlib.sha256(decisions_encoded.encode()).hexdigest()
 
                 context = PlanningContext(
                     job_id=job_id_str,
@@ -355,10 +392,35 @@ class PlannerCoordinator:
                     characterization_coverage=char_coverage,
                     schema_data_plan=schema_plan,
                     provenance_hashes=prov_hashes,
+                    stack_profile=stack_profile,
+                    cost_ceiling_usd=getattr(job, "budget_limit_usd", None),
+                    baseline_source_sha=baseline_source_sha,
                 )
 
+            # Validate every input contract even when callers provide a context
+            # directly; no test, API, or alternate planner path can skip gates.
+            if context is None:
+                raise ConflictException("Planner input context could not be constructed")
+            required_context_hashes = (
+                "feasibility_report_hash",
+                "characterization_suite_hash", "schema_data_plan_hash",
+                "g1_approval_hash", "g2_approval_hash", "g1_decision_hash",
+            )
+            missing_hashes = [key for key in required_context_hashes if not context.provenance_hashes.get(key)]
+            if missing_hashes:
+                raise ConflictException(f"Planner input snapshot is missing hashes: {', '.join(missing_hashes)}")
+            if not context.feasibility_report or not context.characterization_suite or not context.schema_data_plan:
+                raise ConflictException("Planner requires feasibility, frozen characterization, and schema planning inputs")
+            if not context.characterization_suite.get("content_hash"):
+                raise ConflictException("Frozen CharacterizationSuite is missing its approved content hash")
+            schema_state = str(context.schema_data_plan.get("status") or context.schema_data_plan.get("validation_status") or "").upper()
+            if schema_state not in {"VALIDATED", "APPROVED", "COMPLETE", "VALID"} or not context.schema_data_plan.get("content_hash"):
+                raise ConflictException("Planner requires a validated, hash-bound SchemaPlan")
+            if not context.stack_profile or not context.baseline_source_sha or context.cost_ceiling_usd is None:
+                raise ConflictException("Planner requires stack profile, cost ceiling, and pinned source SHA")
+
             # Check feasibility gaps: blocked if unresolved gaps without G1 decision
-            if context and context.feasibility_report:
+            if context.feasibility_report:
                 report = context.feasibility_report
                 gap_capabilities = [
                     c for c in report.capabilities
@@ -463,6 +525,11 @@ class PlannerCoordinator:
                 version=next_version,
                 context=context,
             )
+            if not conversion_plan.validation.is_valid_dag:
+                raise ConflictException(
+                    "Planner rejected an invalid DAG: "
+                    + "; ".join(conversion_plan.validation.validation_messages)
+                )
 
             # 6. Persist ConversionPlan in DB
             db_plan = ConversionPlanModel(
@@ -480,28 +547,66 @@ class PlannerCoordinator:
             db.add(db_plan)
             await db.flush()
 
+            # Persist the exact immutable artifact before assigning module
+            # contracts so task plan_hash is the hash G3 will approve.
+            plan_bytes = json.dumps(conversion_plan.model_dump(mode="json"), indent=2).encode("utf-8")
+            plan_artifact = await self.artifact_service.create_artifact(
+                db=db,
+                job_id=job.job_id,
+                artifact_type="CONVERSION_PLAN",
+                version=next_version,
+                content_bytes=plan_bytes,
+                producing_agent="PlannerCoordinator",
+                derived_from=[blueprint.content_hash],
+                user=user,
+                correlation_id=correlation_id,
+                commit=False,
+            )
+
+            wave_by_module = {}
+            for wave in conversion_plan.waves:
+                for mid in wave.module_ids:
+                    wave_by_module[mid] = wave.wave_number
+
             for unit in conversion_plan.modules:
                 db.add(ConversionPlanModuleModel(
                     module_record_id=uuid.uuid4(),
                     plan_id=db_plan.plan_id,
                     module_id=unit.module_id,
                     responsibility=unit.responsibility,
-                    wave_number=1,
+                    wave_number=wave_by_module.get(unit.module_id, 1),
                     estimate_hours=unit.estimate_hours,
                     risk=unit.risk,
                     acceptance_criteria=unit.acceptance_criteria,
                     payload=unit.model_dump(),
                 ))
 
-            from app.models.module import Module
-            wave_by_module = {}
-            for wave in conversion_plan.waves:
-                for mid in wave.module_ids:
-                    if mid not in wave_by_module:
-                        wave_by_module[mid] = wave.wave_number
+            from app.models.module import Module, ModuleDependency
+            from sqlalchemy import delete
+            # Clean up existing module dependencies for this job before re-inserting
+            await db.execute(delete(ModuleDependency).where(ModuleDependency.job_id == job.job_id))
+
             for unit in conversion_plan.modules:
                 m_uuid = uuid.uuid5(job.job_id, unit.module_id)
+                dep_uuids = [str(uuid.uuid5(job.job_id, d)) for d in dict.fromkeys(unit.dependencies)]
                 existing_m = await db.get(Module, m_uuid)
+                approval_hashes = {
+                    key: value
+                    for key, value in (context.provenance_hashes if context else {}).items()
+                    if key in ("g1_approval_hash", "g2_approval_hash")
+                }
+                contract_payload = {
+                    "module_id": unit.module_id,
+                    "plan_hash": plan_artifact.content_hash,
+                    "dependencies": dep_uuids,
+                    "interfaces": unit.interfaces or [],
+                    "allowed_output_paths": unit.target_scope or [],
+                    "required_tests": unit.required_tests or [],
+                    "schema_dependencies": [unit.data_considerations] if unit.data_considerations else [],
+                    "upstream_approval_hashes": approval_hashes,
+                    "integration_base_sha": context.baseline_source_sha if context else None,
+                }
+                contract_hash = hashlib.sha256(json.dumps(contract_payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
                 if not existing_m:
                     db.add(Module(
                         module_id=m_uuid,
@@ -512,10 +617,65 @@ class PlannerCoordinator:
                         risk_level=unit.risk if unit.risk in ("LOW", "MEDIUM", "HIGH") else "MEDIUM",
                         status="PENDING",
                         wave_number=wave_by_module.get(unit.module_id, 1),
-                        dependency_module_ids=[str(uuid.uuid5(job.job_id, d)) for d in unit.dependencies],
+                        dependency_module_ids=dep_uuids,
+                        interfaces=unit.interfaces or [],
+                        allowed_output_paths=unit.target_scope or [],
+                        required_tests=unit.required_tests or [],
+                        schema_dependencies=[unit.data_considerations] if unit.data_considerations else [],
+                        expected_resources={"required_tools": unit.required_tools, "environment_requirements": unit.environment_requirements},
+                        expected_input_hash=contract_hash,
+                        plan_hash=plan_artifact.content_hash,
+                        upstream_approval_hashes=approval_hashes,
+                        integration_base_sha=context.baseline_source_sha if context else None,
                         budget_limit_usd=Decimal("50.0"),
                         budget_used_usd=Decimal("0.0"),
                     ))
+                else:
+                    # Replanning contract change detection
+                    contract_changed = (
+                        existing_m.target_path != (unit.target_scope[0] if unit.target_scope else "")
+                        or existing_m.interfaces != (unit.interfaces or [])
+                        or existing_m.dependency_module_ids != dep_uuids
+                        or existing_m.plan_hash != plan_artifact.content_hash
+                        or existing_m.upstream_approval_hashes != approval_hashes
+                        or existing_m.integration_base_sha != (context.baseline_source_sha if context else None)
+                    )
+                    if contract_changed:
+                        existing_m.target_path = unit.target_scope[0] if unit.target_scope else ""
+                        existing_m.interfaces = unit.interfaces or []
+                        existing_m.dependency_module_ids = dep_uuids
+                        existing_m.allowed_output_paths = unit.target_scope or []
+                        existing_m.required_tests = unit.required_tests or []
+                        existing_m.schema_dependencies = [unit.data_considerations] if unit.data_considerations else []
+                        existing_m.expected_resources = {"required_tools": unit.required_tools, "environment_requirements": unit.environment_requirements}
+                        existing_m.wave_number = wave_by_module.get(unit.module_id, 1)
+                        existing_m.plan_hash = plan_artifact.content_hash
+                        existing_m.upstream_approval_hashes = approval_hashes
+                        existing_m.integration_base_sha = context.baseline_source_sha if context else None
+                        existing_m.expected_input_hash = contract_hash
+                        existing_m.status = "PENDING"
+                        existing_m.accepted_result_hash = None
+                        existing_m.lease_owner = None
+                        existing_m.lease_token = None
+                        existing_m.lease_expires_at = None
+                        existing_m.lease_heartbeat_at = None
+                        existing_m.lease_generation += 1
+
+            await db.flush()
+
+            # Insert normalized module_dependencies
+            for unit in conversion_plan.modules:
+                child_uuid = uuid.uuid5(job.job_id, unit.module_id)
+                for dep_name in dict.fromkeys(unit.dependencies):
+                    parent_uuid = uuid.uuid5(job.job_id, dep_name)
+                    parent_mod = await db.get(Module, parent_uuid)
+                    if parent_mod:
+                        db.add(ModuleDependency(
+                            dependency_id=uuid.uuid4(),
+                            job_id=job.job_id,
+                            parent_id=parent_uuid,
+                            child_id=child_uuid,
+                        ))
 
             for task in conversion_plan.tasks:
                 db.add(ConversionPlanTaskModel(
@@ -543,32 +703,6 @@ class PlannerCoordinator:
 
             db_run.status = "COMPLETED"
             db_run.completed_at = conversion_plan.created_at
-
-            # 7. Publish canonical CONVERSION_PLAN artifact
-            plan_bytes = json.dumps(conversion_plan.model_dump(mode="json"), indent=2).encode("utf-8")
-            await self.artifact_service.create_artifact(
-                db=db,
-                job_id=job.job_id,
-                artifact_type="CONVERSION_PLAN",
-                version=next_version,
-                content_bytes=plan_bytes,
-                producing_agent="PlannerCoordinator",
-                derived_from=[blueprint.content_hash],
-                user=user,
-                correlation_id=correlation_id,
-            )
-            # Maintain backward compatibility for legacy queries expecting "ConversionPlan"
-            await self.artifact_service.create_artifact(
-                db=db,
-                job_id=job.job_id,
-                artifact_type="ConversionPlan",
-                version=next_version,
-                content_bytes=plan_bytes,
-                producing_agent="PlannerCoordinator",
-                derived_from=[blueprint.content_hash],
-                user=user,
-                correlation_id=correlation_id,
-            )
 
             await db.commit()
             return conversion_plan

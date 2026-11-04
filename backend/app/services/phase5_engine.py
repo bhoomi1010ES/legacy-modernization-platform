@@ -229,6 +229,20 @@ async def replay_web_static(
     verifying route availability, DOM elements, and asset integrity."""
     t0 = monotonic()
     try:
+        if workspace_path is None or not workspace_path.exists():
+            return {
+                "available": False,
+                "execution_mode": "UNAVAILABLE",
+                "duration_ms": int((monotonic() - t0) * 1000),
+                "exit_status": None,
+                "reason": "WORKSPACE_NOT_FOUND: workspace does not exist or is not staged",
+                "output": {
+                    "status": "NOT_RUN",
+                    "evaluation_level": "NOT_RUN",
+                },
+                "side_effects": {},
+            }
+
         routes = []
         primary_route = "/index.html"
         dom_summary: dict[str, Any] = {
@@ -242,74 +256,55 @@ async def replay_web_static(
         }
         verified_assets = []
 
-        if workspace_path and workspace_path.exists():
-            # 1. Discover routes (*.html files)
-            html_files = sorted(list(workspace_path.glob("*.html")))
-            for hf in html_files:
-                rel = hf.relative_to(workspace_path).as_posix()
-                route_path = f"/{rel}"
-                content_bytes = hf.read_bytes()
-                routes.append({
-                    "route": route_path,
-                    "status_code": 200,
-                    "content_type": "text/html; charset=utf-8",
-                    "size_bytes": len(content_bytes),
-                    "sha256": hashlib.sha256(content_bytes).hexdigest(),
-                })
-                if rel == "index.html" or not primary_route:
-                    primary_route = route_path
-
-            # 2. Parse DOM from primary route or first available HTML
-            target_html = workspace_path / "index.html"
-            if not target_html.exists() and html_files:
-                target_html = html_files[0]
-
-            if target_html.exists():
-                parser = StaticDOMParser()
-                parser.feed(target_html.read_text(encoding="utf-8", errors="replace"))
-                dom_summary = {
-                    "title": parser.title,
-                    "tag_counts": dict(sorted(parser.tags.items())),
-                    "element_ids": sorted(list(set(parser.element_ids))),
-                    "classes": sorted(list(parser.classes)),
-                    "stylesheets": sorted(parser.stylesheets),
-                    "scripts": sorted(parser.scripts),
-                    "images": sorted(parser.images),
-                }
-
-            # 3. Asset Integrity Verification
-            asset_extensions = {".css", ".js", ".png", ".jpg", ".jpeg", ".svg", ".gif", ".webp", ".ico"}
-            for p in sorted(workspace_path.rglob("*")):
-                if p.is_file() and p.suffix.lower() in asset_extensions:
-                    rel_p = p.relative_to(workspace_path).as_posix()
-                    if rel_p.startswith((".git", "node_modules")):
-                        continue
-                    b = p.read_bytes()
-                    verified_assets.append({
-                        "path": rel_p,
-                        "size_bytes": len(b),
-                        "sha256": hashlib.sha256(b).hexdigest(),
-                        "category": p.suffix.lower()[1:],
-                        "status": "VERIFIED",
-                    })
-        else:
-            # Fallback synthetic DOM double for unit tests without a real workspace
+        # 1. Discover routes (*.html files)
+        html_files = sorted(list(workspace_path.glob("*.html")))
+        for hf in html_files:
+            rel = hf.relative_to(workspace_path).as_posix()
+            route_path = f"/{rel}"
+            content_bytes = hf.read_bytes()
             routes.append({
-                "route": "/index.html",
+                "route": route_path,
                 "status_code": 200,
                 "content_type": "text/html; charset=utf-8",
-                "size_bytes": 100,
-                "sha256": hashlib.sha256(b"<html><head><title>Synthetic</title></head><body><div></div></body></html>").hexdigest(),
+                "size_bytes": len(content_bytes),
+                "sha256": hashlib.sha256(content_bytes).hexdigest(),
             })
+            if rel == "index.html" or not primary_route:
+                primary_route = route_path
+
+        # 2. Parse DOM from primary route or first available HTML
+        target_html = workspace_path / "index.html"
+        if not target_html.exists() and html_files:
+            target_html = html_files[0]
+
+        if target_html.exists():
+            parser = StaticDOMParser()
+            parser.feed(target_html.read_text(encoding="utf-8", errors="replace"))
             dom_summary = {
-                "title": f"Synthetic DOM for {scenario.name}",
-                "tag_counts": {"body": 1, "div": 1, "head": 1, "html": 1, "title": 1},
-                "element_ids": [],
-                "classes": [],
-                "stylesheets": [],
-                "scripts": [],
-                "images": [],
+                "title": parser.title,
+                "tag_counts": dict(sorted(parser.tags.items())),
+                "element_ids": sorted(list(set(parser.element_ids))),
+                "classes": sorted(list(parser.classes)),
+                "stylesheets": sorted(parser.stylesheets),
+                "scripts": sorted(parser.scripts),
+                "images": sorted(parser.images),
             }
+
+        # 3. Asset Integrity Verification
+        asset_extensions = {".css", ".js", ".png", ".jpg", ".jpeg", ".svg", ".gif", ".webp", ".ico"}
+        for p in sorted(workspace_path.rglob("*")):
+            if p.is_file() and p.suffix.lower() in asset_extensions:
+                rel_p = p.relative_to(workspace_path).as_posix()
+                if rel_p.startswith((".git", "node_modules")):
+                    continue
+                b = p.read_bytes()
+                verified_assets.append({
+                    "path": rel_p,
+                    "size_bytes": len(b),
+                    "sha256": hashlib.sha256(b).hexdigest(),
+                    "category": p.suffix.lower()[1:],
+                    "status": "VERIFIED",
+                })
 
         # Filter or highlight assets based on target module
         mod_name = (scenario.module or "").lower()
@@ -322,10 +317,48 @@ async def replay_web_static(
         else:
             module_assets = verified_assets
 
+        # 4. Evaluate assertions from inputs
+        inputs = scenario.inputs or {}
+        passed = True
+        failure_reasons = []
+
+        if "expected_title" in inputs:
+            if dom_summary["title"] != inputs["expected_title"]:
+                passed = False
+                failure_reasons.append(f"Title mismatch: expected '{inputs['expected_title']}', got '{dom_summary['title']}'")
+
+        if "required_ids" in inputs:
+            missing_ids = [req_id for req_id in inputs["required_ids"] if req_id not in dom_summary["element_ids"]]
+            if missing_ids:
+                passed = False
+                failure_reasons.append(f"Missing required DOM element IDs: {missing_ids}")
+
+        if "required_classes" in inputs:
+            missing_classes = [req_cls for req_cls in inputs["required_classes"] if req_cls not in dom_summary["classes"]]
+            if missing_classes:
+                passed = False
+                failure_reasons.append(f"Missing required CSS classes: {missing_classes}")
+
+        if not passed:
+            evaluation_level = "DOM_FAILED"
+            status = "FAILED"
+            exit_status = 1
+        else:
+            status = "PASSED"
+            if inputs.get("behavior"):
+                evaluation_level = "BEHAVIOR_PASS"
+            elif dom_summary["element_ids"] or dom_summary["classes"]:
+                evaluation_level = "DOM_PASS"
+            else:
+                evaluation_level = "BUILD_PASS"
+            exit_status = 0
+
         output = {
             "scenario": scenario.name,
             "module": scenario.module,
-            "status": "PASSED",
+            "status": status,
+            "evaluation_level": evaluation_level,
+            "failure_reasons": failure_reasons,
             "route_availability": {
                 "routes": routes,
                 "primary_route": primary_route,
@@ -335,7 +368,7 @@ async def replay_web_static(
             "asset_integrity": {
                 "total_workspace_assets": len(verified_assets),
                 "module_specific_assets": module_assets,
-                "integrity_status": "PASS",
+                "integrity_status": "PASS" if passed else "FAIL",
             },
         }
 
@@ -351,10 +384,10 @@ async def replay_web_static(
             "available": True,
             "execution_mode": "IN_MEMORY_DOUBLE",
             "duration_ms": duration_ms,
-            "exit_status": 0,
+            "exit_status": exit_status,
             "container_name": "in-memory-dom-double",
             "stdout_sample": f"IN_MEMORY_DOUBLE: static web characterization completed for scenario {scenario.name}",
-            "stderr_sample": "",
+            "stderr_sample": "\n".join(failure_reasons),
             "output": output,
             "side_effects": side_effects,
         }
@@ -366,356 +399,95 @@ async def replay_web_static(
             "duration_ms": int((monotonic() - t0) * 1000),
             "exit_status": 1,
             "reason": f"STATIC_DOM_CHARACTERIZER_ERROR: {str(exc)}",
-        }
-
-
-def resolve_or_create_backend_adapter(
-    workspace_path: Optional[Path],
-    job: Optional[Any],
-    scenario: Scenario,
-) -> Optional[Path]:
-    """Resolve or auto-generate a repository-specific adapter script mounted alongside the project workspace."""
-    if not workspace_path or not workspace_path.exists():
-        return None
-
-    # Check for existing adapter in workspace
-    for candidate in ("adapter.py", ".rebase_adapter.py"):
-        p = workspace_path / candidate
-        if p.is_file():
-            return p
-
-    # Check for repository-specific adapter in tools/legacy_runtimes
-    repo_name = ""
-    if job and getattr(job, "source_repository", None):
-        repo_name = job.source_repository.rstrip("/").split("/")[-1].replace(".git", "")
-    elif workspace_path:
-        repo_name = workspace_path.name.replace("job_", "")
-
-    if repo_name:
-        tools_adapter = Path(f"tools/legacy_runtimes/{repo_name}/adapter.py")
-        if tools_adapter.is_file():
-            dest = workspace_path / ".rebase_adapter.py"
-            dest.write_bytes(tools_adapter.read_bytes())
-            return dest
-
-    # Auto-generate a repository-specific adapter script
-    auto_adapter = workspace_path / ".rebase_adapter.py"
-    auto_adapter_code = '''"""Repository-specific legacy adapter for Phase 5 characterization."""
-import json
-import logging
-import sys
-
-logger = logging.getLogger(__name__)
-
-def main():
-    try:
-        raw = sys.stdin.read()
-        if not raw.strip():
-            raise ValueError("Empty request on stdin")
-        request = json.loads(raw)
-        scenario_name = request.get("scenario", "default")
-        inputs = request.get("inputs", {})
-
-        result = {
             "output": {
-                "scenario": scenario_name,
-                "status": "SUCCESS",
-                "inputs": inputs,
-                "verified": True,
+                "status": "FAILED",
+                "evaluation_level": "ERROR",
             },
-            "side_effects": {
-                "writes": 0,
-                "reads": 1,
-                "audit_events": 0,
-            },
+            "side_effects": {},
         }
-        json.dump(result, sys.stdout, sort_keys=True, allow_nan=False)
-        sys.stdout.flush()
-    except Exception as exc:
-        logger.exception("adapter failed: %s", exc)
-        sys.stderr.write(f"ADAPTER_ERROR: {str(exc)}\n")
-        sys.stderr.flush()
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()
-'''
-    auto_adapter.write_text(auto_adapter_code, encoding="utf-8")
-    return auto_adapter
 
 
-async def replay(scenario: Scenario, workspace_path: Optional[Path] = None, job: Optional[Any] = None) -> dict:
-    """Execute only the configured adapter with a strict evidence contract and resource bounds."""
-    if is_web_static_project(workspace_path, job, scenario):
-        return await replay_web_static(scenario, workspace_path)
 
-    process = None
-    container_name = f"phase5-{uuid.uuid4().hex}"
-    t0 = monotonic()
+def resolve_or_create_backend_adapter(workspace_path, job, scenario):
+    """Only an operator-reviewed image adapter may characterize an application."""
+    return None
+
+
+
+async def replay(scenario, workspace_path=None, job=None, *, binding=None):
+    """Observe actual legacy execution through the separate durable controller."""
+    from app.core.config import settings
+    from app.services import sandbox_client
+    start=monotonic()
     try:
-        from app.core.config import settings
-
-        image = os.getenv("PHASE5_LEGACY_IMAGE", settings.PHASE5_LEGACY_IMAGE).strip()
-        raw_command = os.getenv(
-            "PHASE5_LEGACY_COMMAND_JSON", settings.PHASE5_LEGACY_COMMAND_JSON
-        )
-        if not image or not raw_command:
-            return {
-                "available": False,
-                "execution_mode": "UNAVAILABLE",
-                "duration_ms": int((monotonic() - t0) * 1000),
-                "exit_status": None,
-                "reason": "ADAPTER_NOT_CONFIGURED: PHASE5_LEGACY_IMAGE and PHASE5_LEGACY_COMMAND_JSON are required",
-            }
+        if is_web_static_project(workspace_path, job, scenario):
+            return await replay_web_static(scenario, workspace_path)
+        if job is None or workspace_path is None:
+            raise ValueError("PINNED_WORKSPACE_REQUIRED: a pinned job workspace and approved legacy adapter are required")
+        from app.services.phase6_workspace import file_snapshot, git
+        workspace = Path(workspace_path)
+        source_commit = await git(workspace, "rev-parse", "HEAD")
+        if await git(workspace, "status", "--porcelain", "--untracked-files=no"):
+            raise ValueError("SOURCE_TREE_NOT_PINNED: tracked source differs from its Git commit")
+        excluded = []
+        excluded_paths = set()
+        if "go" in str(getattr(job, "source_stack", "")).lower() and "fiber" in str(getattr(job, "source_stack", "")).lower():
+            tracked = set(filter(None, (await git(workspace, "ls-files", "-z")).split("\x00")))
+            executable = workspace / "bin" / "main"
+            if "bin/main" in tracked and executable.is_file():
+                if executable.is_symlink() or getattr(executable, "is_junction", lambda: False)() or workspace.resolve() not in executable.resolve().parents:
+                    raise ValueError("Unsafe tracked Go executable in characterization workspace")
+                raw = executable.read_bytes()
+                if len(raw) > 8 * 1048576:
+                    excluded_paths.add("bin/main")
+                    excluded.append({
+                        "path": "bin/main",
+                        "size_bytes": len(raw),
+                        "sha256": hashlib.sha256(raw).hexdigest(),
+                        "reason": "Tracked prebuilt executable is excluded; the pinned Go/Fiber image builds the application from the bound source snapshot.",
+                    })
+        files=await file_snapshot(workspace, exclude_paths=excluded_paths)
+        source_provenance = {
+            "source_commit": source_commit,
+            "source_snapshot_sha256": digest(files),
+            "excluded_files": excluded,
+        }
+        command=json.loads(settings.PHASE5_LEGACY_COMMAND_JSON)
+        case_id=digest(scenario.model_dump())
+        scope=binding or {"request_id":"legacy-"+uuid.uuid4().hex,"job_id":str(job.job_id),
+            "attempt_id":str(uuid.uuid4()),"candidate_hash":digest(source_provenance),"suite_hash":digest(scenario.model_dump())}
+        execution={"image":settings.PHASE5_LEGACY_IMAGE,"runtime":settings.SANDBOX_RUNTIME,"timeout":30,
+            "files":files,"checks":[],"adapter":command,"source_provenance":source_provenance,
+            "cases":[{"test_case_id":case_id,"name":scenario.name,"fixtures":scenario.inputs}]}
+        proof=await sandbox_client.execute(execution,scope)
+        if proof.get('execution_purpose')!='VERIFICATION':
+            raise ValueError('DIAGNOSTIC_EVIDENCE_REJECTED: characterization requires production verification policy')
+        run=proof['execution']
+        if run.get('exit_code')!=0 or not run.get('cleanup',{}).get('container_absent'):
+            raise ValueError(run.get('error') or 'SANDBOX_EXECUTION_FAILED: legacy sandbox failed')
+        if run.get('observation',{}).get('source_unchanged') is not True or len(run.get('observation',{}).get('observations',[]))!=1:
+            raise ValueError('INVALID_ADAPTER_EVIDENCE: source changed or observations are incomplete')
+        observed=run['observation']['observations'][0]
+        if observed.get('exit_code')!=0:
+            adapter_reason = (observed.get('stderr') or "approved adapter did not implement this scenario").strip()[:500]
+            if not adapter_reason.startswith("UNOBSERVED:"):
+                adapter_reason = "UNOBSERVED: " + adapter_reason
+            raise ValueError('ADAPTER_EXIT: '+adapter_reason)
         try:
-            command = json.loads(raw_command)
-        except (ValueError, TypeError):
-            return {
-                "available": False,
-                "execution_mode": "UNAVAILABLE",
-                "duration_ms": int((monotonic() - t0) * 1000),
-                "exit_status": None,
-                "reason": "INVALID_ADAPTER_CONFIG: command must be a JSON argv array",
-            }
-        if (
-            not re.fullmatch(r"[A-Za-z0-9./:_@-]+", image)
-            or image.startswith("-")
-            or not isinstance(command, list)
-            or not command
-            or not all(isinstance(c, str) and c for c in command)
-        ):
-            return {
-                "available": False,
-                "execution_mode": "UNAVAILABLE",
-                "duration_ms": int((monotonic() - t0) * 1000),
-                "exit_status": None,
-                "reason": "INVALID_ADAPTER_CONFIG: invalid image or command argv",
-            }
-        try:
-            process = await asyncio.create_subprocess_exec(
-                "docker",
-                "run",
-                "--name",
-                container_name,
-                "--rm",
-                "--pull=never",
-                "--network=none",
-                "--read-only",
-                "--memory=256m",
-                "--cpus=1",
-                "--pids-limit=64",
-                "--cap-drop=ALL",
-                "--security-opt=no-new-privileges",
-                "--user=65534:65534",
-                "--log-driver=none",
-                "--tmpfs=/tmp:rw,noexec,nosuid,size=32m",
-                "-i",
-                image,
-                *command,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                limit=1048576,
-            )
-            output, error = await asyncio.wait_for(
-                adapter_exchange(
-                    process,
-                    canonical({"scenario": scenario.name, "inputs": scenario.inputs}),
-                ),
-                timeout=30,
-            )
-            returncode = process.returncode
-        except NotImplementedError:
-            from app.core.subprocesses import run_subprocess_async
-            sub_res = await run_subprocess_async(
-                [
-                    "docker", "run", "--name", container_name, "--rm", "--pull=never",
-                    "--network=none", "--read-only", "--memory=256m", "--cpus=1",
-                    "--pids-limit=64", "--cap-drop=ALL", "--security-opt=no-new-privileges",
-                    "--user=65534:65534", "--log-driver=none",
-                    "--tmpfs=/tmp:rw,noexec,nosuid,size=32m", "-i", image, *command,
-                ],
-                input_data=canonical({"scenario": scenario.name, "inputs": scenario.inputs}),
-                timeout=30.0,
-            )
-            output, error = sub_res.stdout, sub_res.stderr
-            returncode = sub_res.returncode
-            process = None
+            data=json.loads(observed['stdout'],object_pairs_hook=strict_adapter_object,parse_constant=reject_json_constant)
+            if not isinstance(data,dict) or set(data)!={'output','side_effects'}:
+                raise ValueError('Legacy observation contract violated')
+        except (ValueError,TypeError) as exc:
+            raise ValueError('INVALID_ADAPTER_EVIDENCE: '+str(exc)) from exc
+        if proof['image_scan']['status']!='PASS': raise ValueError('Legacy image vulnerability scan is not passing')
+        return {"available":True,"execution_mode":"REAL_CONTAINER","duration_ms":int((monotonic()-start)*1000),
+            "exit_status":0,"container_name":run['worker_id'],"runtime_evidence":run,
+            "source_provenance":source_provenance,
+            "controller_attestation":proof['attestation'],**data}
+    except Exception as exc:
+        return {"available":False,"execution_mode":"UNAVAILABLE","duration_ms":int((monotonic()-start)*1000),
+            "exit_status":None,"reason":('ADAPTER_TIMEOUT: independent controller deadline exceeded' if isinstance(exc,TimeoutError) else str(exc)[:700])}
 
-        duration_ms = int((monotonic() - t0) * 1000)
-        stdout_sample = output[:2000].decode("utf-8", errors="replace")
-        stderr_sample = error[:2000].decode("utf-8", errors="replace")
-        if returncode:
-            adapter_path = resolve_or_create_backend_adapter(workspace_path, job, scenario)
-            if adapter_path and adapter_path.is_file():
-                try:
-                    from app.core.subprocesses import run_subprocess_async
-                    sub_res = await run_subprocess_async(
-                        [sys.executable, str(adapter_path)],
-                        input_data=canonical({"scenario": scenario.name, "inputs": scenario.inputs}),
-                        cwd=str(workspace_path) if workspace_path else None,
-                        timeout=30.0,
-                    )
-                    if sub_res.returncode == 0:
-                        data = json.loads(
-                            sub_res.stdout,
-                            object_pairs_hook=strict_adapter_object,
-                            parse_constant=reject_json_constant,
-                        )
-                        if isinstance(data, dict) and set(data) == {"output", "side_effects"}:
-                            return {
-                                "available": True,
-                                "execution_mode": "IN_MEMORY_DOUBLE",
-                                "duration_ms": int((monotonic() - t0) * 1000),
-                                "exit_status": 0,
-                                "container_name": "backend-adapter-runner",
-                                "stdout_sample": sub_res.stdout[:2000].decode("utf-8", errors="replace"),
-                                "stderr_sample": sub_res.stderr[:2000].decode("utf-8", errors="replace"),
-                                **data,
-                            }
-                except Exception as exc:
-                    logger.warning("Backend adapter execution fallback failed: %s", exc)
-
-            diagnostic = error.decode("utf-8", errors="replace").lower()
-            if any(
-                t in diagnostic
-                for t in (
-                    "daemon",
-                    "docker_engine",
-                    "dockerdesktoplinuxengine",
-                    "cannot connect",
-                    "failed to connect",
-                )
-            ):
-                reason = "DOCKER_UNAVAILABLE: Docker daemon socket is not reachable"
-            elif any(
-                t in diagnostic
-                for t in ("no such image", "unable to find image", "pull access denied")
-            ):
-                reason = "IMAGE_UNAVAILABLE: configured image is not present locally; pulling is prohibited"
-            else:
-                reason = f"ADAPTER_EXIT: legacy sandbox exited with code {returncode}"
-            return {
-                "available": False,
-                "execution_mode": "UNAVAILABLE",
-                "duration_ms": duration_ms,
-                "exit_status": returncode,
-                "stdout_sample": stdout_sample,
-                "stderr_sample": stderr_sample,
-                "reason": reason,
-            }
-        data = json.loads(
-            output,
-            object_pairs_hook=strict_adapter_object,
-            parse_constant=reject_json_constant,
-        )
-        if not isinstance(data, dict) or set(data) != {"output", "side_effects"}:
-            return {
-                "available": False,
-                "execution_mode": "REAL_CONTAINER",
-                "duration_ms": duration_ms,
-                "exit_status": returncode,
-                "stdout_sample": stdout_sample,
-                "stderr_sample": stderr_sample,
-                "reason": "INVALID_ADAPTER_EVIDENCE: stdout must contain exactly output and side_effects",
-            }
-        # Comparison uses original observations; redaction occurs before persistence, not before pass/fail.
-        return {
-            "available": True,
-            "execution_mode": "REAL_CONTAINER",
-            "duration_ms": duration_ms,
-            "exit_status": returncode,
-            "container_name": container_name,
-            "stdout_sample": stdout_sample,
-            "stderr_sample": stderr_sample,
-            **data,
-        }
-    except FileNotFoundError:
-        adapter_path = resolve_or_create_backend_adapter(workspace_path, job, scenario)
-        if adapter_path and adapter_path.is_file():
-            try:
-                from app.core.subprocesses import run_subprocess_async
-                sub_res = await run_subprocess_async(
-                    [sys.executable, str(adapter_path)],
-                    input_data=canonical({"scenario": scenario.name, "inputs": scenario.inputs}),
-                    cwd=str(workspace_path) if workspace_path else None,
-                    timeout=30.0,
-                )
-                if sub_res.returncode == 0:
-                    data = json.loads(
-                        sub_res.stdout,
-                        object_pairs_hook=strict_adapter_object,
-                        parse_constant=reject_json_constant,
-                    )
-                    if isinstance(data, dict) and set(data) == {"output", "side_effects"}:
-                        return {
-                            "available": True,
-                            "execution_mode": "IN_MEMORY_DOUBLE",
-                            "duration_ms": int((monotonic() - t0) * 1000),
-                            "exit_status": 0,
-                            "container_name": "backend-adapter-runner",
-                            "stdout_sample": sub_res.stdout[:2000].decode("utf-8", errors="replace"),
-                            "stderr_sample": sub_res.stderr[:2000].decode("utf-8", errors="replace"),
-                            **data,
-                        }
-            except Exception as exc:
-                logger.warning("Backend adapter execution fallback failed: %s", exc)
-        logger.exception("phase5.replay Docker executable unavailable")
-        return {
-            "available": False,
-            "execution_mode": "UNAVAILABLE",
-            "duration_ms": int((monotonic() - t0) * 1000),
-            "exit_status": None,
-            "reason": "DOCKER_NOT_INSTALLED: Docker executable was not found",
-        }
-    except asyncio.TimeoutError:
-        logger.exception("phase5.replay timed out")
-        return {
-            "available": False,
-            "execution_mode": "REAL_CONTAINER",
-            "duration_ms": int((monotonic() - t0) * 1000),
-            "exit_status": None,
-            "reason": "ADAPTER_TIMEOUT: 30 second execution deadline exceeded",
-        }
-    except (ValueError, UnicodeError):
-        logger.exception("phase5.replay invalid or oversized evidence")
-        return {
-            "available": False,
-            "execution_mode": "REAL_CONTAINER",
-            "duration_ms": int((monotonic() - t0) * 1000),
-            "exit_status": process.returncode if process else None,
-            "reason": "INVALID_ADAPTER_EVIDENCE: malformed JSON, duplicate keys, nonfinite values or output limit exceeded",
-        }
-    except Exception:
-        logger.exception("phase5.replay infrastructure failure")
-        return {
-            "available": False,
-            "execution_mode": "UNAVAILABLE",
-            "duration_ms": int((monotonic() - t0) * 1000),
-            "exit_status": None,
-            "reason": "SANDBOX_ERROR: legacy adapter could not be executed",
-        }
-    finally:
-        if process and process.returncode is None:
-            process.kill()
-            await process.wait()
-            try:
-                cleanup = await asyncio.create_subprocess_exec(
-                    "docker",
-                    "rm",
-                    "--force",
-                    container_name,
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL,
-                )
-                await asyncio.wait_for(cleanup.wait(), timeout=10)
-            except NotImplementedError:
-                from app.core.subprocesses import run_subprocess_async
-                await run_subprocess_async(["docker", "rm", "--force", container_name], timeout=10.0)
-            except Exception:
-                logger.exception(
-                    "phase5 sandbox cleanup failed | container=%s", container_name
-                )
 
 
 async def adapter_exchange(process, payload: bytes) -> tuple[bytes, bytes]:

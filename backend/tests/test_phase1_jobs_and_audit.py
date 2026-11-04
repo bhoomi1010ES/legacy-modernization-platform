@@ -22,7 +22,7 @@ async def test_transactional_job_creation(client: TestClient):
     client.cookies.clear()
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     token = login_resp.cookies[settings.SESSION_COOKIE_NAME]
 
@@ -57,7 +57,7 @@ async def test_transactional_job_creation(client: TestClient):
         mem_res = await db_session.execute(mem_stmt)
         membership = mem_res.scalar_one_or_none()
         assert membership is not None
-        assert membership.role_id == "ADMIN"
+        assert membership.role_id == "DEVELOPER"
 
         # Verify Initial AuditEvent
         audit_stmt = select(AuditEvent).where(
@@ -87,7 +87,7 @@ def test_job_cancellation_idempotency(client: TestClient):
     client.cookies.clear()
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "alex.morgan@acme.corp", "password": "SecurePassword123!"},
+        json={"email": "alex.morgan@acme.corp", "password": "AdminSecure123!"},
     )
     token = login_resp.cookies[settings.SESSION_COOKIE_NAME]
 

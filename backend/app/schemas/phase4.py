@@ -1,3 +1,4 @@
+from decimal import Decimal
 """Typed schemas and contracts for Phase 4: Intake, Analysis, Architect, Feasibility, and Planning."""
 
 from datetime import datetime, timezone
@@ -572,6 +573,9 @@ class PlanningContext(BaseModel):
     characterization_coverage: Optional[Dict[str, Any]] = None
     schema_data_plan: Optional[Dict[str, Any]] = None
     provenance_hashes: Dict[str, str] = Field(default_factory=dict)
+    stack_profile: Optional[Dict[str, Any]] = None
+    cost_ceiling_usd: Optional[Decimal] = None
+    baseline_source_sha: Optional[str] = None
     model_config = ConfigDict(extra="forbid")
 
 

@@ -1,0 +1,2341 @@
+{
+  "scope": "Real bounded containment probes; not full W09 acceptance. Missing tools never count as verification PASS.",
+  "health": {
+    "blocked_reasons": [
+      "Image vulnerability scanner trivy is unavailable"
+    ],
+    "images": [
+      "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3"
+    ],
+    "runtime": {
+      "cgroup_version": "2",
+      "docker_version": "29.9.2",
+      "runtime_name": "docker-rootless",
+      "security_options": [
+        "name=seccomp,profile=builtin",
+        "name=rootless",
+        "name=cgroupns"
+      ],
+      "selected_runtime": "runc",
+      "timestamp": 1793616621.5875585
+    },
+    "status": "blocked",
+    "worker_alive": true
+  },
+  "fixtures": [
+    {
+      "fixture": "path-traversal",
+      "attempt_id": "188d9fd439b24439b0d01a480efdeb24",
+      "request_id": "5c9d3b99003f4076a848a45c8b5a5fd4",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "POLICY_DENIAL",
+      "actual": {
+        "policy_denied": true,
+        "output": null,
+        "status": null
+      },
+      "execution_mode": "POLICY_REJECTION",
+      "started_at": 1793616621.5883267,
+      "finished_at": 1793616621.6339242,
+      "evidence": {},
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "symlink-escape",
+      "attempt_id": "4925f3f1d3a14535b6473147afaae139",
+      "request_id": "61e2a95d9d1b40219654293e5b546f1e",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793616621.6340508,
+      "finished_at": 1793616628.3906996,
+      "evidence": {
+        "attempt_id": "4925f3f1d3a14535b6473147afaae139",
+        "candidate_hash": "dbf93e4cb31408748fc65e25106d9fe9eecbebd468693a901620e6e08f970be2",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "67a5ce757c3e8b8719dd4155b2d253cb0b06c55b568a3d16a68af59653719bc6",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616626.0288897,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "bb64aad889d89f73a7d0ee6cef8d3f0590ce6c861cc4b18ca05aaa44c50715f7",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 91.05364700008067,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616624.8893824
+          },
+          "stage": "verify",
+          "started_at": 1793616624.8893945,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 91.05364700008067, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-61e2a95d9d1b40219654293e5b546f1e-verify"
+        },
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "reason": "Operator image vulnerability scanner trivy is unavailable",
+          "status": "NOT_RUN"
+        },
+        "input_hash": "3deb5a4fd025db38d1b5458b2384091fdd2df003199922d9dbf8779bf8db3001",
+        "job_id": "41ce01fb156442ebb7bd32c16c2a7e4e",
+        "lease_expires_at": 1793616667.0019996,
+        "lease_generation": 1,
+        "lease_token": "24c3f884edb04580ab6d97ef90c2f9a0",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "7438c1ea9edd06b7a6fcc6c08230dc5594f9be7e02a7e2587f59f4074f7b9b21",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616623.6618648,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "995820ba08f0e0e0c20f94a9b805d31b42843e2cdd899fc526c003333c89fe0d",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616622.8890924
+          },
+          "stage": "preflight",
+          "started_at": 1793616622.8891137,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-61e2a95d9d1b40219654293e5b546f1e-preflight"
+        },
+        "request_id": "61e2a95d9d1b40219654293e5b546f1e",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "dca3f968ca0a24f7e51555b383d138bab66cee5eba848f97ac2eac73ca7bf0bf",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616628.2197137,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616627.5192568
+          },
+          "stage": "review",
+          "started_at": 1793616627.5192676,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-61e2a95d9d1b40219654293e5b546f1e-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-28373-84a311d05c074cd8b3b449142d900a02"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "host-secret-access",
+      "attempt_id": "788f7180b65e4375a6023aea034ead5e",
+      "request_id": "ec770360c9e64af5ba52d4582c2f4439",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793616628.3908358,
+      "finished_at": 1793616634.962267,
+      "evidence": {
+        "attempt_id": "788f7180b65e4375a6023aea034ead5e",
+        "candidate_hash": "04493f782acd03af85b18f7e4eb893fdd5b5b59dfd22f295cbd5fc601afe32a6",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "842b18fc8f995c44fb9eadd85b8ab85e34454f940228a168fb466d3c90187455",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616632.8480911,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "fa5685b07e9830de21cc6883bd350e4d0117c8369b196690fac46305d9a8c986",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 89.91931699711131,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616631.771665
+          },
+          "stage": "verify",
+          "started_at": 1793616631.7716768,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 89.91931699711131, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-ec770360c9e64af5ba52d4582c2f4439-verify"
+        },
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "reason": "Operator image vulnerability scanner trivy is unavailable",
+          "status": "NOT_RUN"
+        },
+        "input_hash": "5237806690f23f66600b26ab2bc68594a3e7db72a8cae0475881310d715866cf",
+        "job_id": "7e8ff7869b984d409d3c2a1f4f9936dd",
+        "lease_expires_at": 1793616673.7863917,
+        "lease_generation": 1,
+        "lease_token": "9a25ac8d3e6b49b9a41d736cf7c9dcea",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "e93f851d2d1ce11c30320079a82e716b7f5ae0a5979dd399a52402df4bfb55e9",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616630.5619915,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "995820ba08f0e0e0c20f94a9b805d31b42843e2cdd899fc526c003333c89fe0d",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616629.8880482
+          },
+          "stage": "preflight",
+          "started_at": 1793616629.8880591,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-ec770360c9e64af5ba52d4582c2f4439-preflight"
+        },
+        "request_id": "ec770360c9e64af5ba52d4582c2f4439",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "8517d814d3386cb0f967c8c2d21616250a46ce4e9d9857df8bc6e7011dab88e8",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616634.7419064,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616634.0193667
+          },
+          "stage": "review",
+          "started_at": 1793616634.0193777,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-ec770360c9e64af5ba52d4582c2f4439-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-28373-84a311d05c074cd8b3b449142d900a02"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "docker-socket-access",
+      "attempt_id": "10e7d9e0eda249f79d345aa984775924",
+      "request_id": "4e0d87dc2cf5415ba4b13dd6e22e6e22",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793616634.9624481,
+      "finished_at": 1793616641.7119598,
+      "evidence": {
+        "attempt_id": "10e7d9e0eda249f79d345aa984775924",
+        "candidate_hash": "3e6475f8555d40cb2425565cf6c9aa58c304b83fe133522309edca544723d47f",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "bf506417a284f21cd2a9221fc9aca58ae3f7c86926cf2a021518fab6a45b51b8",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616639.6605175,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "6b9a524316554558e18187ecdcc09d37cdc7fb4f66b2d044a4ad29a05cf787ca",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 108.15151499991771,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616638.5386868
+          },
+          "stage": "verify",
+          "started_at": 1793616638.5386977,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 108.15151499991771, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-4e0d87dc2cf5415ba4b13dd6e22e6e22-verify"
+        },
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "reason": "Operator image vulnerability scanner trivy is unavailable",
+          "status": "NOT_RUN"
+        },
+        "input_hash": "6e8d6bff160008f604c2bb2dff917e697372142f54e1975e920435ceb9d620fb",
+        "job_id": "5bb8effbe6384c86a1bfe767dd18d6d1",
+        "lease_expires_at": 1793616680.3099852,
+        "lease_generation": 1,
+        "lease_token": "5b2bbb73931640d284459bfcf84540c5",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "a14cb61c2d23bb8ea519c026392c7123df517d8f22589bbe62ab090a2835c819",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616637.4134307,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "995820ba08f0e0e0c20f94a9b805d31b42843e2cdd899fc526c003333c89fe0d",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616636.6155336
+          },
+          "stage": "preflight",
+          "started_at": 1793616636.6155457,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-4e0d87dc2cf5415ba4b13dd6e22e6e22-preflight"
+        },
+        "request_id": "4e0d87dc2cf5415ba4b13dd6e22e6e22",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "b77c7c3296dcdb3ed056e345a47e78fb66132a8320c519ce417f2d0cd47a4e02",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616641.481103,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616640.8160515
+          },
+          "stage": "review",
+          "started_at": 1793616640.816062,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-4e0d87dc2cf5415ba4b13dd6e22e6e22-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-28373-84a311d05c074cd8b3b449142d900a02"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "cloud-metadata-access",
+      "attempt_id": "7c5d521959da4d1fbafb766fda266ff2",
+      "request_id": "4db0801f60fd4a0f924c0b9b605af6d0",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793616641.7120776,
+      "finished_at": 1793616649.9413683,
+      "evidence": {
+        "attempt_id": "7c5d521959da4d1fbafb766fda266ff2",
+        "candidate_hash": "33655afd63f9be5de47a090ef402ec14bc16f1abad2e3fe8a3321ba98d243eb8",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "eec199ab8c3f7f45b0abe27b6b29e31975eaedebb55e3943c7e7fb12d7af4924",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616647.4381998,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "30132da6ff3a105ab350f5271c69941259c6890670127a4e14b6d886b4c72061",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 142.1651419987029,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616646.014092
+          },
+          "stage": "verify",
+          "started_at": 1793616646.0141065,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 142.1651419987029, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-4db0801f60fd4a0f924c0b9b605af6d0-verify"
+        },
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "reason": "Operator image vulnerability scanner trivy is unavailable",
+          "status": "NOT_RUN"
+        },
+        "input_hash": "dac1337e0da464653ee8f86629ac16c18744328a07d4e463f00fd72851eaf8ab",
+        "job_id": "722b489fed9f4a5b9e7eee418691bbaa",
+        "lease_expires_at": 1793616687.0521116,
+        "lease_generation": 1,
+        "lease_token": "3a80d795b9e74dc291afbfd105b6145b",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "5311f23d3ec1af4222ddd4cda9f59a42c0e8ac1959cbc914d91295e0b9c06a50",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616643.9199147,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "995820ba08f0e0e0c20f94a9b805d31b42843e2cdd899fc526c003333c89fe0d",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616643.1121113
+          },
+          "stage": "preflight",
+          "started_at": 1793616643.1121223,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-4db0801f60fd4a0f924c0b9b605af6d0-preflight"
+        },
+        "request_id": "4db0801f60fd4a0f924c0b9b605af6d0",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "a5ebe39f59c33a454cf37b66fc30ca7f9e626e13e9cc8086fc8f5fff2e7dc85c",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616649.720638,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616648.8491638
+          },
+          "stage": "review",
+          "started_at": 1793616648.8491795,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-4db0801f60fd4a0f924c0b9b605af6d0-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-28373-84a311d05c074cd8b3b449142d900a02"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "other-tenant-access",
+      "attempt_id": "fb237556d64b4b42b90b023e1bff0668",
+      "request_id": "5c118a933f7a41d3bbc85fb1824d0b10",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793616649.9415398,
+      "finished_at": 1793616658.3993304,
+      "evidence": {
+        "attempt_id": "fb237556d64b4b42b90b023e1bff0668",
+        "candidate_hash": "ed6f02af1d07130f8a1caf03b549eb5b8a933702885ae1236dbd41a662a31069",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "409f59a557733d191775947891ecde578fc52a60560880e019771a2201431129",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616656.1185472,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "94b0b7096df9916bee0492bba9d554b207ac8172579986d58aca27419536f469",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 125.64743699840619,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616654.7304497
+          },
+          "stage": "verify",
+          "started_at": 1793616654.7304657,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 125.64743699840619, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-5c118a933f7a41d3bbc85fb1824d0b10-verify"
+        },
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "reason": "Operator image vulnerability scanner trivy is unavailable",
+          "status": "NOT_RUN"
+        },
+        "input_hash": "b2ccc054d7733e3c96c2e45026d720b9537d04e4a78f64e2127abc6a16277e21",
+        "job_id": "5064e419d7fc41d885faa9bb55e4ef5f",
+        "lease_expires_at": 1793616695.303224,
+        "lease_generation": 1,
+        "lease_token": "0cf91ca260874b919f8f50165047a3c6",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "4062c652c424fc8a6f916d72ee165b10f37d861febcd2c6cdc495d763819e336",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616653.0907862,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "995820ba08f0e0e0c20f94a9b805d31b42843e2cdd899fc526c003333c89fe0d",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616651.9947114
+          },
+          "stage": "preflight",
+          "started_at": 1793616651.994733,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-5c118a933f7a41d3bbc85fb1824d0b10-preflight"
+        },
+        "request_id": "5c118a933f7a41d3bbc85fb1824d0b10",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "5be2af51f656081bd4af179a23743539b39a657e039702458b330bcf34752447",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616658.2952309,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616657.5920258
+          },
+          "stage": "review",
+          "started_at": 1793616657.592038,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-5c118a933f7a41d3bbc85fb1824d0b10-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-28373-84a311d05c074cd8b3b449142d900a02"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "fork-bomb-bounded",
+      "attempt_id": "d89b7ca56b944f329e5901b296cfb17c",
+      "request_id": "f3c7639ce10946908b15c2877e764dfe",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793616658.3994722,
+      "finished_at": 1793616667.4801095,
+      "evidence": {
+        "attempt_id": "d89b7ca56b944f329e5901b296cfb17c",
+        "candidate_hash": "9923dfc776f2fc47f2a3fc65d44a9bc05f39749d097794f9a11b5faba86d33c6",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "c516f446b558215e575b9b0054c16faa21c97f0b6ab5cac1707fb4929ac8d250",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616665.8449168,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "e84ffb94573396128ab7666e7c707c180d628ff18551cd476506e90f1d42efbd",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 2266.4658629983023,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616662.5867574
+          },
+          "stage": "verify",
+          "started_at": 1793616662.5867686,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 2266.4658629983023, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-f3c7639ce10946908b15c2877e764dfe-verify"
+        },
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "reason": "Operator image vulnerability scanner trivy is unavailable",
+          "status": "NOT_RUN"
+        },
+        "input_hash": "59c977ff440e59622a9544df2825c8998fe6b556839d97b1cc3d376caaf1862d",
+        "job_id": "69f690c578fe40b2b24d4b0f78c71c25",
+        "lease_expires_at": 1793616703.8643887,
+        "lease_generation": 1,
+        "lease_token": "2fb2c83f7ffc4ef9aa9715fbfc73c5cc",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "fb0cdff932354e5486e82ac77a02110dd00a43457ef0a9f69c97d813d4f43644",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616660.9267178,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "995820ba08f0e0e0c20f94a9b805d31b42843e2cdd899fc526c003333c89fe0d",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616660.0211973
+          },
+          "stage": "preflight",
+          "started_at": 1793616660.0212202,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-f3c7639ce10946908b15c2877e764dfe-preflight"
+        },
+        "request_id": "f3c7639ce10946908b15c2877e764dfe",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "12267e115b748df674764b256e2b170ebd2ec8e699fa7e699f2f9889a56e98b3",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616667.2416863,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616666.6544087
+          },
+          "stage": "review",
+          "started_at": 1793616666.654419,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-f3c7639ce10946908b15c2877e764dfe-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-28373-84a311d05c074cd8b3b449142d900a02"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "infinite-loop",
+      "attempt_id": "b7d6713d1c9344f4bc68662d7fa33f07",
+      "request_id": "504853b57b774987be88c992d83d814b",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "DEADLINE",
+      "actual": {
+        "policy_denied": false,
+        "output": null,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793616667.4802105,
+      "finished_at": 1793616677.6178653,
+      "evidence": {
+        "attempt_id": "b7d6713d1c9344f4bc68662d7fa33f07",
+        "candidate_hash": "3df15a468e51acdc69bf21dec8133183cadb5da1d0fdc2756c1d3560eb6987ba",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "a60ca8fccc8cceaa71ead337bc2e928e1029330a2d7d13b7a478c83faa0c086b",
+          "execution_uid": "65534:65534",
+          "exit_code": 137,
+          "finished_at": 1793616675.3879876,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616670.578981
+          },
+          "stage": "verify",
+          "started_at": 1793616670.5789928,
+          "stderr": "",
+          "stdout": "",
+          "worker_id": "rebase-504853b57b774987be88c992d83d814b-verify"
+        },
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "reason": "Operator image vulnerability scanner trivy is unavailable",
+          "status": "NOT_RUN"
+        },
+        "input_hash": "009e8c82f0e49f9fd1445853c187cf6ac8634a76207c044cfe49275917aaf321",
+        "job_id": "e4c775f97f6d447bbff62341646a4bf8",
+        "lease_expires_at": 1793616712.7966964,
+        "lease_generation": 1,
+        "lease_token": "26d1052823184cd5babac20f0a037bee",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "95440ddebf4873022d889459316b1f8412b4f3ec5a5672106891ad05d2d15599",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616669.3482466,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "995820ba08f0e0e0c20f94a9b805d31b42843e2cdd899fc526c003333c89fe0d",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616668.6878114
+          },
+          "stage": "preflight",
+          "started_at": 1793616668.6878219,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-504853b57b774987be88c992d83d814b-preflight"
+        },
+        "request_id": "504853b57b774987be88c992d83d814b",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "a4b3f7843564f532cd9f90a4269ac9ef0207c047266e878be34e09f1fda9bfc5",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616677.3299024,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616676.569324
+          },
+          "stage": "review",
+          "started_at": 1793616676.5693352,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-504853b57b774987be88c992d83d814b-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-28373-84a311d05c074cd8b3b449142d900a02"
+      },
+      "cleanup_confirmed": true,
+      "status": "FAIL"
+    },
+    {
+      "fixture": "network-egress",
+      "attempt_id": "be5f1aeeb09646f3815c84bebefd856a",
+      "request_id": "d04abbad239940c185b0cb7ee5b5aff0",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793616677.6179833,
+      "finished_at": 1793616684.2873785,
+      "evidence": {
+        "attempt_id": "be5f1aeeb09646f3815c84bebefd856a",
+        "candidate_hash": "76c14d09a752cd3dc5be79631b1ec878c7f9c2441e10e0731dd348aa4fda3e03",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "9141233a5a748d11e06de1b2d968b1f69f63efcb7c9fda511154b45839fcb281",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616681.9452355,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "b8b38ceec7d17e7b701c3fed9ae786c773c26140815b870b084423167addd8e9",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 104.43500000110362,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616680.8711317
+          },
+          "stage": "verify",
+          "started_at": 1793616680.8711436,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 104.43500000110362, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-d04abbad239940c185b0cb7ee5b5aff0-verify"
+        },
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "reason": "Operator image vulnerability scanner trivy is unavailable",
+          "status": "NOT_RUN"
+        },
+        "input_hash": "49ba869d71449c0fe6f9a98ce7711359034e2698e692bd8220c8b8bcd5ba22ec",
+        "job_id": "f181a871d6e24643a8fb87763d244d60",
+        "lease_expires_at": 1793616722.9068658,
+        "lease_generation": 1,
+        "lease_token": "572c2bab7a8e4934b712bbc2d958ea4f",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "37fd557e934f96f13c60d78631c10c7d7e67e84909b414ddbd2fbdf734386a42",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616679.7748015,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "995820ba08f0e0e0c20f94a9b805d31b42843e2cdd899fc526c003333c89fe0d",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616679.056333
+          },
+          "stage": "preflight",
+          "started_at": 1793616679.0563457,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-d04abbad239940c185b0cb7ee5b5aff0-preflight"
+        },
+        "request_id": "d04abbad239940c185b0cb7ee5b5aff0",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "50150e3c7a892e641c5a86a3c604fb614767349fbeb20d76ae3c4d7042592b89",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616684.0061536,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616683.2126675
+          },
+          "stage": "review",
+          "started_at": 1793616683.2126799,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-d04abbad239940c185b0cb7ee5b5aff0-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-28373-84a311d05c074cd8b3b449142d900a02"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "unexpected-install",
+      "attempt_id": "fef990ed3bfb4247a04823ddb2c9e8eb",
+      "request_id": "b69e4ce78d8346748dd1d164de461e4b",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "INSTALL_DENIAL",
+      "actual": {
+        "policy_denied": true,
+        "output": null,
+        "status": null
+      },
+      "execution_mode": "POLICY_REJECTION",
+      "started_at": 1793616684.2875128,
+      "finished_at": 1793616684.3323228,
+      "evidence": {},
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "unsafe-submodule",
+      "attempt_id": "309f9b3d81c64c58a9dc818a54886ca4",
+      "request_id": "9f5dc2b32a754ed28c1c20c5d6748f81",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "POLICY_DENIAL",
+      "actual": {
+        "policy_denied": true,
+        "output": null,
+        "status": null
+      },
+      "execution_mode": "POLICY_REJECTION",
+      "started_at": 1793616684.3324547,
+      "finished_at": 1793616684.3798103,
+      "evidence": {},
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "unsafe-git-hook",
+      "attempt_id": "65d20d29d1144f2f892377f776c3659d",
+      "request_id": "b8461a874a244ac1b6e86b9fdc4ddc29",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "POLICY_DENIAL",
+      "actual": {
+        "policy_denied": true,
+        "output": null,
+        "status": null
+      },
+      "execution_mode": "POLICY_REJECTION",
+      "started_at": 1793616684.3799553,
+      "finished_at": 1793616684.426364,
+      "evidence": {},
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "archive-traversal",
+      "attempt_id": "9037d0679ac8491195dc9c5914d05255",
+      "request_id": "3c5915a71191406bad7fcdb9b3a15202",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793616684.4264865,
+      "finished_at": 1793616690.6207783,
+      "evidence": {
+        "attempt_id": "9037d0679ac8491195dc9c5914d05255",
+        "candidate_hash": "bb00d8bdaaa7274f81086fed1bf8120b013d403ee701a972eb848c08809590d9",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "a505e5f7edb6964273419354a974bc2aca5b7f29753e9bfc7dcac39a1060f016",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616688.6097019,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "79e37576bec1271ced6f98152a9079402e9544ae065dbf69a35fdbf927c235e4",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 139.23612799771945,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616687.4886353
+          },
+          "stage": "verify",
+          "started_at": 1793616687.4886472,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 139.23612799771945, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-3c5915a71191406bad7fcdb9b3a15202-verify"
+        },
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "reason": "Operator image vulnerability scanner trivy is unavailable",
+          "status": "NOT_RUN"
+        },
+        "input_hash": "39bfb3d50f46e544cbdc9c8b326f9734e5b5d657cc198eeef41e29f5a61e048c",
+        "job_id": "66a5454fdb684223836d421e9e8236c3",
+        "lease_expires_at": 1793616729.5782928,
+        "lease_generation": 1,
+        "lease_token": "8ae1f1b7fd3145a38d10ea41bcf4911e",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "3826ee110707d3ac0cc8b984a2679cf92a78b33a086ad99c13120014dc58f9bd",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616686.3864713,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "995820ba08f0e0e0c20f94a9b805d31b42843e2cdd899fc526c003333c89fe0d",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616685.6815772
+          },
+          "stage": "preflight",
+          "started_at": 1793616685.6816182,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-3c5915a71191406bad7fcdb9b3a15202-preflight"
+        },
+        "request_id": "3c5915a71191406bad7fcdb9b3a15202",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "4603717f9ac864ef1bbcf6cdd16e1f5ce1e56ab1cd0ca601b663a76ac9e5e965",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616690.4361184,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616689.7422113
+          },
+          "stage": "review",
+          "started_at": 1793616689.7422233,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-3c5915a71191406bad7fcdb9b3a15202-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-28373-84a311d05c074cd8b3b449142d900a02"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "archive-bomb-bounded",
+      "attempt_id": "a973c75fca114f959b0a01de30ff6e18",
+      "request_id": "424a1718467f47edbc793409cd01d140",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "TRUE",
+      "actual": {
+        "policy_denied": false,
+        "output": true,
+        "status": "SUCCEEDED"
+      },
+      "execution_mode": "REAL_SANDBOX",
+      "started_at": 1793616690.6208954,
+      "finished_at": 1793616697.5169666,
+      "evidence": {
+        "attempt_id": "a973c75fca114f959b0a01de30ff6e18",
+        "candidate_hash": "5b7e099d3f665c13bc6af73ebf5319668a07939d907e4af7d97006950c28e3b7",
+        "execution": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "03484b277982141aad49779c0e4a893661105e3f6dac7d7d359fb053a478b2fc",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616695.1413674,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "c3dd182efdec5e1e499b8242479d27552111c507c536acbe0020d366ee1f9dfa",
+          "observation": {
+            "checks": [],
+            "observations": [
+              {
+                "command": [
+                  "python",
+                  "/adapter.py"
+                ],
+                "duration_ms": 437.66887099991436,
+                "exit_code": 0,
+                "status": "OBSERVED",
+                "stderr": "",
+                "stdout": "{\"output\": true, \"side_effects\": {\"count\": 1}}",
+                "test_case_id": "containment-probe"
+              }
+            ],
+            "source_unchanged": true
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616693.746898
+          },
+          "stage": "verify",
+          "started_at": 1793616693.7469096,
+          "stderr": "",
+          "stdout": "{\"checks\": [], \"observations\": [{\"test_case_id\": \"containment-probe\", \"command\": [\"python\", \"/adapter.py\"], \"exit_code\": 0, \"duration_ms\": 437.66887099991436, \"stdout\": \"{\\\"output\\\": true, \\\"side_effects\\\": {\\\"count\\\": 1}}\", \"stderr\": \"\", \"status\": \"OBSERVED\"}], \"source_unchanged\": true}\n",
+          "worker_id": "rebase-424a1718467f47edbc793409cd01d140-verify"
+        },
+        "harness_version": "w09-harness-v3",
+        "image_scan": {
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "reason": "Operator image vulnerability scanner trivy is unavailable",
+          "status": "NOT_RUN"
+        },
+        "input_hash": "42f2da074c1d24b7ed4d3f63832b7242a766681768307826652b2d005f1003f8",
+        "job_id": "7e8a539e6ffc4db8b25b9bbd96c035ed",
+        "lease_expires_at": 1793616736.004155,
+        "lease_generation": 1,
+        "lease_token": "795b882345734f3b9273d068bc48db3f",
+        "preflight": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "1017eeb0899b2d6f1a82d9a3d17eec26326a5cadbc92e08b71c2b2b2e17d2a4f",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616692.6634693,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "995820ba08f0e0e0c20f94a9b805d31b42843e2cdd899fc526c003333c89fe0d",
+          "observation": {
+            "adapter_sha256": "93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d",
+            "cgroup_limits": {
+              "cpu.max": "100000 100000",
+              "io.max": "",
+              "memory.max": "268435456",
+              "pids.max": "64"
+            },
+            "gid": 65534,
+            "process_security": {
+              "CapEff": "0000000000000000",
+              "NoNewPrivs": "1",
+              "Seccomp": "2"
+            },
+            "uid": 65534
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616691.9711213
+          },
+          "stage": "preflight",
+          "started_at": 1793616691.9711332,
+          "stderr": "",
+          "stdout": "{\"uid\": 65534, \"gid\": 65534, \"process_security\": {\"CapEff\": \"0000000000000000\", \"NoNewPrivs\": \"1\", \"Seccomp\": \"2\"}, \"cgroup_limits\": {\"memory.max\": \"268435456\", \"pids.max\": \"64\", \"cpu.max\": \"100000 100000\", \"io.max\": \"\"}, \"adapter_sha256\": \"93382cb3be18c97afbf420d15cfe8c68fba8b9124f6bfd6c6278ce468f5bc75d\"}\n",
+          "worker_id": "rebase-424a1718467f47edbc793409cd01d140-preflight"
+        },
+        "request_id": "424a1718467f47edbc793409cd01d140",
+        "review": {
+          "cleanup": {
+            "container_absent": true,
+            "remove_exit_code": 0
+          },
+          "container_configuration": {
+            "Binds": null,
+            "CapDrop": [
+              "ALL"
+            ],
+            "Memory": 268435456,
+            "NanoCpus": 1000000000,
+            "NetworkMode": "none",
+            "PidsLimit": 64,
+            "ReadonlyRootfs": true,
+            "Runtime": "runc",
+            "SecurityOpt": [
+              "apparmor=docker-default",
+              "no-new-privileges"
+            ],
+            "Tmpfs": {
+              "/tmp": "rw,noexec,nosuid,nodev,size=32m",
+              "/work": "rw,noexec,nosuid,nodev,size=128m,mode=1777"
+            }
+          },
+          "container_id": "c2f78d232ef8471484dfa729796deb1852564e6f2a427f412eca2e522b49e91e",
+          "execution_uid": "65534:65534",
+          "exit_code": 0,
+          "finished_at": 1793616697.2891421,
+          "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+          "logs_hash": "9724b4fe0110414e0873d0881cea89072d01e7ae375fb60d4241b4748009f84e",
+          "observation": {
+            "findings": [],
+            "limitations": [
+              "Static source review; security/license tools and observed behavior are separately required"
+            ],
+            "reviewer_version": "w09-independent-review-v1",
+            "status": "PASS"
+          },
+          "runtime_evidence": {
+            "cgroup_version": "2",
+            "docker_version": "29.9.2",
+            "runtime_name": "docker-rootless",
+            "security_options": [
+              "name=seccomp,profile=builtin",
+              "name=rootless",
+              "name=cgroupns"
+            ],
+            "selected_runtime": "runc",
+            "timestamp": 1793616696.4722195
+          },
+          "stage": "review",
+          "started_at": 1793616696.472232,
+          "stderr": "",
+          "stdout": "{\"status\": \"PASS\", \"findings\": [], \"reviewer_version\": \"w09-independent-review-v1\", \"limitations\": [\"Static source review; security/license tools and observed behavior are separately required\"]}\n",
+          "worker_id": "rebase-424a1718467f47edbc793409cd01d140-review"
+        },
+        "suite_hash": "583b18daedb107677fa26cdafecbf365c02e2cce9f1d7988e755a9fd1554f33b",
+        "worker_id": "verifier-28373-84a311d05c074cd8b3b449142d900a02"
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    },
+    {
+      "fixture": "process-tree-cancellation",
+      "attempt_id": "7e7ed2a44ff146159d70d87c80009841",
+      "request_id": "5fbd9fed21804267a2a1245f805b36c8",
+      "image_digest": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+      "expected": "Running child tree removed",
+      "actual": {
+        "running_tree_observed": true,
+        "reply": {
+          "status": "CANCELLED"
+        }
+      },
+      "cleanup_confirmed": true,
+      "status": "PASS"
+    }
+  ],
+  "counts": {
+    "PASS": 14,
+    "FAIL": 1
+  },
+  "host_canaries_unchanged": true
+}

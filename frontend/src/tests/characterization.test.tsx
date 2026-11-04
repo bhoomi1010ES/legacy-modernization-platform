@@ -4,6 +4,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { BaselineEvidence, Characterization } from '../pages/Characterization';
 import type { CharacterizationReport } from '../types/phase5';
 import { api } from '../services/api';
+import { GateDetailExplanationView } from '../components/GateDetailExplanationView';
 
 const report: CharacterizationReport = {
   suite_id: 'suite-1', version: 2, content_hash: 'sha256:baseline', status: 'DRAFT',
@@ -74,6 +75,30 @@ describe('Phase 5 characterization review', () => {
 
     const unavailMarkup = renderToStaticMarkup(<BaselineEvidence report={{ ...report, execution_mode: 'UNAVAILABLE' }} />);
     expect(unavailMarkup).toContain('EXECUTION UNAVAILABLE');
+  });
+
+  it('shows the concrete reason beside each unavailable G2 scenario', () => {
+    const markup = renderToStaticMarkup(
+      <GateDetailExplanationView
+        gateType="G2"
+        job={{
+          job_id: 'job-1', name: 'Go service', source_repository: '', source_revision: 'abc',
+          source_stack: 'Go / Fiber', target_stack: 'Node.js', status: 'AWAITING_GATE_G2',
+          progress: 0, modules: 0, cost: 0, budget: 0, owner: 'owner', max_repair_attempts: 1,
+          created_at: '', updated_at: '',
+        }}
+        characterizationReport={{
+          ...report,
+          cases: [{
+            test_case_id: 'case-1', name: 'bootstrap replay', module: 'bootstrap', interface: 'main',
+            behavior: 'Start legacy app', expected: null, actual: null, normalization: [],
+            outcome: 'UNAVAILABLE', execution_mode: 'UNAVAILABLE', duration_ms: 436,
+            limitation: 'Verification workspace exceeds 8 MiB adapter limit', evidence_status: 'UNOBSERVED',
+          }],
+        }}
+      />
+    );
+    expect(markup).toContain('UNAVAILABLE: Verification workspace exceeds 8 MiB adapter limit');
   });
 
   it('renders structured schema findings for complex and proprietary SQL constructs', () => {

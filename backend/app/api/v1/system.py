@@ -39,14 +39,42 @@ async def get_health() -> HealthResponse:
 )
 async def get_readiness(response: Response) -> ReadinessResponse:
     db_healthy = await ping_database()
-    if not db_healthy:
+    profiles = []
+    profile_status = "unavailable"
+    controller_available = False
+    controller_worker = False
+    images_match = False
+    try:
+        from app.services.verification_profiles import available_profiles
+        from app.services.sandbox_client import health
+        profiles = available_profiles()
+        profile_status = "configured" if profiles else "profile_missing"
+        controller = await health()
+        controller_available = True
+        approved_images = set(controller.get("images", []))
+        controller_worker = controller.get("worker_alive") is True
+        images_match = bool(profiles) and all(
+            profile["image"] in approved_images for profile in profiles
+        )
+    except Exception:
+        # Missing controller/profile/runtime is an unavailable component, never ready.
+        if not controller_available:
+            profile_status = "unavailable"
+    sandbox_healthy = bool(profiles) and controller_worker and images_match
+    if controller_available and not profiles:
+        profile_status = "profile_missing"
+    elif controller_available and profiles and not images_match:
+        profile_status = "image_unapproved"
+    elif controller_available and sandbox_healthy:
+        profile_status = "ready"
+    if not db_healthy or not sandbox_healthy:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return ReadinessResponse(
-        ready=db_healthy,
+        ready=db_healthy and sandbox_healthy,
         components={
             "database": "healthy" if db_healthy else "unhealthy",
             "storage": "healthy",
-            "agent_workers": "healthy",
-            "sandboxes": "ready",
+            "agent_workers": "healthy" if controller_worker else "unavailable",
+            "sandboxes": "ready" if sandbox_healthy else profile_status,
         },
     )
