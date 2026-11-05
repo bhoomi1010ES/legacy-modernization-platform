@@ -385,6 +385,7 @@ class CharacterizationCoordinator:
             suite_payload["cases"] = cases_payload
             suite_payload["g2_readiness"] = readiness
             suite_payload["schema_hash"] = suite.content_hash
+            suite_payload["runtime_available"] = any(r.passed for r in execution_results) if execution_results else False
 
             content_bytes = json.dumps(suite_payload, sort_keys=True).encode("utf-8")
             if self.db is not None:

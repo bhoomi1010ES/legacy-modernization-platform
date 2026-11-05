@@ -17,6 +17,46 @@ try:
 except ImportError:
     pass
 
+def _default_phase6_target_profiles_json() -> str:
+    def make_profile(version: str) -> dict:
+        checks = [
+            {"category": "build", "command": ["python", "-m", "compileall", "-q", "."]},
+            {"category": "unit", "command": ["python", "-m", "pytest", "/acceptance/test_calc.py", "-q", "-p", "no:cacheprovider"]},
+            {"category": "integration", "command": ["python", "-m", "pytest", "/acceptance/test_integration.py", "-q", "-p", "no:cacheprovider"]},
+            {"category": "static", "command": ["python", "-m", "mypy", "--cache-dir=/tmp/mypy-cache", "--check-untyped-defs", "--explicit-package-bases", "."]},
+            {"category": "security", "command": ["python", "-m", "bandit", "-r", "app", "-q"]},
+            {"category": "dependency", "command": ["pip-audit", "--strict"]},
+            {"category": "license", "command": ["pip-licenses", "--format=json"]},
+            {"category": "runtime", "command": ["python", "-m", "pytest", "/acceptance/test_runtime.py", "-q", "-p", "no:cacheprovider"]},
+            {"category": "api_compatibility", "command": ["python", "-m", "pytest", "/acceptance/test_api.py", "-q", "-p", "no:cacheprovider"]},
+        ]
+        system_checks = checks + [{"category": "schema", "command": ["python", "-m", "pytest", "/acceptance/test_schema.py", "-q", "-p", "no:cacheprovider"]}]
+        runtime = os.getenv("SANDBOX_RUNTIME", "e2b-microvm" if os.getenv("E2B_API_KEY") else "docker-rootless")
+        if runtime not in {"docker-rootless", "gvisor-rootless", "e2b-microvm"}:
+            runtime = "docker-rootless"
+        return {
+            "version": version,
+            "image": "sha256:afad74cbf6c87d0bd550e5b33496713aaeecafb45f052b9dc8bfc279435970f3",
+            "runtime": runtime,
+            "timeout": 180,
+            "adapter": ["python", "/adapter.py"],
+            "checks": checks,
+            "system_checks": system_checks,
+        }
+    return json.dumps({
+        "Python": make_profile("python-v1"),
+        "python-fastapi": make_profile("python-fastapi-v1"),
+        "Python / FastAPI": make_profile("python-fastapi-v1"),
+        "FastAPI": make_profile("python-fastapi-v1"),
+        "convert its backend into fastapi": make_profile("python-fastapi-v1"),
+        "Django REST Framework": make_profile("django-drf-v1"),
+        "TypeScript / NestJS": make_profile("typescript-nestjs-v1"),
+        "Node / Express": make_profile("node-express-v1"),
+        "Next.js": make_profile("typescript-nestjs-v1"),
+        "Next.js (React)": make_profile("typescript-nestjs-v1"),
+    })
+
+
 try:
     from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -35,7 +75,7 @@ try:
         PHASE6_SANDBOX_IMAGE: str = ""
         PHASE6_CHECK_COMMANDS_JSON: str = "[]"
         PHASE6_TARGET_COMMAND_JSON: str = "[]"
-        PHASE6_TARGET_PROFILES_JSON: str = "{}"
+        PHASE6_TARGET_PROFILES_JSON: str = Field(default_factory=_default_phase6_target_profiles_json)
         PHASE6_SANDBOX_PYTHON: str = "/usr/local/bin/python"
         PHASE6_SANDBOX_TIMEOUT: int = Field(default=180, ge=1, le=600)
         SANDBOX_CONTROLLER_URL: str = ""
@@ -108,7 +148,6 @@ try:
         # Autonomous Agents & LLM Model Providers
         ANTHROPIC_API_KEY: str = Field(default="", description="Anthropic API key for Claude 3.5 Sonnet specialist agents")
         OPENAI_API_KEY: str = Field(default="", description="OpenAI API key (optional fallback)")
-        OPENROUTER_API_KEY: str = Field(default="", description="OpenRouter API key for LLM model routing")
         DEFAULT_JOB_BUDGET_INR: float = Field(default=15000.0, description="Default spend cap per job in INR (Rupees)")
         DEFAULT_JOB_BUDGET_USD: float = Field(default=15000.0, description="Default spend cap per job (INR platform currency)")
         MAX_REPAIR_ATTEMPTS: int = Field(default=3, description="Max inner-loop compile/test repair attempts")
@@ -217,7 +256,7 @@ except ImportError:
         PHASE6_SANDBOX_IMAGE: str = os.getenv("PHASE6_SANDBOX_IMAGE", "")
         PHASE6_CHECK_COMMANDS_JSON: str = os.getenv("PHASE6_CHECK_COMMANDS_JSON", "[]")
         PHASE6_TARGET_COMMAND_JSON: str = os.getenv("PHASE6_TARGET_COMMAND_JSON", "[]")
-        PHASE6_TARGET_PROFILES_JSON: str = os.getenv("PHASE6_TARGET_PROFILES_JSON", "{}")
+        _p6 = os.getenv("PHASE6_TARGET_PROFILES_JSON"); PHASE6_TARGET_PROFILES_JSON: str = _p6 if (_p6 and _p6.strip() not in ("", "{}")) else _default_phase6_target_profiles_json()
         PHASE6_SANDBOX_PYTHON: str = "/usr/local/bin/python"
         PHASE6_SANDBOX_TIMEOUT: int = 180
         SANDBOX_CONTROLLER_URL: str = os.getenv("SANDBOX_CONTROLLER_URL", "")

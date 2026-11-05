@@ -247,6 +247,14 @@ async def isolated(monkeypatch):
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+        creator = User(
+            email="creator@example.test",
+            full_name="Creator",
+            password_hash="unused",
+            role="DEVELOPER",
+        )
+        db.add(creator)
+        await db.flush()
         owner = User(
             email="reviewer@example.test",
             full_name="Reviewer",
@@ -258,13 +266,14 @@ async def isolated(monkeypatch):
         job = Job(
             name="phase5 isolated",
             source_repository="fixture",
-            owner_user_id=owner.user_id,
+            owner_user_id=creator.user_id,
             status="CHARACTERIZING",
             active_node="characterization",
         )
         db.add(job)
         await db.flush()
-        db.add(JobMembership(job_id=job.job_id,user_id=owner.user_id,role_id='SUPER_ADMIN'))
+        db.add(JobMembership(job_id=job.job_id, user_id=creator.user_id, role_id='DEVELOPER'))
+        db.add(JobMembership(job_id=job.job_id, user_id=owner.user_id, role_id='SUPER_ADMIN'))
         db.add(
             Module(
                 job_id=job.job_id,
@@ -782,6 +791,11 @@ async def test_adapter_contract_and_precise_failure_reasons(monkeypatch,stdout,s
     from types import SimpleNamespace
     from app.services import sandbox_client,phase6_workspace
     monkeypatch.setattr(phase6_workspace,'file_snapshot',AsyncMock(return_value={}))
+    async def pinned_git(_repo, *args):
+        if args == ('rev-parse', 'HEAD'): return 'a' * 40
+        if args == ('status', '--porcelain', '--untracked-files=no'): return ''
+        return 'legacy.py\x00'
+    monkeypatch.setattr(phase6_workspace, 'git', pinned_git)
     async def execute(execution,binding):
         if reason in {'DOCKER_UNAVAILABLE','IMAGE_UNAVAILABLE'}:
             raise ValueError(reason+': signed controller failure fixture')
@@ -998,6 +1012,11 @@ async def test_adapter_timeout_cleans_up_named_container_without_weakening_polic
     spawn=AsyncMock(side_effect=AssertionError('The API must not launch Docker or execute customer code'))
     monkeypatch.setattr(asyncio,'create_subprocess_exec',spawn)
     monkeypatch.setattr(phase6_workspace,'file_snapshot',AsyncMock(return_value={}))
+    async def pinned_git(_repo, *args):
+        if args == ('rev-parse', 'HEAD'): return 'a' * 40
+        if args == ('status', '--porcelain', '--untracked-files=no'): return ''
+        return 'legacy.py\x00'
+    monkeypatch.setattr(phase6_workspace, 'git', pinned_git)
     monkeypatch.setattr(sandbox_client,'execute',AsyncMock(side_effect=TimeoutError('Independent controller deadline')))
     result=await replay(Scenario(name='slow',module='m',interface='i',behavior='slow adapter'),'/unit-workspace',SimpleNamespace(job_id=uuid.uuid4()))
     assert not result['available'] and result['reason'].startswith('ADAPTER_TIMEOUT')
@@ -1019,6 +1038,11 @@ async def test_adapter_output_size_is_bounded():
 @pytest.mark.asyncio
 async def test_real_legacy_environment_acceptance(isolated):
     """Opt-in real configured adapter path; never mocked or counted as PASS without execution."""
+    try:
+        from app.services import sandbox_client
+        await sandbox_client.health()
+    except Exception as exc:
+        pytest.skip(f"Opt-in sandbox controller not running: {exc}")
     from app.core.config import settings
     from app.services.supervisor_service import supervisor_service
 
@@ -1043,6 +1067,9 @@ async def test_real_legacy_environment_acceptance(isolated):
     scenario_json = os.getenv("PHASE5_ACCEPTANCE_SCENARIO_JSON") or default_scenario
 
     db, job, owner, storage = isolated
+    from pathlib import Path
+    fixture_root = Path(__file__).resolve().parent.parent.parent / "tools" / "phase5_acceptance" / "fixture"
+    job.source_repository = str(fixture_root)
     baseline = await service.capture(
         db,
         job,

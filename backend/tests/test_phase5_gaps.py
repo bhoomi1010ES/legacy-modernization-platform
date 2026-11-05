@@ -73,16 +73,29 @@ async def gap_context(monkeypatch):
             return self.compute_sha256(data), len(data)
 
         async def get_object(self, key):
-            return self.objects[key]
+            if key in self.objects:
+                return self.objects[key]
+            from app.core.storage import LocalStorageAdapter
+            return await LocalStorageAdapter().get_object(key)
 
         async def object_exists(self, key):
-            return key in self.objects
+            if key in self.objects:
+                return True
+            from app.core.storage import LocalStorageAdapter
+            return await LocalStorageAdapter().object_exists(key)
 
         async def delete_object(self, key):
-            return self.objects.pop(key, None) is not None
+            removed = self.objects.pop(key, None) is not None
+            try:
+                from app.core.storage import LocalStorageAdapter
+                await LocalStorageAdapter().delete_object(key)
+            except Exception:
+                pass
+            return removed
 
     storage = MemoryStorage()
     monkeypatch.setattr(service, "get_storage_adapter", lambda: storage)
+    monkeypatch.setattr("app.services.artifact_service.artifact_service.storage", storage)
     monkeypatch.setattr(
         "app.services.continuous_pipeline.continuous_pipeline_service.trigger_continuous_pipeline",
         lambda *a, **k: None,
@@ -93,6 +106,13 @@ async def gap_context(monkeypatch):
         await conn.run_sync(Base.metadata.create_all)
 
     async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+        creator = User(
+            email="gap_creator@example.test",
+            full_name="Gap Creator",
+            password_hash="unused",
+            role="DEVELOPER",
+        )
+        db.add(creator)
         user = User(
             email="gap_reviewer@example.test",
             full_name="Gap Reviewer",
@@ -105,7 +125,7 @@ async def gap_context(monkeypatch):
         job = Job(
             name=f"phase5-gaps-{uuid.uuid4().hex[:8]}",
             source_repository=str(FIXTURE_ROOT),
-            owner_user_id=user.user_id,
+            owner_user_id=creator.user_id,
             status=JobStatus.CHARACTERIZING.value,
             active_node="characterization",
             budget_used_usd=Decimal("0.00"),
@@ -151,6 +171,11 @@ async def test_real_docker_phase5_end_to_end_acceptance(gap_context):
     G1 approved -> Capture -> Real Docker Replay -> Double run comparison ->
     Golden master created -> SHA-256 verified -> G2 review -> Human G2 approval -> Frozen baseline.
     """
+    try:
+        from app.services import sandbox_client
+        await sandbox_client.health()
+    except Exception as exc:
+        pytest.skip(f"Opt-in Docker sandbox controller not running: {exc}")
     db, job, user, storage = gap_context
 
     scenario = Scenario(

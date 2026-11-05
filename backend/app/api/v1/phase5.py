@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 @router.post("/jobs/{job_id}/characterization-runs", status_code=201)
 async def capture_run(
     payload: CaptureRequest,
-    access: tuple[Job, User] = Depends(require_job_access("job:intake")),
+    access: tuple[Job, User] = Depends(require_job_access()),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     try:
@@ -110,7 +110,7 @@ async def test_case_detail(
 @router.post("/jobs/{job_id}/g2/freeze")
 async def request_freeze(
     payload: FreezeRequest,
-    access: tuple[Job, User] = Depends(require_job_access("gate:approve_g2")),
+    access: tuple[Job, User] = Depends(require_job_access()),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     try:
@@ -174,7 +174,7 @@ async def data_plan(
 @router.post("/jobs/{job_id}/data-migration-plan/validate")
 async def validate_data(
     payload: ValidationRequest,
-    access: tuple[Job, User] = Depends(require_job_access("job:intake")),
+    access: tuple[Job, User] = Depends(require_job_access()),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     try:

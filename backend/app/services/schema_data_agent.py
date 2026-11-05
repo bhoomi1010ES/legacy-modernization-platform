@@ -267,6 +267,7 @@ class SchemaDataService:
             "schema_version": "5.1",
             "job_id": job_id_str,
             "status": plan_status,
+            "validation_status": "VALIDATED" if validation_result.get("passed") else "FAILED",
             "schema_status": schema_status,
             "detection_scope": {
                 "files_scanned": sql_files,

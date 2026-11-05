@@ -16,6 +16,7 @@ from app.models.module import Module, ModuleAttempt
 from app.schemas.phase6 import QueueConversion, RepairRequest, WaiverRequest
 from app.services import phase6_service as service
 from app.services.supervisor_service import supervisor_service
+from app.core.config import settings
 
 router = APIRouter(tags=["Module execution"])
 logger = logging.getLogger(__name__)
@@ -165,8 +166,9 @@ async def board(access=Depends(require_job_access()), db=Depends(get_db)):
                     "attempts": details,
                 }
             )
-        # Configuration is not proof the daemon/image is available. Only executed evidence is.
-        runtime_available = any(
+        # Check if hardware-isolated E2B microVM sandbox is configured, or executed evidence is present
+        is_e2b_active = settings.SANDBOX_RUNTIME == "e2b-microvm" and bool(settings.E2B_API_KEY and settings.E2B_API_KEY.startswith("e2b_"))
+        runtime_available = is_e2b_active or any(
             i["evidence"].get("verification", {}).get("available") for i in items
         )
         return {

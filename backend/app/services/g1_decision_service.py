@@ -9,7 +9,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ConflictException, NotFoundException, ValidationException
+from app.core.errors import ConflictException, ForbiddenException, NotFoundException, ValidationException
 from app.domain.state_machine import GatePolicy, JobStateMachine, RBACPolicy
 from app.models.audit import AuditEvent
 from app.models.gate import GateDecision
@@ -109,10 +109,17 @@ class G1DecisionService:
             if job.status not in (JobStatus.AWAITING_GATE_G1.value, JobStatus.ANALYZING.value):
                 raise ConflictException(f"G1 decisions can only be submitted while job is awaiting G1. Current: {job.status}")
 
+            # Separation of duties: creator cannot approve own gate
+            creator_id = getattr(job, "created_by_user_id", None) or getattr(job, "owner_user_id", None)
+            if creator_id and str(creator_id) == str(user.user_id):
+                raise ForbiddenException(
+                    "Separation of duties violation: Job creator cannot approve or reject gates for their own job."
+                )
+
             # Verify user permissions
             effective_role = getattr(user, "_effective_job_role", user.role)
             if not RBACPolicy.has_permission(effective_role, "gate:approve_g1") and effective_role not in ("ADMIN", "SUPER_ADMIN", "REVIEWER"):
-                raise ValidationException("User is not authorized to submit G1 gate decisions.")
+                raise ForbiddenException(f"Role '{effective_role}' lacks required permission 'gate:approve_g1' to decide gate G1.")
 
             # Get latest feasibility report
             report = (

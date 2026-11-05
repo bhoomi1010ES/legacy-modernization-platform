@@ -92,6 +92,11 @@ class Job(Base, TimestampMixin):
     workflow_gates = relationship("WorkflowGate", back_populates="job", cascade="all, delete-orphan")
     workflow_outbox_events = relationship("WorkflowOutbox", back_populates="job", cascade="all, delete-orphan")
 
+    @property
+    def created_by_user_id(self) -> uuid.UUID:
+        return self.owner_user_id
+
+
 
 class JobMembership(Base):
     __tablename__ = "job_memberships"

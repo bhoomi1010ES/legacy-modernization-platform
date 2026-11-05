@@ -77,6 +77,11 @@ async def test_phase7_real_environment_e2e_acceptance(ready, monkeypatch, tmp_pa
     - Immutable DELIVERY_RECORD
     - Idempotent ZIP-delivery response (legacy endpoint compatibility)
     """
+    import subprocess
+    check_docker = subprocess.run(["docker", "info"], capture_output=True, text=True)
+    if check_docker.returncode != 0:
+        pytest.skip("Docker daemon is not running on development host")
+
     db, job, owner, storage, module, repo = ready
     job.source_stack = "Python"
     job.target_stack = "Python"
@@ -94,6 +99,10 @@ async def test_phase7_real_environment_e2e_acceptance(ready, monkeypatch, tmp_pa
         '{"category":"schema","command":["python","-m","compileall","-q","."]}]'
     )
 
+    from test_phase6 import synthetic_target_profile
+    p6_profile = synthetic_target_profile()
+    p6_profile["image"] = image_digest
+    monkeypatch.setattr(settings, "PHASE6_TARGET_PROFILES_JSON", json.dumps({"Python": p6_profile}))
     monkeypatch.setattr(settings, "PHASE6_MODEL_PROVIDER", "openai")
     monkeypatch.setattr(settings, "PHASE6_MODEL_IDENTIFIER", "gpt-4o-mini")
     monkeypatch.setattr(settings, "PHASE6_SANDBOX_IMAGE", image_digest)

@@ -303,6 +303,9 @@ async def test_true_parallelism_and_topological_dependency_blocking():
         m4 = Module(module_id=m4_id, job_id=job.job_id, name="M4", legacy_path="l/m4", target_path="m/m4.py", status="PENDING", wave_number=2, dependency_module_ids=[str(m1_id), str(m2_id), str(m3_id)])
 
         db.add_all([m1, m2, m3, m4])
+        from app.models.module import ModuleDependency
+        for parent_m in (m1_id, m2_id, m3_id):
+            db.add(ModuleDependency(job_id=job.job_id, parent_id=parent_m, child_id=m4_id))
         await db.commit()
 
         # Claim ready modules with limit=4

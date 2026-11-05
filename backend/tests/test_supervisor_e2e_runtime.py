@@ -65,6 +65,25 @@ async def _get_or_create_admin(db) -> User:
     return admin
 
 
+async def _get_or_create_creator(db) -> User:
+    creator = await db.scalar(
+        select(User).where(User.role == "DEVELOPER").limit(1)
+    )
+    if not creator:
+        creator = User(
+            user_id=uuid.uuid4(),
+            email=f"creator_{uuid.uuid4().hex[:8]}@example.com",
+            full_name="Software Developer",
+            password_hash="mock_hash_for_testing",
+            role="DEVELOPER",
+            status="ACTIVE",
+        )
+        db.add(creator)
+        await db.commit()
+        await db.refresh(creator)
+    return creator
+
+
 async def _create_test_job(
     db,
     status: JobStatus = JobStatus.CREATED,
@@ -74,11 +93,11 @@ async def _create_test_job(
     target_stack: str = "Python / FastAPI",
 ) -> Job:
     """Provisions a test job in the database with audit and budget defaults."""
-    admin = await _get_or_create_admin(db)
+    creator = await _get_or_create_creator(db)
     job = Job(
         name=f"supervisor-e2e-{uuid.uuid4().hex[:8]}",
         source_repository="https://github.com/acme/legacy-ordering-core",
-        owner_user_id=admin.user_id,
+        owner_user_id=creator.user_id,
         status=status.value,
         active_node=status.value.lower(),
         budget_used_usd=Decimal(used),

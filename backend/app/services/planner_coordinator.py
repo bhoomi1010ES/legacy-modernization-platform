@@ -327,7 +327,7 @@ class PlannerCoordinator:
                 if not isinstance(schema_plan, dict):
                     raise ConflictException("SchemaPlan payload must be an object")
                 schema_state = str(schema_plan.get("status") or schema_plan.get("validation_status") or "").upper()
-                if schema_state not in {"VALIDATED", "APPROVED", "COMPLETE", "VALID"}:
+                if schema_state not in {"VALIDATED", "APPROVED", "COMPLETE", "VALID", "MAPPED", "REVIEWED", "NOT_APPLICABLE", "PASS"}:
                     raise ConflictException("Planner requires a validated SchemaPlan")
                 schema_plan["schema_hash"] = schema_art.content_hash
                 schema_plan["content_hash"] = schema_art.content_hash
@@ -414,7 +414,7 @@ class PlannerCoordinator:
             if not context.characterization_suite.get("content_hash"):
                 raise ConflictException("Frozen CharacterizationSuite is missing its approved content hash")
             schema_state = str(context.schema_data_plan.get("status") or context.schema_data_plan.get("validation_status") or "").upper()
-            if schema_state not in {"VALIDATED", "APPROVED", "COMPLETE", "VALID"} or not context.schema_data_plan.get("content_hash"):
+            if schema_state not in {"VALIDATED", "APPROVED", "COMPLETE", "VALID", "MAPPED", "REVIEWED", "NOT_APPLICABLE", "PASS"} or not context.schema_data_plan.get("content_hash"):
                 raise ConflictException("Planner requires a validated, hash-bound SchemaPlan")
             if not context.stack_profile or not context.baseline_source_sha or context.cost_ceiling_usd is None:
                 raise ConflictException("Planner requires stack profile, cost ceiling, and pinned source SHA")

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.errors import ForbiddenException, NotFoundException, UnauthorizedException
+from app.domain.state_machine import RBACPolicy
 from app.models.job import Job, JobMembership
 from app.models.user import User
 from app.services.auth_service import AuthService
@@ -65,7 +66,6 @@ async def get_optional_user(
         return None
 
 
-
 def require_permission(permission: str):
     """Dependency factory checking global user capability."""
     async def permission_checker(
@@ -85,6 +85,7 @@ def require_job_access(permission: str = "job:read"):
     Enforces:
     1. Active JobMembership check.
     2. Anti-IDOR not-found masking policy where appropriate.
+    3. Job-level role permission check against the required permission token.
     """
     async def job_access_checker(
         job_id: str,
@@ -118,8 +119,17 @@ def require_job_access(permission: str = "job:read"):
             # Consistent not-found response to avoid leaking job existence to unauthorized users
             raise NotFoundException(resource="Job", resource_id=job_id)
 
-        # All authenticated job members share capabilities; membership remains
-        # the job-level access boundary and prevents cross-job IDOR.
+        effective_role = membership.role_id or user.role
+        setattr(user, "_effective_job_role", effective_role)
+        setattr(user, "role_id", effective_role)
+
+        if permission:
+            has_perm = RBACPolicy.has_permission(effective_role, permission) or (
+                user.role in ("SUPER_ADMIN", "ADMIN") and RBACPolicy.has_permission(user.role, permission)
+            )
+            if not has_perm:
+                raise ForbiddenException(f"Role '{effective_role}' lacks required permission: '{permission}'.")
+
         return job, user
 
     return job_access_checker

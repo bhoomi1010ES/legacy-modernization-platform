@@ -217,6 +217,9 @@ async def test_codewriter_requires_all_gates_and_schedules_dependencies_leaf_fir
             dependency_module_ids=[str(leaf.module_id)],
         )
         db.add(parent)
+        await db.flush()
+        from app.models.module import ModuleDependency
+        db.add(ModuleDependency(job_id=job.job_id, parent_id=leaf.module_id, child_id=parent.module_id))
         await db.commit()
         claimed = await scheduler.claim_ready_modules(db, job.job_id, worker_id="worker-a", limit=3)
         assert [module.name for module in claimed] == ["leaf"]

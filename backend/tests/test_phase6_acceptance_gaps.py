@@ -15,7 +15,7 @@ from app.services.reviewer_agent import review
 async def test_gateway_retains_provider_identity_usage_and_billing(monkeypatch):
     """Unit-only HTTP double: this is not real-model acceptance evidence."""
     import httpx
-    from app.services.model_gateway import OpenRouterProvider
+    from app.services.model_gateway import OpenAIProvider
 
     class Client:
         def __init__(self, **kwargs):
@@ -46,7 +46,7 @@ async def test_gateway_retains_provider_identity_usage_and_billing(monkeypatch):
             )
 
     monkeypatch.setattr(httpx, "AsyncClient", Client)
-    response = await OpenRouterProvider(api_key="unit-only-not-a-real-key").complete(
+    response = await OpenAIProvider(api_key="unit-only-not-a-real-key").complete(
         model="configured-model", request={"messages": []}
     )
     assert response.provider_request_id == "unit-provider-request"

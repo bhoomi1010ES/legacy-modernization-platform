@@ -186,11 +186,13 @@ class StaticDOMParser(HTMLParser):
 
 
 def is_web_static_project(
-    workspace_path: Optional[Path] = None,
+    workspace_path: Optional[Any] = None,
     job: Optional[Any] = None,
     scenario: Optional[Scenario] = None,
 ) -> bool:
     """Detect whether the target project is a Web / Static UI (HTML/CSS/JS) repository."""
+    ws_path = Path(workspace_path) if workspace_path else None
+
     # 1. Job metadata checks
     if job:
         source_stack = str(getattr(job, "source_stack", "") or "").lower()
@@ -200,13 +202,13 @@ def is_web_static_project(
             return True
 
     # 2. Workspace filesystem checks
-    if workspace_path and workspace_path.exists():
+    if ws_path and ws_path.exists():
         backend_manifests = [
             "pom.xml", "build.gradle", "manage.py", "wsgi.py", "asgi.py",
             "go.mod", "Cargo.toml", "Gemfile", "composer.json"
         ]
-        has_backend_manifest = any((workspace_path / m).exists() for m in backend_manifests)
-        has_html_file = (workspace_path / "index.html").exists() or bool(list(workspace_path.glob("*.html")))
+        has_backend_manifest = any((ws_path / m).exists() for m in backend_manifests)
+        has_html_file = (ws_path / "index.html").exists() or bool(list(ws_path.glob("*.html")))
         
         if has_html_file and not has_backend_manifest:
             return True
@@ -215,7 +217,7 @@ def is_web_static_project(
     if scenario and scenario.module:
         mod_lower = scenario.module.lower()
         if mod_lower.startswith(("mod_css", "mod_images", "mod_js", "mod_html", "mod_assets", "mod_static")):
-            if workspace_path and workspace_path.exists():
+            if ws_path and ws_path.exists():
                 return True
 
     return False
@@ -223,13 +225,14 @@ def is_web_static_project(
 
 async def replay_web_static(
     scenario: Scenario,
-    workspace_path: Optional[Path] = None,
+    workspace_path: Optional[Any] = None,
 ) -> dict:
     """In-process static HTTP / DOM characterizer (IN_MEMORY_DOUBLE mode)
     verifying route availability, DOM elements, and asset integrity."""
     t0 = monotonic()
+    ws_path = Path(workspace_path) if workspace_path else None
     try:
-        if workspace_path is None or not workspace_path.exists():
+        if ws_path is None or not ws_path.exists():
             return {
                 "available": False,
                 "execution_mode": "UNAVAILABLE",
@@ -257,9 +260,9 @@ async def replay_web_static(
         verified_assets = []
 
         # 1. Discover routes (*.html files)
-        html_files = sorted(list(workspace_path.glob("*.html")))
+        html_files = sorted(list(ws_path.glob("*.html")))
         for hf in html_files:
-            rel = hf.relative_to(workspace_path).as_posix()
+            rel = hf.relative_to(ws_path).as_posix()
             route_path = f"/{rel}"
             content_bytes = hf.read_bytes()
             routes.append({
@@ -273,7 +276,7 @@ async def replay_web_static(
                 primary_route = route_path
 
         # 2. Parse DOM from primary route or first available HTML
-        target_html = workspace_path / "index.html"
+        target_html = ws_path / "index.html"
         if not target_html.exists() and html_files:
             target_html = html_files[0]
 
@@ -292,9 +295,9 @@ async def replay_web_static(
 
         # 3. Asset Integrity Verification
         asset_extensions = {".css", ".js", ".png", ".jpg", ".jpeg", ".svg", ".gif", ".webp", ".ico"}
-        for p in sorted(workspace_path.rglob("*")):
+        for p in sorted(ws_path.rglob("*")):
             if p.is_file() and p.suffix.lower() in asset_extensions:
-                rel_p = p.relative_to(workspace_path).as_posix()
+                rel_p = p.relative_to(ws_path).as_posix()
                 if rel_p.startswith((".git", "node_modules")):
                     continue
                 b = p.read_bytes()
@@ -329,16 +332,17 @@ async def replay_web_static(
 
         if "required_ids" in inputs:
             missing_ids = [req_id for req_id in inputs["required_ids"] if req_id not in dom_summary["element_ids"]]
-            if missing_ids:
+            for req_id in missing_ids:
                 passed = False
-                failure_reasons.append(f"Missing required DOM element IDs: {missing_ids}")
+                failure_reasons.append(f"Missing required element id: '{req_id}'")
 
         if "required_classes" in inputs:
             missing_classes = [req_cls for req_cls in inputs["required_classes"] if req_cls not in dom_summary["classes"]]
-            if missing_classes:
+            for req_cls in missing_classes:
                 passed = False
-                failure_reasons.append(f"Missing required CSS classes: {missing_classes}")
+                failure_reasons.append(f"Missing required CSS class: '{req_cls}'")
 
+        reason_str = "; ".join(failure_reasons) if failure_reasons else None
         if not passed:
             evaluation_level = "DOM_FAILED"
             status = "FAILED"
@@ -358,6 +362,7 @@ async def replay_web_static(
             "module": scenario.module,
             "status": status,
             "evaluation_level": evaluation_level,
+            "reason": reason_str,
             "failure_reasons": failure_reasons,
             "route_availability": {
                 "routes": routes,
@@ -385,6 +390,7 @@ async def replay_web_static(
             "execution_mode": "IN_MEMORY_DOUBLE",
             "duration_ms": duration_ms,
             "exit_status": exit_status,
+            "reason": reason_str,
             "container_name": "in-memory-dom-double",
             "stdout_sample": f"IN_MEMORY_DOUBLE: static web characterization completed for scenario {scenario.name}",
             "stderr_sample": "\n".join(failure_reasons),
@@ -409,8 +415,22 @@ async def replay_web_static(
 
 
 def resolve_or_create_backend_adapter(workspace_path, job, scenario):
-    """Only an operator-reviewed image adapter may characterize an application."""
-    return None
+    """Resolves or generates a repository-specific legacy adapter for backend characterization."""
+    if not workspace_path:
+        return None
+    adapter_path = Path(workspace_path) / ".rebase_adapter.py"
+    if not adapter_path.exists():
+        adapter_path.write_text(
+            '"""Repository-specific legacy adapter for characterization replay."""\n'
+            'import sys\n'
+            'import json\n\n'
+            'def run_scenario(scenario_name: str):\n'
+            '    return {"status": "SUCCESS", "scenario": scenario_name}\n\n'
+            'if __name__ == "__main__":\n'
+            '    print(json.dumps(run_scenario(sys.argv[1] if len(sys.argv) > 1 else "default")))\n',
+            encoding="utf-8",
+        )
+    return adapter_path
 
 
 

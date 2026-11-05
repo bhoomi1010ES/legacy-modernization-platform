@@ -79,9 +79,11 @@ class GatePolicy:
                 issue="Every gate decision requires an authenticated human reviewer."
             )
 
-        # Role assignments do not authorize gate decisions. Authenticated human,
-        # separation-of-duties, evidence and rationale checks remain enforced.
-        # Rule 2: Rationale must meet minimum character length
+        # Rule 2: Enforce role permissions for gate approval
+        if actor_role:
+            cls.validate_role_for_gate(actor_role, gate_type)
+
+        # Rule 3: Rationale must meet minimum character length
         clean_rationale = rationale.strip() if rationale else ""
         if len(clean_rationale) < cls.MIN_RATIONALE_LENGTH:
             raise GatePolicyException(
@@ -97,9 +99,17 @@ class GatePolicy:
                     issue="All capability gaps must have an explicit resolution (adapter, custom, or descope)."
                 )
 
+    @classmethod
+    def validate_role_for_gate(cls, actor_role: str, gate_type: GateType) -> None:
+        perm = f"gate:approve_{gate_type.value.lower()}"
+        if not RBACPolicy.has_permission(actor_role, perm):
+            raise ForbiddenException(
+                message=f"Role '{actor_role}' is not authorized to decide gate {gate_type.value}: lacks required permission '{perm}'."
+            )
+
 
 class RBACPolicy:
-    """Compatibility adapter while authorization is role-independent."""
+    """Authoritative Role-Based Access Control policy matrix."""
 
     ROLE_PERMISSIONS: dict[str, set[str]] = {
         "SUPER_ADMIN": {
@@ -122,6 +132,15 @@ class RBACPolicy:
             "gate:review", "gate:approve_g1", "gate:approve_g2", "gate:approve_g3", "gate:approve_g4",
             "artifact:read", "artifact:download", "audit:read"
         },
+        "APPROVER": {
+            "gate:review", "gate:approve_g1", "gate:approve_g2", "gate:approve_g3", "gate:approve_g4",
+            "job:read", "artifact:read", "audit:read"
+        },
+        "PROJECT_MANAGER": {
+            "job:create", "job:read", "job:pause_resume",
+            "gate:review", "gate:approve_g1", "gate:approve_g2", "gate:approve_g3",
+            "artifact:read", "audit:read"
+        },
         "DEVELOPER": {
             "integration:run",
             "module:convert", "module:repair",
@@ -134,11 +153,14 @@ class RBACPolicy:
 
     @classmethod
     def has_permission(cls, role: str, permission: str) -> bool:
-        return True
+        normalized_role = (role or "").strip().upper()
+        allowed = cls.ROLE_PERMISSIONS.get(normalized_role, set())
+        return permission in allowed
 
     @classmethod
     def permissions_for(cls, role: str) -> list[str]:
-        return sorted(set().union(*cls.ROLE_PERMISSIONS.values()))
+        normalized_role = (role or "").strip().upper()
+        return sorted(cls.ROLE_PERMISSIONS.get(normalized_role, set()))
 
     @classmethod
     def check_permission(cls, role: str, permission: str) -> None:

@@ -169,13 +169,16 @@ async def node_evaluate_gate(state: SupervisorLoopState) -> dict:
         is_human_required = decision.action == SupervisorAction.WAIT and "Gate" in decision.reason
         gate_rejected = decision.action == SupervisorAction.ESCALATE and "rejected" in decision.reason
 
-        return {
+        res = {
             "is_human_gate_required": is_human_required,
             "gate_rejected": gate_rejected,
             "decision_action": decision.action.value,
             "decision_reason": decision.reason,
             "events": [{"type": "GATE_EVALUATED", "action": decision.action.value, "reason": decision.reason}],
         }
+        if is_human_required:
+            res["active_node"] = "pause_for_human"
+        return res
 
 
 async def node_discover_ready_tasks(state: SupervisorLoopState) -> dict:
@@ -237,16 +240,6 @@ async def node_execute_agent(state: SupervisorLoopState) -> dict:
                 from app.models.module import Module
                 from app.services.code_writer import code_writer_service
                 from app.services.repository_workspace_service import repository_workspace_service
-                try:
-                    await repository_workspace_service.ensure_workspace(db, job, correlation_id=corr_id)
-                except Exception as ws_err:
-                    job.blocking_reason = f"Workspace unavailable: {ws_err}"
-                    await db.commit()
-                    return {
-                        "execution_verdict": "WAIT",
-                        "blocking_reason": f"Workspace unavailable: {ws_err}",
-                        "events": [{"type": "WORKSPACE_UNAVAILABLE", "error": str(ws_err)}],
-                    }
 
                 # Extract module ID from task_id e.g. "convert-<uuid>"
                 task_id = state.get("selected_task_id", "")
@@ -256,6 +249,19 @@ async def node_execute_agent(state: SupervisorLoopState) -> dict:
                     mod = None
                 if not mod:
                     mod = await db.scalar(select(Module).where(Module.job_id == job.job_id, Module.status == "PENDING").order_by(Module.wave_number).limit(1))
+
+                try:
+                    await repository_workspace_service.ensure_workspace(db, job, correlation_id=corr_id)
+                except Exception as ws_err:
+                    if mod:
+                        mod.status = "BLOCKED"
+                    job.blocking_reason = f"Workspace unavailable: {ws_err}"
+                    await db.commit()
+                    return {
+                        "execution_verdict": "WAIT",
+                        "blocking_reason": f"Workspace unavailable: {ws_err}",
+                        "events": [{"type": "WORKSPACE_UNAVAILABLE", "error": str(ws_err)}],
+                    }
 
                 if mod:
                     try:
@@ -825,7 +831,26 @@ def build_supervisor_loop_graph(checkpointer=None):
     builder.add_edge("handle_escalation", END)
     builder.add_edge("complete_project", END)
 
-    return builder.compile(checkpointer=checkpointer, interrupt_before=['pause_for_human'])
+    compiled = builder.compile(checkpointer=checkpointer, interrupt_before=['pause_for_human'])
+
+    original_ainvoke = compiled.ainvoke
+    async def ainvoke_with_default_thread(input, config=None, **kwargs):
+        if config is None:
+            config = {}
+        if "configurable" not in config:
+            job_id = None
+            if isinstance(input, dict):
+                job_id = input.get("job_id")
+            config["configurable"] = {"thread_id": str(job_id or "default")}
+        elif "thread_id" not in config["configurable"] and "checkpoint_id" not in config["configurable"]:
+            job_id = None
+            if isinstance(input, dict):
+                job_id = input.get("job_id")
+            config["configurable"]["thread_id"] = str(job_id or "default")
+        return await original_ainvoke(input, config=config, **kwargs)
+
+    compiled.ainvoke = ainvoke_with_default_thread
+    return compiled
 
 
 # ---------------------------------------------------------------------------

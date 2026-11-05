@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 """Append-only Phase 5 artifacts, evidence discovery and G2 baseline lifecycle."""
 
@@ -190,11 +191,14 @@ async def capture(
         from app.services.repository_workspace_service import repository_workspace_service
         candidate_ws = repository_workspace_service.get_workspace_path(job.job_id)
         workspace_dir = candidate_ws if candidate_ws.exists() else None
+        if workspace_dir is None and getattr(job, "source_repository", None):
+            src_repo = Path(job.source_repository)
+            if src_repo.exists():
+                workspace_dir = src_repo
 
         scenarios_to_run = list(request.scenarios)
         candidate_scenarios = []
         if not scenarios_to_run:
-            from pathlib import Path
             from app.services.scenario_discovery_service import scenario_discovery_service
             from app.schemas.phase4 import LegacyModel, RepositoryInventory
 
@@ -595,8 +599,12 @@ async def report(
     try:
         artifact = artifact or await latest(db, job_id)
         payload = await read_payload(artifact)
-        schema = await db.get(Artifact, uuid.UUID(payload["schema_artifact_id"]))
-        plan = await read_payload(schema)
+        schema_art_id = payload.get("schema_artifact_id")
+        try:
+            schema = await latest(db, job_id, "SCHEMA_MIGRATION_PLAN")
+        except Exception:
+            schema = await db.get(Artifact, uuid.UUID(schema_art_id)) if schema_art_id else None
+        plan = await read_payload(schema) if schema else {}
         gates = list(
             (
                 await db.execute(
@@ -614,9 +622,10 @@ async def report(
         return {
             **payload,
             "schema_status": plan.get("status", "REVIEW_REQUIRED"),
+            "runtime_available": payload.get("runtime_available", False),
             "schema_validation_status": (
                 "NOT_APPLICABLE"
-                if plan.get("status") == "NOT_APPLICABLE"
+                if (plan.get("status") == "NOT_APPLICABLE" or not schema)
                 else await validation_status(db, job_id, schema.content_hash)
             ),
             "suite_id": str(artifact.artifact_id),

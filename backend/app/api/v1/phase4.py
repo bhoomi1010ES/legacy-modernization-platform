@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, require_job_access
-from app.core.errors import ConflictException, NotFoundException, ValidationException
+from app.core.errors import ConflictException, ForbiddenException, NotFoundException, ValidationException
 from app.domain.state_machine import RBACPolicy
 from app.models.job import Job
 from app.models.phase4 import (
@@ -366,6 +366,11 @@ async def submit_feasibility_decisions(
 ) -> List[G1DecisionRecord]:
     try:
         job, user = access
+        creator_id = getattr(job, "created_by_user_id", None) or getattr(job, "owner_user_id", None)
+        if creator_id and str(creator_id) == str(user.user_id):
+            raise ForbiddenException(
+                "Separation of duties violation: Job creator cannot approve or reject gates for their own job."
+            )
         correlation_id = getattr(request.state, "correlation_id", None)
 
         recorded = await g1_decision_service.submit_decisions(

@@ -85,6 +85,8 @@ def safe_target(root: Path, relative: str, allowed: str) -> Path:
 
 
 async def git(repository: Path, *args: str) -> str:
+    if args == ('status', '--porcelain', '--untracked-files=no') and not (repository / '.git').exists():
+        args = ('status', '--porcelain', '--untracked-files=no', '--', '.')
     if any(arg == 'commit' or (isinstance(arg, str) and arg.strip() == 'commit') for arg in args):
         gitdir = repository / '.git'
         if gitdir.is_file():

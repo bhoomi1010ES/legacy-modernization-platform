@@ -33,7 +33,16 @@ class RealModelBudgetTracker:
 
     async def reserve(self, amount_usd: float, ceiling_usd: float) -> None:
         async with self._lock:
-            if amount_usd <= 0 or self.total_spent_usd + self.reserved_usd + amount_usd > ceiling_usd:
+            if self.total_spent_usd >= ceiling_usd:
+                raise ModelGatewayError(
+                    f"Real model budget ceiling exceeded: spent ${self.total_spent_usd:.4f} >= ${ceiling_usd:.4f}"
+                )
+            if amount_usd <= 0:
+                raise ModelGatewayError(
+                    "Real model budget cannot reserve the bounded request cost"
+                )
+            remaining = max(0.0, ceiling_usd - self.total_spent_usd - self.reserved_usd)
+            if amount_usd > remaining:
                 raise ModelGatewayError(
                     "Real model budget cannot reserve the bounded request cost"
                 )
@@ -185,98 +194,33 @@ def provider_cost(
         raise
 
 
-class OpenRouterProvider:
-    """Invokes models via the OpenRouter API (OpenAI-compatible chat completions)."""
+def _estimate_dynamic_reservation(
+    model: str,
+    request: Dict[str, Any],
+    max_cost_usd: Optional[float] = None,
+    ceiling_usd: float = 5.0,
+) -> float:
+    """Calculate bounded reservation dynamically based on requested tokens rather than entire ceiling."""
+    if max_cost_usd is not None and max_cost_usd > 0:
+        return float(max_cost_usd)
+    if request.get("max_cost_usd") is not None and float(request["max_cost_usd"]) > 0:
+        return float(request["max_cost_usd"])
 
-    def __init__(self, api_key: Optional[str] = None):
-        import os
-        from app.core.config import settings
+    out_tok = request.get("max_output_tokens") or request.get("max_tokens")
+    out_tokens = int(out_tok) if out_tok is not None else 2048
 
-        self.api_key = (
-            api_key
-            or getattr(settings, "OPENROUTER_API_KEY", "")
-            or os.getenv("OPENROUTER_API_KEY", "")
-        )
-        self.base_url = "https://openrouter.ai/api/v1"
+    prompt = request.get("prompt") or ""
+    messages = request.get("messages") or []
+    content_len = len(prompt) + sum(len(str(m.get("content", ""))) for m in messages if isinstance(m, dict))
+    task_data = request.get("task")
+    if task_data:
+        content_len += len(str(task_data))
+    in_tokens = max(50, content_len // 4)
 
-    async def complete(self, *, model: str, request: Dict[str, Any]) -> ModelResponse:
-        import httpx
-
-        if not self.api_key:
-            raise ModelGatewayError("OpenRouter API key is not configured.")
-
-        messages = request.get("messages", [])
-        if not messages and "prompt" in request:
-            messages = [{"role": "user", "content": request["prompt"]}]
-
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": request.get("temperature", 0.2),
-            "max_tokens": request.get("max_tokens", 8192),
-        }
-
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Idempotency-Key": str(request.get("_gateway_request_id", "")),
-            "HTTP-Referer": "https://rebase.local",
-            "X-Title": "Rebase Legacy Modernization Platform",
-            "Content-Type": "application/json",
-        }
-
-        async with httpx.AsyncClient(timeout=180.0) as client:
-            resp = await client.post(
-                f"{self.base_url}/chat/completions",
-                json=payload,
-                headers=headers,
-            )
-            if resp.status_code >= 500:
-                raise TransientModelError(
-                    f"OpenRouter upstream server error {resp.status_code}"
-                )
-            if resp.status_code == 429:
-                raise ModelRateLimitError("OpenRouter rate limit exceeded")
-            if resp.status_code != 200:
-                error_type=UnchargedModelError if resp.status_code in {400,401,402,403,404,422} else ModelGatewayError
-                raise error_type(
-                    f"OpenRouter rejected request with HTTP {resp.status_code}"
-                )
-
-            data = resp.json()
-            choice = data["choices"][0]
-            content = choice["message"].get("content", "")
-            usage_data = data.get("usage", {})
-            usage_reported = isinstance(usage_data, dict) and bool(usage_data)
-
-            in_tok = usage_data.get("prompt_tokens", 0)
-            out_tok = usage_data.get("completion_tokens", 0)
-            cost, cost_source = provider_cost(model, in_tok, out_tok, usage_data)
-            actual_model = data.get("model") or model
-
-            return ModelResponse(
-                action="final",
-                provider_request_id=data.get("id"),
-                provider_metadata={
-                    "model": data.get("model"),
-                    "created": data.get("created"),
-                    "finish_reason": choice.get("finish_reason"),
-                    "usage": usage_data,
-                    "usage_reported": usage_reported,
-                    "cost_source": cost_source,
-                },
-                output={"content": content, "raw": choice["message"]},
-                usage=ModelUsage(
-                    input_tokens=in_tok,
-                    output_tokens=out_tok,
-                    cost_usd=cost,
-                    reported_input_tokens=in_tok,
-                    reported_output_tokens=out_tok,
-                    provider_request_id=data.get("id"),
-                    provider_model_id=actual_model,
-                    estimated_cost=cost if cost_source != "provider_reported" else None,
-                    billed_cost=cost if cost_source == "provider_reported" else None,
-                ),
-            )
+    estimated_cost = _calculate_model_cost(model, in_tokens, out_tokens)
+    if estimated_cost <= 0:
+        estimated_cost = 0.001
+    return float(min(estimated_cost, ceiling_usd))
 
 
 class OpenAIProvider:
@@ -429,7 +373,7 @@ class ModelGateway:
             raise ModelNotAllowedError(
                 f"Provider/model '{provider}/{model}' is not allowlisted."
             )
-        is_real_provider = provider in ("openai", "openrouter")
+        is_real_provider = provider == "openai"
         resolved_lane = lane or (
             ModelLane.BUDGET_CAPPED_REAL
             if is_real_provider
@@ -472,7 +416,12 @@ class ModelGateway:
             from app.core.config import settings
 
             max_budget = getattr(settings, "MAX_BUDGET_USD", 5.0)
-            reservation = float(max_cost_usd if max_cost_usd is not None else max_budget)
+            reservation = _estimate_dynamic_reservation(
+                model=model,
+                request=request,
+                max_cost_usd=max_cost_usd,
+                ceiling_usd=float(max_budget),
+            )
             await model_request_ledger.reserve(
                 request_id=request_id,
                 provider=provider,
@@ -491,7 +440,12 @@ class ModelGateway:
             from app.core.config import settings
             tracker = RealModelBudgetTracker.get_tracker()
             max_budget = getattr(settings, "MAX_BUDGET_USD", 5.0)
-            reservation = float(max_cost_usd if max_cost_usd is not None else max_budget)
+            reservation = _estimate_dynamic_reservation(
+                model=model,
+                request=request,
+                max_cost_usd=max_cost_usd,
+                ceiling_usd=float(max_budget),
+            )
             await tracker.reserve(reservation, float(max_budget))
         else:
             tracker = None
@@ -564,13 +518,13 @@ class ModelGateway:
                                 billed_cost_usd=response.usage.billed_cost,
                                 charged_cost_usd=response.usage.cost_usd,
                             )
+                            if response.usage.cost_usd > reservation:
+                                raise ModelGatewayError(
+                                    "Actual model charge exceeded its reserved amount; further requests are stopped"
+                                )
                         else:
                             total_spent = await tracker.reconcile(
                                 reservation, response.usage.cost_usd
-                            )
-                        if response.usage.cost_usd > reservation:
-                            raise ModelGatewayError(
-                                "Actual model charge exceeded its reserved amount; further requests are stopped"
                             )
                     elif durable_ledger is not None:
                         await durable_ledger.fail(
@@ -690,19 +644,6 @@ def build_default_gateway() -> ModelGateway:
     allowlist: Dict[str, set[str]] = {
         "fake": {"fake-model-v1", "approved-model"},
     }
-
-    if getattr(settings, "OPENROUTER_API_KEY", ""):
-        providers["openrouter"] = OpenRouterProvider(
-            api_key=settings.OPENROUTER_API_KEY
-        )
-        allowlist["openrouter"] = {
-            "anthropic/claude-3.5-sonnet",
-            "openai/gpt-4o",
-            "openai/gpt-4o-mini",
-            "meta-llama/llama-3.3-70b-instruct",
-            "qwen/qwen-2.5-coder-32b-instruct",
-            "mistralai/mistral-large-2411",
-        }
 
     if getattr(settings, "OPENAI_API_KEY", ""):
         providers["openai"] = OpenAIProvider(api_key=settings.OPENAI_API_KEY)

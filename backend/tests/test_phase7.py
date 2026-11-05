@@ -192,10 +192,22 @@ async def test_g4_exact_human_approval_and_immutable_delivery(verified):
     )
     from app.domain.state_machine import GatePolicy
     from app.schemas.gates import GateType
-    from app.core.errors import GatePolicyException
+    from app.core.errors import GatePolicyException, ForbiddenException
     with pytest.raises(GatePolicyException):
         GatePolicy.validate_decision(GateType.G4,DecisionOutcome.APPROVED,
             'An autonomous agent cannot authorize delivery','DEVELOPER',is_human=False)
+    with pytest.raises(ForbiddenException):
+        await GateService().decide(
+            db,
+            gate.gate_id,
+            GateDecisionRequest(
+                decision=DecisionOutcome.APPROVED,
+                rationale="Developer illegally attempting G4 approval",
+                artifact_hashes=gate.artifact_hashes,
+            ),
+            actor_id=owner.user_id,
+            actor_role="DEVELOPER",
+        )
     decision, _, _, _ = await GateService().decide(
         db,
         gate.gate_id,
@@ -206,7 +218,7 @@ async def test_g4_exact_human_approval_and_immutable_delivery(verified):
             idempotency_key="unit-approved-g4",
         ),
         actor_id=owner.user_id,
-        actor_role="DEVELOPER",
+        actor_role="SUPER_ADMIN",
     )
     delivery = await service.delivery(db, job)
     assert job.status == "COMPLETED" and delivery["delivery_ready"]

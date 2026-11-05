@@ -232,3 +232,241 @@ class TestArchitectAndFeasibility:
             decision_record=record_cancel,
         )
         assert outcome_cancel["status"] == "CANCELLED"
+
+    @pytest.mark.asyncio
+    async def test_g1_self_approval_blocked_separation_of_duties(self):
+        """Proves AUD-SEC-01: Job creator cannot approve or submit G1 decisions for their own job."""
+        import uuid
+        from decimal import Decimal
+        from app.core.database import AsyncSessionLocal
+        from app.core.errors import ForbiddenException
+        from app.models.job import Job
+        from app.models.user import User
+        from app.models.phase4 import FeasibilityReportModel, TargetBlueprintModel
+        from app.schemas.jobs import JobStatus
+
+        async with AsyncSessionLocal() as db:
+            creator = User(
+                user_id=uuid.uuid4(),
+                email=f"creator_{uuid.uuid4().hex[:8]}@acme.corp",
+                full_name="Creator Admin",
+                password_hash="secret",
+                role="ADMIN",
+                status="ACTIVE",
+            )
+            reviewer = User(
+                user_id=uuid.uuid4(),
+                email=f"reviewer_{uuid.uuid4().hex[:8]}@acme.corp",
+                full_name="Independent Reviewer",
+                password_hash="secret",
+                role="REVIEWER",
+                status="ACTIVE",
+            )
+            job = Job(
+                job_id=uuid.uuid4(),
+                name=f"test-g1-sod-{uuid.uuid4().hex[:6]}",
+                source_repository="https://github.com/acme/repo",
+                owner_user_id=creator.user_id,
+                                status=JobStatus.AWAITING_GATE_G1.value,
+                active_node="awaiting_gate_g1",
+                budget_used_usd=Decimal("0.0"),
+                budget_limit_usd=Decimal("1000.0"),
+                max_repair_attempts=3,
+                target_stack="Python / FastAPI",
+            )
+            report = FeasibilityReportModel(
+                report_id=uuid.uuid4(),
+                job_id=job.job_id,
+                version=1,
+                blueprint_version=1,
+                legacy_model_version=1,
+                overall_score=85.0,
+                unsupported_count=0,
+                custom_build_count=0,
+                substitute_count=0,
+                unknown_count=0,
+                summary="Feasibility summary",
+                content_hash="sha256:feas_hash",
+            )
+            blueprint = TargetBlueprintModel(
+                blueprint_id=uuid.uuid4(),
+                job_id=job.job_id,
+                version=1,
+                status="VALIDATED",
+                target_stack="Python / FastAPI",
+                target_architecture="Modular Monolith",
+                components_payload=[],
+                interfaces_payload=[],
+                data_model_payload=[],
+                integration_contracts_payload=[],
+                constraints_payload={},
+                accepted_decisions=[],
+                evidence_refs=[],
+                content_hash="sha256:bp_hash",
+            )
+            db.add_all([creator, reviewer, job, report, blueprint])
+            await db.commit()
+
+            service = G1DecisionService()
+            decision_record = G1DecisionRecord(
+                decision_id="g1_dec_test",
+                job_id=str(job.job_id),
+                decision=G1DecisionType.ACCEPT_SUBSTITUTE,
+                reason="Valid 10+ char rationale for substitution",
+                actor=str(creator.user_id),
+                previous_feasibility_version=1,
+            )
+
+            # 1. Creator attempts self-approval -> raises ForbiddenException
+            with pytest.raises(ForbiddenException) as exc_info:
+                await service.submit_decisions(
+                    db=db,
+                    job=job,
+                    user=creator,
+                    decisions=[decision_record],
+                    global_decision=G1DecisionType.ACCEPT_SUBSTITUTE,
+                    global_rationale="Self approval attempt",
+                )
+            assert "separation of duties" in str(exc_info.value).lower()
+
+            # 2. Independent reviewer submits decisions -> succeeds
+            decision_record.actor = str(reviewer.user_id)
+            recorded = await service.submit_decisions(
+                db=db,
+                job=job,
+                user=reviewer,
+                decisions=[decision_record],
+                global_decision=G1DecisionType.ACCEPT_SUBSTITUTE,
+                global_rationale="Independent review approval",
+            )
+            assert len(recorded) == 1
+
+    @pytest.mark.asyncio
+    async def test_g1_api_endpoint_self_approval_blocked(self, client):
+        """Proves AUD-SEC-01 on endpoint: POST /api/v1/jobs/{job_id}/feasibility/decisions returns 403 for creator."""
+        import uuid
+        from decimal import Decimal
+        from app.core.config import settings
+        from app.core.database import AsyncSessionLocal
+        from app.models.job import Job, JobMembership
+        from app.models.user import User
+        from app.models.phase4 import FeasibilityReportModel, TargetBlueprintModel
+        from app.schemas.jobs import JobStatus
+        from app.core.security import hash_password
+
+        async with AsyncSessionLocal() as db:
+            creator = User(
+                user_id=uuid.uuid4(),
+                email=f"api_creator_{uuid.uuid4().hex[:8]}@acme.corp",
+                full_name="API Creator Admin",
+                password_hash=hash_password("Password123!"),
+                role="ADMIN",
+                status="ACTIVE",
+            )
+            reviewer = User(
+                user_id=uuid.uuid4(),
+                email=f"api_reviewer_{uuid.uuid4().hex[:8]}@acme.corp",
+                full_name="API Reviewer",
+                password_hash=hash_password("Password123!"),
+                role="REVIEWER",
+                status="ACTIVE",
+            )
+            job = Job(
+                job_id=uuid.uuid4(),
+                name=f"test-api-sod-{uuid.uuid4().hex[:6]}",
+                source_repository="https://github.com/acme/repo",
+                owner_user_id=creator.user_id,
+                status=JobStatus.AWAITING_GATE_G1.value,
+                active_node="awaiting_gate_g1",
+                budget_used_usd=Decimal("0.0"),
+                budget_limit_usd=Decimal("1000.0"),
+                max_repair_attempts=3,
+                target_stack="Python / FastAPI",
+            )
+            report = FeasibilityReportModel(
+                report_id=uuid.uuid4(),
+                job_id=job.job_id,
+                version=1,
+                blueprint_version=1,
+                legacy_model_version=1,
+                overall_score=85.0,
+                unsupported_count=0,
+                custom_build_count=0,
+                substitute_count=0,
+                unknown_count=0,
+                summary="Feasibility summary",
+                content_hash="sha256:feas_hash",
+            )
+            blueprint = TargetBlueprintModel(
+                blueprint_id=uuid.uuid4(),
+                job_id=job.job_id,
+                version=1,
+                status="VALIDATED",
+                target_stack="Python / FastAPI",
+                target_architecture="Modular Monolith",
+                components_payload=[],
+                interfaces_payload=[],
+                data_model_payload=[],
+                integration_contracts_payload=[],
+                constraints_payload={},
+                accepted_decisions=[],
+                evidence_refs=[],
+                content_hash="sha256:bp_hash",
+            )
+            mem_creator = JobMembership(
+                membership_id=uuid.uuid4(),
+                job_id=job.job_id,
+                user_id=creator.user_id,
+                role_id="ADMIN",
+            )
+            mem_reviewer = JobMembership(
+                membership_id=uuid.uuid4(),
+                job_id=job.job_id,
+                user_id=reviewer.user_id,
+                role_id="REVIEWER",
+            )
+            db.add_all([creator, reviewer, job, report, blueprint, mem_creator, mem_reviewer])
+            await db.commit()
+
+        # Login as creator
+        login_resp = client.post("/api/v1/auth/login", json={"email": creator.email, "password": "Password123!"})
+        assert login_resp.status_code == 200
+        creator_cookie = login_resp.cookies[settings.SESSION_COOKIE_NAME]
+
+        # Creator attempts to submit decisions -> 403 Forbidden
+        payload = {
+            "decisions": [
+                {
+                    "decision_id": "dec_1",
+                    "job_id": str(job.job_id),
+                    "decision": "ACCEPT_SUBSTITUTE",
+                    "reason": "10+ char rationale for substitution",
+                    "actor": str(creator.user_id),
+                    "previous_feasibility_version": 1,
+                }
+            ],
+            "global_decision": "ACCEPT_SUBSTITUTE",
+            "global_rationale": "Overall approval",
+        }
+        res_creator = client.post(
+            f"/api/v1/jobs/{job.job_id}/feasibility/decisions",
+            json=payload,
+            cookies={settings.SESSION_COOKIE_NAME: creator_cookie},
+        )
+        assert res_creator.status_code == 403
+        assert "separation of duties" in res_creator.json()["error"]["message"].lower()
+
+        # Login as reviewer
+        login_rev = client.post("/api/v1/auth/login", json={"email": reviewer.email, "password": "Password123!"})
+        assert login_rev.status_code == 200
+        reviewer_cookie = login_rev.cookies[settings.SESSION_COOKIE_NAME]
+
+        # Reviewer submits decisions -> 200 OK
+        payload["decisions"][0]["actor"] = str(reviewer.user_id)
+        res_reviewer = client.post(
+            f"/api/v1/jobs/{job.job_id}/feasibility/decisions",
+            json=payload,
+            cookies={settings.SESSION_COOKIE_NAME: reviewer_cookie},
+        )
+        assert res_reviewer.status_code == 200
+        assert len(res_reviewer.json()) == 1

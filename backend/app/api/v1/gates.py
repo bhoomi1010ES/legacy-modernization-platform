@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.core.errors import ConflictException, NotFoundException, UnauthorizedException
+from app.core.errors import ConflictException, ForbiddenException, NotFoundException, UnauthorizedException
 from app.domain.state_machine import DecisionOutcome, GatePolicy, JobStateMachine, RBACPolicy
 from app.models.audit import AuditEvent
 from app.models.gate import GateDecision
@@ -332,7 +332,8 @@ async def list_pending_gates(
             JobMembership.job_id == j.job_id, JobMembership.user_id == user.user_id
         ))
         effective_role = membership.role_id if membership else "DEVELOPER"
-        can_decide = RBACPolicy.has_permission(effective_role, f"gate:approve_{g_type.value.lower()}")
+        is_creator = str(j.owner_user_id) == str(user.user_id)
+        can_decide = (not is_creator) and RBACPolicy.has_permission(effective_role, f"gate:approve_{g_type.value.lower()}")
         items.append(
             GateDetailResponse(
                 gate_id=str(durable.gate_id),
@@ -405,7 +406,7 @@ async def list_gates_for_job(
             version=g.version,
             rationale=decision_by_gate.get(str(g.gate_id)).rationale if decision_by_gate.get(str(g.gate_id)) else None,
             artifact_hashes=dict(g.artifact_hashes or {}),
-            allowed_actions=["approve", "reject", "request_changes"] if g.status == "PENDING" and RBACPolicy.has_permission(effective_role, f"gate:approve_{g.gate_type.lower()}") else [],
+            allowed_actions=["approve", "reject", "request_changes"] if g.status == "PENDING" and (str(job.owner_user_id) != str(user.user_id)) and RBACPolicy.has_permission(effective_role, f"gate:approve_{g.gate_type.lower()}") else [],
             verification_guide=get_gate_verification_guide(GateType(g.gate_type), job=job),
         ) for g in durable_gates]
 
@@ -468,6 +469,19 @@ async def submit_gate_decision(
     ))
     if pending is None:
         raise ConflictException("A current evidence-bound pending gate is required")
+
+    creator_id = getattr(job, "created_by_user_id", None) or getattr(job, "owner_user_id", None)
+    if creator_id and str(creator_id) == str(user.user_id):
+        raise ForbiddenException(
+            "Separation of duties violation: Job creator cannot approve or reject gates for their own job."
+        )
+
+    effective_role = getattr(user, "_effective_job_role", user.role)
+    required_perm = f"gate:approve_{pending.gate_type.lower()}"
+    if not RBACPolicy.has_permission(effective_role, required_perm):
+        raise ForbiddenException(
+            f"Role '{effective_role}' lacks required capability '{required_perm}' to decide gate {pending.gate_type}."
+        )
     decision_record, decided_gate, _, _ = await gate_service.decide(
         db,
         pending.gate_id,

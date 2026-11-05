@@ -86,6 +86,8 @@ CANONICAL_TYPE_MAP = {
     # RepositoryInventory variants
     "REPOSITORYINVENTORY": ArtifactType.REPOSITORY_INVENTORY.value,
     "REPOSITORY_INVENTORY": ArtifactType.REPOSITORY_INVENTORY.value,
+    "REPOINVENTORY": ArtifactType.REPOSITORY_INVENTORY.value,
+    "REPO_INVENTORY": ArtifactType.REPOSITORY_INVENTORY.value,
 
     # AnalysisReport variants
     "ANALYSISREPORT": ArtifactType.ANALYSIS_REPORT.value,
@@ -98,6 +100,8 @@ CANONICAL_TYPE_MAP = {
     "CODE_MODULE": ArtifactType.CODE_MODULE.value,
     "MODULESPECIFICATION": ArtifactType.MODULE_SPECIFICATION.value,
     "MODULE_SPECIFICATION": ArtifactType.MODULE_SPECIFICATION.value,
+    "MODULEMANIFEST": ArtifactType.MODULE_SPECIFICATION.value,
+    "MODULE_MANIFEST": ArtifactType.MODULE_SPECIFICATION.value,
 
     # Verification evidence
     "TESTRESULT": ArtifactType.TEST_RESULT.value,

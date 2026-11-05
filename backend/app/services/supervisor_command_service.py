@@ -508,6 +508,8 @@ class SupervisorCommandService:
 
     async def _handle_retry_failed_job(self, db: AsyncSession, job: Job, command: BaseSupervisorCommand) -> None:
         """Authorized recovery creating an explicit new generation from terminal FAILED."""
+        if getattr(command, "actor_role", None) not in ("ADMIN", "SUPER_ADMIN"):
+            raise ForbiddenException("Only administrators can retry a failed workflow.")
         rationale = getattr(command, "rationale", command.payload.get("rationale", ""))
         if len(rationale) < 10:
             raise ConflictException("Authorized retry requires a minimum 10-character diagnostic rationale.")

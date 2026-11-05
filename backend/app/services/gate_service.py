@@ -8,8 +8,8 @@ from uuid import UUID
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ConflictException, NotFoundException
-from app.domain.state_machine import GatePolicy
+from app.core.errors import ConflictException, ForbiddenException, NotFoundException
+from app.domain.state_machine import GatePolicy, RBACPolicy
 from app.models.artifact import Artifact, ArtifactType
 from app.models.audit import AuditEvent
 from app.models.gate import GateDecision
@@ -126,6 +126,21 @@ class GateService:
         gate_type = GateType(gate.gate_type)
         if job.status != GATE_WAITING_STATUS[gate_type].value:
             raise ConflictException("Gate is stale relative to the current workflow state.")
+
+        # Enforce separation of duties: job creator cannot approve or reject gates for their own job
+        creator_id = getattr(job, "created_by_user_id", None) or getattr(job, "owner_user_id", None)
+        if actor_id and creator_id and str(creator_id) == str(actor_id):
+            raise ForbiddenException(
+                "Separation of duties violation: Job creator cannot approve or reject gates for their own job."
+            )
+
+        # Enforce role-based permission for gate decision
+        effective_role = (actor_role or "DEVELOPER").strip().upper()
+        required_perm = f"gate:approve_{gate.gate_type.lower()}"
+        if not RBACPolicy.has_permission(effective_role, required_perm):
+            raise ForbiddenException(
+                f"Role '{effective_role}' lacks required capability '{required_perm}' to decide gate {gate.gate_type}."
+            )
 
         GatePolicy.validate_decision(
             gate_type,
