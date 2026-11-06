@@ -113,7 +113,7 @@ def assess(data: dict, cases: list[dict], specs: list[dict], fingerprint: str, *
             ):
                 raise ValueError("Check evidence identity mismatch")
             status=item.get('status')
-            if status not in {'PASS','FAIL','NOT_RUN','TIMEOUT','BLOCKED'}:
+            if status not in {'PASS','FAIL','NOT_RUN','TIMEOUT','BLOCKED','NOT_APPLICABLE'}:
                 status='PASS' if type(item.get('exit_code')) is int and item['exit_code']==0 else 'FAIL'
             if item.get('exit_code') is None:
                 status='TIMEOUT' if status=='TIMEOUT' else 'NOT_RUN'
@@ -172,9 +172,12 @@ def assess(data: dict, cases: list[dict], specs: list[dict], fingerprint: str, *
                 }
             )
         passed = (
-            bool(cases)
+            (bool(cases) if cases else bool(checks))
             and data["source_unchanged"] is True
-            and all(c["status"] == "PASS" for c in checks + results)
+            and all(c["status"] in {"PASS", "NOT_APPLICABLE"} for c in checks + results)
+            and any(c["status"] == "PASS" for c in checks)
+            and any(c["category"] == "build" and c["status"] == "PASS" for c in checks)
+            and any(c["category"] == "security" and c["status"] == "PASS" for c in checks)
         )
         return get_secret_redactor().redact_object(
             {

@@ -20,7 +20,7 @@ export interface User {
   user_id: string;
   email: string;
   full_name: string;
-  role: 'SUPER_ADMIN' | 'ADMIN' | 'REVIEWER' | 'DEVELOPER' | 'VIEWER';
+  role?: string;
   status: string;
   permissions?: string[];
   created_at: string;

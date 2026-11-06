@@ -100,14 +100,33 @@ class StructureModulesWorker(BaseAnalyzerWorker):
                 module_dir = p.parent.as_posix()
                 discovered_roots.add(module_dir)
 
+            CONTAINER_DIRS = {"apps", "packages", "modules", "services", "src", "components", "libs"}
+            NON_CODE_DIRS = {"static", "templates", "assets", "media", "public", "dist", "build", "node_modules", "vendor", ".venv", "venv", "tests", "test", ".git", ".github", "docs"}
+
             if not discovered_roots:
-                # Discover top-level source packages naturally from repository files
                 all_dirs = set(inventory.directories)
-                all_dirs.update(f.path.split("/")[0] for f in inventory.files if "/" in f.path)
-                for d in all_dirs:
-                    parts = d.split("/")
-                    if len(parts) == 1 and parts[0] not in {"tests", "test", ".git", ".github", "docs"}:
-                        discovered_roots.add(parts[0])
+                all_dirs.update(f.path.replace("\\", "/").split("/")[0] for f in inventory.files if "/" in f.path.replace("\\", "/"))
+                for d in sorted(all_dirs):
+                    parts = d.replace("\\", "/").split("/")
+                    if parts[0] in NON_CODE_DIRS:
+                        continue
+                    if parts[0] in CONTAINER_DIRS:
+                        sub_apps = set()
+                        for f in inventory.files:
+                            f_parts = f.path.replace("\\", "/").split("/")
+                            if len(f_parts) >= 3 and f_parts[0] == parts[0] and f_parts[1] not in NON_CODE_DIRS:
+                                sub_apps.add(f"{f_parts[0]}/{f_parts[1]}")
+                        if sub_apps:
+                            discovered_roots.update(sub_apps)
+                        else:
+                            discovered_roots.add(parts[0])
+                    elif len(parts) == 1:
+                        has_code = any(
+                            f.path.replace("\\", "/").startswith(f"{parts[0]}/") and f.language and f.language not in ("HTML", "CSS", "Markdown")
+                            for f in inventory.files
+                        )
+                        if has_code:
+                            discovered_roots.add(parts[0])
 
             # If only a single generic root was found, inspect natural subdirectories
             # to identify modular component boundaries
@@ -348,11 +367,13 @@ class PublicInterfacesWorker(BaseAnalyzerWorker):
 
                     # Python FastAPI / Flask / Django
                     elif f.language == "Python":
+                        # Standard FastAPI / Flask decorators
                         for match in re.finditer(
-                            r"@(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*[\"']([^\"']+)[\"']",
+                            r"@(?:app|router|[A-Za-z0-9_]+)\.(get|post|put|delete|patch|route)\s*\(\s*[\"']([^\"']+)[\"']",
                             text,
                         ):
-                            http_method = match.group(1).upper()
+                            raw_method = match.group(1).upper()
+                            http_method = "ANY" if raw_method == "ROUTE" else raw_method
                             path_val = match.group(2)
                             line_no = text[:match.start()].count("\n") + 1
 
@@ -376,6 +397,39 @@ class PublicInterfacesWorker(BaseAnalyzerWorker):
                                 "line_number": line_no,
                                 "evidence_refs": [ev.evidence_id],
                             })
+
+                        # Django URLConf path / re_path / url definitions
+                        if f.path.endswith("urls.py") or "urls" in f.path:
+                            for match in re.finditer(
+                                r"(?:path|re_path|url)\s*\(\s*['\"]([^'\"]*)['\"]\s*,\s*([^,)\s]+)",
+                                text,
+                            ):
+                                path_val = match.group(1)
+                                target_view = match.group(2)
+                                line_no = text[:match.start()].count("\n") + 1
+                                view_lower = target_view.lower()
+                                http_method = "POST" if ("create" in view_lower or "submit" in view_lower or "post" in view_lower or "login" in view_lower or "register" in view_lower or "apply" in view_lower) else ("GET" if ("list" in view_lower or "detail" in view_lower or "view" in view_lower or "index" in view_lower) else "ANY")
+
+                                ev = evidence_service.create_evidence(
+                                    source_artifact=inventory.inventory_hash,
+                                    source_path=f.path,
+                                    source_location=f"line {line_no}",
+                                    evidence_type=EvidenceType.NETWORK_INTERFACE,
+                                    raw_excerpt=f"Django route: {http_method} /{path_val} -> {target_view}",
+                                    confidence=ConfidenceLevel.CONFIRMED,
+                                    agent_name="PublicInterfacesWorker",
+                                )
+                                evidence_list.append(ev)
+
+                                interfaces.append({
+                                    "interface_id": f"iface_{uuid.uuid4().hex[:8]}",
+                                    "interface_type": "REST_ENDPOINT",
+                                    "name": f"{http_method} /{path_val.lstrip('/')}",
+                                    "signature": match.group(0)[:100],
+                                    "location_path": f.path,
+                                    "line_number": line_no,
+                                    "evidence_refs": [ev.evidence_id],
+                                })
                 except Exception as exc:
                     logger.warning("Error reading file %s for interfaces: %s", f.path, exc)
 

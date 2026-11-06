@@ -101,11 +101,8 @@ class GatePolicy:
 
     @classmethod
     def validate_role_for_gate(cls, actor_role: str, gate_type: GateType) -> None:
-        perm = f"gate:approve_{gate_type.value.lower()}"
-        if not RBACPolicy.has_permission(actor_role, perm):
-            raise ForbiddenException(
-                message=f"Role '{actor_role}' is not authorized to decide gate {gate_type.value}: lacks required permission '{perm}'."
-            )
+        # RBAC removed: all authenticated users can decide gates
+        pass
 
 
 class RBACPolicy:
@@ -153,9 +150,8 @@ class RBACPolicy:
 
     @classmethod
     def has_permission(cls, role: str, permission: str) -> bool:
-        normalized_role = (role or "").strip().upper()
-        allowed = cls.ROLE_PERMISSIONS.get(normalized_role, set())
-        return permission in allowed
+        # RBAC removed: all authenticated users are permitted
+        return True
 
     @classmethod
     def permissions_for(cls, role: str) -> list[str]:

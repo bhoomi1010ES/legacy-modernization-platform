@@ -1,8 +1,8 @@
-"""Role domain model for Role-Based Access Control (RBAC)."""
+"""Role domain model (Deprecated - RBAC removed in favor of normal authentication)."""
 
 from typing import List
 from sqlalchemy import JSON, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
 
 
@@ -13,5 +13,3 @@ class Role(Base):
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=True)
     permissions: Mapped[List[str]] = mapped_column(JSON, default=list, nullable=False)
-
-    memberships = relationship("JobMembership", back_populates="role")

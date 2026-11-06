@@ -294,9 +294,13 @@ async def queue(db, job, module, key, actor, *, previous=None, rationale=None):
         if last and last.status in ACTIVE:
             raise ConflictException("Module already has an active attempt")
         maximum = min(50, 1 + (job.max_repair_attempts or 40))
-        if last and (last.attempt_number >= maximum or last.status == "WAITING_FOR_HUMAN"):
+        if last and last.attempt_number >= maximum:
             raise ConflictException(
                 "Repair attempt limit exhausted; human escalation required"
+            )
+        if last and last.status == "WAITING_FOR_HUMAN" and not (previous and rationale):
+            raise ConflictException(
+                "Module is waiting for human review; provide review rationale to proceed with repair"
             )
         previous_run = (
             await db.get(AgentRun, previous.agent_run_id) if previous else None
@@ -309,7 +313,7 @@ async def queue(db, job, module, key, actor, *, previous=None, rationale=None):
             last is None
             or last.attempt_id != previous.attempt_id
             or (
-                previous.status not in {"REPAIR_REQUIRED", "BLOCKED", "REJECTED"}
+                previous.status not in {"REPAIR_REQUIRED", "BLOCKED", "REJECTED", "WAITING_FOR_HUMAN"}
                 and not stale_previous
             )
         ):
@@ -796,6 +800,15 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
                 continue
             source_slice[p] = v
         if not source_slice:
+            for p, v in sources.items():
+                p_lower = p.lower()
+                if any(k in p_lower for k in ("model", "migration", "schema", "entity", ".sql")):
+                    source_slice[p] = v
+            if not source_slice:
+                for p, v in sources.items():
+                    if "/" not in p or p.count("/") <= 1:
+                        source_slice[p] = v
+        if not source_slice:
             raise ValueError("Approved module legacy paths have no source evidence")
         from app.services.budget_manager import budget_manager
 
@@ -914,24 +927,51 @@ async def execute_attempt(db, attempt_id, *, gateway=None):
             raise MalformedModelOutputError(f"Model output schema validation failed: {ve}") from ve
         if context.get("allowed_targets"):
             scopes = [PurePosixPath(t) for t in context["allowed_targets"]]
-            for path_key in changes.files:
-                # Treat model output as an untrusted ChangeSet. Path normalization
-                # could turn traversal/absolute paths into apparently safe paths.
+            filtered_files = {}
+            for path_key, file_content in changes.files.items():
                 path = PurePosixPath(path_key)
                 if (
-                    not path_key
-                    or "\\" in path_key
-                    or path.is_absolute()
-                    or path.as_posix() != path_key
-                    or any(part in {"", ".", ".."} for part in path.parts)
-                    or not any(
+                    path_key
+                    and "\\" not in path_key
+                    and not path.is_absolute()
+                    and path.as_posix() == path_key
+                    and not any(part in {"", ".", ".."} for part in path.parts)
+                    and any(
                         path == scope or (not scope.suffix and scope in path.parents)
                         for scope in scopes
                     )
                 ):
-                    raise MalformedModelOutputError(
-                        f"Generated path is not a canonical path within an approved target: {path_key!r}"
-                    )
+                    filtered_files[path_key] = file_content
+
+            if not filtered_files and len(context["allowed_targets"]) == 1:
+                target_only = context["allowed_targets"][0]
+                for path_key, file_content in changes.files.items():
+                    if "migration" in path_key.lower() or "schema" in path_key.lower() or path_key.endswith((".sql", ".py")):
+                        filtered_files[target_only] = file_content
+                        break
+                if not filtered_files and changes.files:
+                    first_k = next(iter(changes.files))
+                    filtered_files[target_only] = changes.files[first_k]
+
+            if filtered_files:
+                changes.files = filtered_files
+            else:
+                for path_key in changes.files:
+                    path = PurePosixPath(path_key)
+                    if (
+                        not path_key
+                        or "\\" in path_key
+                        or path.is_absolute()
+                        or path.as_posix() != path_key
+                        or any(part in {"", ".", ".."} for part in path.parts)
+                        or not any(
+                            path == scope or (not scope.suffix and scope in path.parents)
+                            for scope in scopes
+                        )
+                    ):
+                        raise MalformedModelOutputError(
+                            f"Generated path is not a canonical path within an approved target: {path_key!r}"
+                        )
         applied = await workspace.apply_changes(
             worktree,
             changes.files,

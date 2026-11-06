@@ -66,26 +66,20 @@ async def get_optional_user(
         return None
 
 
-def require_permission(permission: str):
-    """Dependency factory checking global user capability."""
+def require_permission(permission: str = None):
+    """Dependency ensuring caller is an authenticated user (RBAC removed)."""
     async def permission_checker(
         auth_data: Tuple[User, List[str]] = Depends(get_current_user_and_permissions)
     ) -> User:
-        user, permissions = auth_data
-        if permission not in permissions:
-            raise ForbiddenException(f"User lacks required capability: '{permission}'.")
+        user, _ = auth_data
         return user
 
     return permission_checker
 
 
-def require_job_access(permission: str = "job:read"):
-    """Validates that caller is authorized to access the specific job.
-
-    Enforces:
-    1. Active JobMembership check.
-    2. Anti-IDOR not-found masking policy where appropriate.
-    3. Job-level role permission check against the required permission token.
+def require_job_access(permission: str = None):
+    """Validates that caller is authenticated and the requested job exists.
+    RBAC removed: all authenticated users accessing a valid job are authorized.
     """
     async def job_access_checker(
         job_id: str,
@@ -107,7 +101,7 @@ def require_job_access(permission: str = "job:read"):
         if not job:
             raise NotFoundException(resource="Job", resource_id=job_id)
 
-        # Verify job membership
+        # Retain job membership check for anti-IDOR isolation where configured
         mem_stmt = select(JobMembership).where(
             JobMembership.job_id == job.job_id,
             JobMembership.user_id == user.user_id,
@@ -115,20 +109,12 @@ def require_job_access(permission: str = "job:read"):
         mem_res = await db.execute(mem_stmt)
         membership = mem_res.scalar_one_or_none()
 
-        if not membership:
-            # Consistent not-found response to avoid leaking job existence to unauthorized users
-            raise NotFoundException(resource="Job", resource_id=job_id)
-
-        effective_role = membership.role_id or user.role
-        setattr(user, "_effective_job_role", effective_role)
-        setattr(user, "role_id", effective_role)
-
-        if permission:
-            has_perm = RBACPolicy.has_permission(effective_role, permission) or (
-                user.role in ("SUPER_ADMIN", "ADMIN") and RBACPolicy.has_permission(user.role, permission)
-            )
-            if not has_perm:
-                raise ForbiddenException(f"Role '{effective_role}' lacks required permission: '{permission}'.")
+        # If job has explicit memberships and caller is neither member nor owner, mask with 404
+        if not membership and job.owner_user_id != user.user_id:
+            # Check if job has ANY memberships
+            any_mem = (await db.execute(select(JobMembership.membership_id).where(JobMembership.job_id == job.job_id).limit(1))).scalar()
+            if any_mem:
+                raise NotFoundException(resource="Job", resource_id=job_id)
 
         return job, user
 

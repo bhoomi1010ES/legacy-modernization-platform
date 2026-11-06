@@ -342,7 +342,8 @@ class StackDetector:
                 evidence.extend(f.get("evidence", []))
 
         elif languages_dict:
-            top_lang = list(languages_dict.keys())[0]
+            programming_langs = [l for l in languages_dict if l not in ("HTML", "CSS", "SCSS", "Less", "Markdown")]
+            top_lang = programming_langs[0] if programming_langs else list(languages_dict.keys())[0]
             primary_lang = top_lang
             lang_ver = f"{top_lang} (Inferred from source files)"
             primary_framework = f"{top_lang} Source Project"
@@ -361,6 +362,9 @@ class StackDetector:
         has_backend = tiers.backend.primary is not None
         if has_frontend and has_backend:
             arch_style = "Full-Stack Web App (Frontend + Backend)"
+            if primary_lang in ("HTML", "CSS") and tiers.backend.primary and tiers.backend.primary.primary_language:
+                primary_lang = tiers.backend.primary.primary_language
+                primary_framework = tiers.backend.primary.framework or f"{primary_lang} Application"
             if "TypeScript" in languages_dict or "JavaScript" in languages_dict:
                 if primary_lang not in ("TypeScript", "JavaScript"):
                     primary_lang = f"{primary_lang} / TypeScript"
@@ -891,6 +895,8 @@ class StackDetector:
             return cls._parse_go_mod(content, manifest, inventory)
         elif m_type == "cargo":
             return cls._parse_cargo_toml(content, manifest, inventory)
+        elif m_type == "django_manage":
+            return cls._parse_django_manage(content, manifest, inventory)
         return None
 
     @classmethod
@@ -1302,6 +1308,44 @@ class StackDetector:
             "component_type": "backend",
             "db_drivers": db_drivers,
             "evidence": [{"file": manifest.relative_path, "reason": f"requirements file declaring {framework}."}],
+        }
+
+    @classmethod
+    def _parse_django_manage(
+        cls,
+        content: str,
+        manifest: DiscoveredManifest,
+        inventory: InventoryResult,
+    ) -> Optional[Dict[str, Any]]:
+        """Parses Django manage.py entrypoint to detect Django framework, settings module, and database drivers."""
+        settings_match = re.search(r"DJANGO_SETTINGS_MODULE['\"]\s*,\s*['\"]([^'\"]+)['\"]", content)
+        settings_module = settings_match.group(1) if settings_match else "settings"
+
+        db_drivers = ["Django ORM", "SQLite (default)"]
+        for sql_f in inventory.sql_files:
+            lower = sql_f.relative_path.lower()
+            if ("psycopg" in lower or "postgres" in lower or "pg" in lower) and "PostgreSQL" not in db_drivers:
+                db_drivers.append("PostgreSQL")
+
+        return {
+            "manifest_type": "django_manage",
+            "language": "Python",
+            "language_version": "Python 3.10+ (CPython)",
+            "framework": "Django",
+            "framework_version": "4.2 / 5.0",
+            "build_tool": f"Django manage.py ({manifest.relative_path})",
+            "manifest_file": manifest.relative_path,
+            "directory_relative": manifest.directory_relative,
+            "test_framework": "pytest / django.test",
+            "architecture_style": "Django Monolithic Web Application",
+            "component_type": "backend",
+            "db_drivers": db_drivers,
+            "evidence": [
+                {
+                    "file": manifest.relative_path,
+                    "reason": f"Django manage.py entrypoint configuring {settings_module}.",
+                }
+            ],
         }
 
     @classmethod

@@ -116,10 +116,8 @@ class G1DecisionService:
                     "Separation of duties violation: Job creator cannot approve or reject gates for their own job."
                 )
 
-            # Verify user permissions
-            effective_role = getattr(user, "_effective_job_role", user.role)
-            if not RBACPolicy.has_permission(effective_role, "gate:approve_g1") and effective_role not in ("ADMIN", "SUPER_ADMIN", "REVIEWER"):
-                raise ForbiddenException(f"Role '{effective_role}' lacks required permission 'gate:approve_g1' to decide gate G1.")
+            # RBAC removed: all authenticated human users can submit G1 decisions
+            effective_role = getattr(user, "_effective_job_role", user.role or "USER")
 
             # Get latest feasibility report
             report = (

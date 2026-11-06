@@ -1,4 +1,4 @@
-"""Phase 1 Authorization, Job Membership, and Resource-Level Isolation Tests."""
+"""Phase 1 Authentication, Access, and Approval Governance Tests (RBAC Removed)."""
 
 import pytest
 import uuid
@@ -28,7 +28,7 @@ async def test_job_isolation_non_member_access_denied(client: TestClient):
                 email="user.b@acme.corp",
                 full_name="User B (External)",
                 password_hash=hash_password("Password123!"),
-                role="DEVELOPER",
+                role="USER",
                 status="ACTIVE",
             )
             db_session.add(user_b)
@@ -57,7 +57,7 @@ async def test_job_isolation_non_member_access_denied(client: TestClient):
             owner_user_id=user_a.user_id,
         )
         db_session.add(job_a)
-        membership_a = JobMembership(job_id=private_job_id, user_id=user_a.user_id, role_id="ADMIN")
+        membership_a = JobMembership(job_id=private_job_id, user_id=user_a.user_id)
         db_session.add(membership_a)
 
         # Add artifact and audit event to Job A
@@ -113,27 +113,27 @@ async def test_job_isolation_non_member_access_denied(client: TestClient):
 
 
 @pytest.mark.asyncio
-async def test_job_membership_role_restrictions(client: TestClient):
-    """Proves a VIEWER job member cannot perform state mutations like cancel."""
+async def test_all_authenticated_users_can_perform_job_actions(client: TestClient):
+    """Proves that without RBAC, any authenticated user with job access can perform operations (e.g. cancel)."""
     client.cookies.clear()
     async with AsyncSessionLocal() as db_session:
-        # 1. Provision Viewer User
+        # 1. Provision User
         stmt = select(User).where(User.email == "viewer.user@acme.corp")
         res = await db_session.execute(stmt)
         viewer_user = res.scalar_one_or_none()
         if not viewer_user:
             viewer_user = User(
                 email="viewer.user@acme.corp",
-                full_name="Read-Only Auditor",
+                full_name="Standard User",
                 password_hash=hash_password("Password123!"),
-                role="VIEWER",
+                role="USER",
                 status="ACTIVE",
             )
             db_session.add(viewer_user)
             await db_session.commit()
             await db_session.refresh(viewer_user)
 
-        # 2. Login as Viewer
+        # 2. Login
         login_resp = client.post(
             "/api/v1/auth/login",
             json={"email": "viewer.user@acme.corp", "password": "Password123!"},
@@ -141,7 +141,7 @@ async def test_job_membership_role_restrictions(client: TestClient):
         assert login_resp.status_code == 200
         viewer_token = login_resp.cookies[settings.SESSION_COOKIE_NAME]
 
-        # 3. Create Job and grant VIEWER membership
+        # 3. Create Job and grant membership
         test_job_id = uuid.uuid4()
         job = Job(
             job_id=test_job_id,
@@ -151,11 +151,11 @@ async def test_job_membership_role_restrictions(client: TestClient):
             owner_user_id=viewer_user.user_id,
         )
         db_session.add(job)
-        membership = JobMembership(job_id=test_job_id, user_id=viewer_user.user_id, role_id="VIEWER")
+        membership = JobMembership(job_id=test_job_id, user_id=viewer_user.user_id)
         db_session.add(membership)
         await db_session.commit()
 
-    # 4. Read job as VIEWER -> Permitted (200 OK)
+    # 4. Read job -> Permitted (200 OK)
     read_resp = client.get(
         f"/api/v1/jobs/{test_job_id}",
         cookies={settings.SESSION_COOKIE_NAME: viewer_token},
@@ -163,10 +163,54 @@ async def test_job_membership_role_restrictions(client: TestClient):
     assert read_resp.status_code == 200
     assert read_resp.json()["name"] == "Audited Project"
 
-    # 5. Attempt cancel as VIEWER -> Denied with 403 Forbidden
+    # 5. Cancel job -> Permitted for authenticated user (200 OK without role-based 403)
     cancel_resp = client.post(
         f"/api/v1/jobs/{test_job_id}/cancel",
         cookies={settings.SESSION_COOKIE_NAME: viewer_token},
     )
-    assert cancel_resp.status_code == 403
-    assert cancel_resp.json()["error"]["code"] == "FORBIDDEN"
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["status"] == "CANCELLED"
+
+
+@pytest.mark.asyncio
+async def test_unauthenticated_requests_denied_401(client: TestClient):
+    """Proves that unauthenticated requests to protected endpoints return 401 Unauthorized."""
+    client.cookies.clear()
+    fake_job_id = uuid.uuid4()
+
+    # Endpoints must strictly require authentication
+    resp = client.get(f"/api/v1/jobs/{fake_job_id}")
+    assert resp.status_code == 401
+
+    resp = client.post(f"/api/v1/jobs/{fake_job_id}/cancel")
+    assert resp.status_code == 401
+
+    resp = client.get("/api/v1/auth/me")
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_human_only_approval_enforcement(client: TestClient):
+    """Proves that gates require human approval and reject agent/automated actors."""
+    from app.services.gate_service import gate_service
+    from app.schemas.gates import GateDecisionRequest
+    from app.domain.state_machine import GateType, DecisionOutcome
+
+    async with AsyncSessionLocal() as db_session:
+        # Verify gate_service rejects is_human=False
+        fake_gate_id = uuid.uuid4()
+        fake_actor_id = uuid.uuid4()
+
+        payload = GateDecisionRequest(
+            decision=DecisionOutcome.APPROVED,
+            rationale="Valid technical rationale for approval.",
+        )
+
+        with pytest.raises(ValueError, match="Only human users can approve or reject quality gates"):
+            await gate_service.decide(
+                db=db_session,
+                gate_id=fake_gate_id,
+                payload=payload,
+                actor_id=fake_actor_id,
+                is_human=False,
+            )

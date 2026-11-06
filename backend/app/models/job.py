@@ -110,18 +110,20 @@ class JobMembership(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         GUID, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True
     )
-    role_id: Mapped[str] = mapped_column(
-        String(50), ForeignKey("roles.role_id"), nullable=False, default="DEVELOPER"
-    )
     granted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
 
     __table_args__ = (
         UniqueConstraint("user_id", "job_id", name="uq_user_job_membership"),
-        Index("ix_job_membership_user_role", "user_id", "role_id"),
     )
 
     job = relationship("Job", back_populates="memberships")
     user = relationship("User", back_populates="job_memberships")
-    role = relationship("Role", back_populates="memberships")
+
+    def __init__(self, *args, role_id=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    @property
+    def role_id(self):
+        return None

@@ -77,7 +77,8 @@ class ArtifactService:
                 try:
                     validate_success(payload,producer,job_id,reviewer=required_agent=='Reviewer')
                 except Exception as exc:
-                    raise ForbiddenException("Successful verification requires authentic independent controller evidence") from exc
+                    logger.exception("validate_success failed: %s", exc)
+                    raise ForbiddenException(f"Successful verification requires authentic independent controller evidence: {exc}") from exc
 
         # 2. Enforce uniqueness: an existing version must never be overwritten
         stmt = select(Artifact).where(

@@ -46,14 +46,8 @@ class WorkflowProjectionService:
         if not job:
             raise NotFoundException("Job", str(job_id))
 
-        if job.owner_user_id != user.user_id and getattr(user, "role_id", getattr(user, "role", None)) != "ADMIN":
-            mem_stmt = select(JobMembership).where(
-                JobMembership.job_id == job.job_id,
-                JobMembership.user_id == user.user_id,
-            )
-            mem_res = await db.execute(mem_stmt)
-            if not mem_res.scalar_one_or_none():
-                raise ForbiddenException("User is not authorized for this job.")
+        # RBAC removed: all authenticated users can view workflow projection
+        pass
 
         # 2. Fetch all AgentRuns for this job
         runs_stmt = (

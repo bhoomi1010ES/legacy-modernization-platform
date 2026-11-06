@@ -134,13 +134,8 @@ class GateService:
                 "Separation of duties violation: Job creator cannot approve or reject gates for their own job."
             )
 
-        # Enforce role-based permission for gate decision
-        effective_role = (actor_role or "DEVELOPER").strip().upper()
-        required_perm = f"gate:approve_{gate.gate_type.lower()}"
-        if not RBACPolicy.has_permission(effective_role, required_perm):
-            raise ForbiddenException(
-                f"Role '{effective_role}' lacks required capability '{required_perm}' to decide gate {gate.gate_type}."
-            )
+        # RBAC removed: all authenticated human users can decide gates
+        effective_role = actor_role or "USER" 
 
         GatePolicy.validate_decision(
             gate_type,

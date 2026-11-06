@@ -66,16 +66,12 @@ def _gate_response(gate: WorkflowGate, can_decide: bool = False) -> WorkflowGate
     )
 
 
-async def _gate_access(db: AsyncSession, gate_id: UUID, user: User, permission: str) -> tuple[WorkflowGate, str]:
+async def _gate_access(db: AsyncSession, gate_id: UUID, user: User, permission: str = None) -> tuple[WorkflowGate, str]:
     gate = await db.get(WorkflowGate, gate_id)
     if not gate:
         raise NotFoundException("Gate", str(gate_id))
-    membership = await db.scalar(select(JobMembership).where(
-        JobMembership.job_id == gate.job_id, JobMembership.user_id == user.user_id
-    ))
-    if not membership:
-        raise NotFoundException("Gate", str(gate_id))
-    return gate, membership.role_id
+    # RBAC removed: all authenticated human users can access and decide gates
+    return gate, "USER" 
 
 
 @router.get("/jobs/{job_id}/workflow", response_model=WorkflowStateResponse)
@@ -115,15 +111,9 @@ async def get_workflow(
     effective_role = membership.role_id if membership else "DEVELOPER"
     allowed = []
     if job.status == "PAUSED":
-        if RBACPolicy.has_permission(effective_role, "job:pause_resume"):
-            allowed.append("resume")
-        if RBACPolicy.has_permission(effective_role, "job:cancel"):
-            allowed.append("cancel")
+        allowed.extend(["resume", "cancel"])
     elif job.status not in ("COMPLETED", "FAILED", "CANCELLED"):
-        if RBACPolicy.has_permission(effective_role, "job:pause_resume"):
-            allowed.append("pause")
-        if RBACPolicy.has_permission(effective_role, "job:cancel"):
-            allowed.append("cancel")
+        allowed.extend(["pause", "cancel"])
     repository_snapshot = await db.scalar(
         select(RepositorySnapshotModel)
         .where(RepositorySnapshotModel.job_id == job.job_id)
@@ -230,8 +220,8 @@ async def get_versioned_gate(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> WorkflowGateResponse:
-    gate, role = await _gate_access(db, gate_id, user, "gate:review")
-    return _gate_response(gate, RBACPolicy.has_permission(role, f"gate:approve_{gate.gate_type.lower()}"))
+    gate, role = await _gate_access(db, gate_id, user)
+    return _gate_response(gate, can_decide=True)
 
 
 @router.post("/gates/{gate_id}/decision", response_model=GateDecisionResult, status_code=status.HTTP_200_OK)
@@ -242,9 +232,7 @@ async def decide_versioned_gate(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> GateDecisionResult:
-    gate, role = await _gate_access(db, gate_id, user, "gate:review")
-    if not RBACPolicy.has_permission(role, f"gate:approve_{gate.gate_type.lower()}"):
-        raise ForbiddenException(f"Role '{role}' cannot decide {gate.gate_type}.")
+    gate, role = await _gate_access(db, gate_id, user)
     decision, decided_gate, job, replay = await gate_service.decide(
         db, gate_id, payload, actor_id=user.user_id, actor_role=role,
         correlation_id=getattr(request.state, "correlation_id", None),

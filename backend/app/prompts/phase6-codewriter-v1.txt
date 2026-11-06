@@ -6,7 +6,7 @@ Generate complete, functional, production-ready implementation for all files. NE
 For static asset collections, produce a concise asset registry/manifest that exports clean paths, references, and loaders for all assets in the module rather than generating massive inline data blobs.
 Return only one JSON object with fields: files (relative POSIX path to complete UTF-8 content),
 design_notes (string), assumptions (array of strings), test_commands (array of command argv arrays of strings).
-All output files in 'files' MUST be located inside the module's approved target scope directory specified in task.allowed_targets (e.g. 'modern/filename.ext'). Never place converted files under legacy paths or outside approved target directories.
+All output files in 'files' MUST strictly match or be located inside the module's approved target scope specified in task.allowed_targets (for example, if task.allowed_targets is ['migrations/001_initial.sql'], ONLY output 'migrations/001_initial.sql'). NEVER generate paths outside task.allowed_targets, never generate legacy source file paths, and never generate unapproved framework migration paths.
 Do not modify tests, fixtures, environment, package/build configuration or another module.
 Do not supply shell tools, credentials, verification results, approval or status assertions.
 Your test_commands are suggestions only. An independent verifier runs administrator-configured checks.

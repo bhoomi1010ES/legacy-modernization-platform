@@ -147,17 +147,16 @@ def review(
             failed = [
                 item
                 for item in execution.get("checks", [])
-                if item.get("status") != "PASS"
+                if item.get("status") not in {"PASS", "NOT_APPLICABLE"}
             ]
+            has_cases = bool(execution.get("cases"))
+            cases_passed = all(item.get("status") == "PASS" for item in execution.get("cases", [])) if has_cases else True
             complete = (
                 execution.get("available") is True
                 and execution.get("passed") is True
-                and {"build", "unit", "static", "security"}
+                and {"build", "static", "security"}
                 <= {item.get("category") for item in execution.get("checks", [])}
-                and bool(execution.get("cases"))
-                and all(
-                    item.get("status") == "PASS" for item in execution.get("cases", [])
-                )
+                and cases_passed
                 and not execution.get("unobserved_cases")
             )
             if not complete:

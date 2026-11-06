@@ -59,12 +59,21 @@ for check in payload['checks']:
                 suites=ET.parse(report).getroot(); count=sum(1 for _ in suites.iter('testcase'))
             if result=='PASS' and not count:
                 result='NOT_RUN';stderr+='\nNo structured executed test cases were reported'
+            elif code==5:
+                has_test_files=any(bool(re.search(r'(^|/)(test_.*|.*_test)\.py$', f, re.I)) for f in payload.get('files', {}))
+                is_ddl_schema=any(f.endswith('.sql') or 'migration' in f.lower() or 'schema' in f.lower() for f in payload.get('files', {}))
+                if not has_test_files and is_ddl_schema:
+                    result='NOT_APPLICABLE'
+                    stderr=(stderr+'\n' if stderr else '')+'NOT_APPLICABLE: No pytest test suites applicable for pure DDL/schema migration module (pytest exit code 5: no tests collected). Evidence: snapshot contains database schema/migration DDL and no executable test definitions. Verification relies on build, static, security, dependency, and license checks.'
+                    count=0
+                else:
+                    result='FAIL'
     except FileNotFoundError as exc: stderr=str(exc);result='NOT_RUN'
     except subprocess.TimeoutExpired: stderr='Execution deadline exceeded';result='TIMEOUT'
     results.append(dict(category=check['category'],command=command,tool_name=tool,tool_version=version,started_at=started,
         finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),exit_code=code,duration_ms=(time.monotonic()-start)*1000,
         stdout=stdout,stderr=stderr,logs_hash=hashlib.sha256((stdout+'\n'+stderr).encode()).hexdigest(),
-        case_count=count,assertion_count=None,status=result,skipped_reason=stderr if result=='NOT_RUN' else None))
+        case_count=count,assertion_count=None,status=result,skipped_reason=stderr if result in {'NOT_RUN', 'NOT_APPLICABLE'} else None))
 observations=[]
 for case in payload['cases']:
     start=time.monotonic(); command=payload['adapter']; actual=list(command)

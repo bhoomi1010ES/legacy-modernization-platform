@@ -116,8 +116,7 @@ class JobService:
         membership = JobMembership(
             job_id=job_id,
             user_id=user.user_id,
-            role_id="DEVELOPER",
-        )
+                    )
         db.add(membership)
 
         # Append initial transactional audit record
